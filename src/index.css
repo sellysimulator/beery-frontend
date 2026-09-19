@@ -5,45 +5,64 @@
  * theme defines lives here and is emitted as both a CSS variable and a set of
  * utilities.
  *
- * The palette is the Okabe-Ito set, which stays distinguishable under
- * deuteranopia, protanopia and tritanopia, on a near-black surface so it holds
- * contrast at projector distance. Colour is never the only signal: backlog, in
- * particular, always carries an icon and a text label as well.
+ * Light theme on a warm bone surface. The accents are pastel, but the hues are
+ * still the Okabe-Ito set — they stay distinguishable under deuteranopia,
+ * protanopia and tritanopia, which matters on the results chart where five
+ * series share one axis and on the host console where four role colours appear
+ * at once.
+ *
+ * Pastels are used for FILLS and SURFACES. Anything carrying meaning as text,
+ * a line or a small mark uses the -ink pair of the same hue, because a pastel
+ * on bone is around 1.5:1 and unreadable. Each -ink value below clears 4.5:1
+ * on --color-surface. Colour is never the only signal: backlog in particular
+ * always carries an icon and a text label as well.
  */
 @theme {
-  --color-surface: #0f1115;
-  --color-surface-raised: #171a21;
-  --color-surface-sunken: #0a0c10;
-  --color-border: #2b3039;
-  --color-border-strong: #3d444f;
+  --color-surface: #faf7f0;
+  --color-surface-raised: #fffdf8;
+  --color-surface-sunken: #f2ede1;
+  --color-border: #e2dac8;
+  --color-border-strong: #c9bda3;
 
-  --color-ink: #f5f7fa;
-  --color-ink-muted: #b6bfcc;
-  --color-ink-subtle: #7f8a99;
-  --color-ink-inverse: #0f1115;
+  --color-ink: #23201a;
+  --color-ink-muted: #5c5547;
+  --color-ink-subtle: #8a8170;
+  --color-ink-inverse: #fffdf8;
 
-  --color-brand: #e69f00;
-  --color-brand-strong: #b87e00;
-  --color-brand-soft: #4a3611;
+  --color-brand: #c98a00;
+  --color-brand-strong: #9a6800;
+  --color-brand-soft: #fdefc9;
 
-  --color-info: #56b4e9;
-  --color-success: #009e73;
-  --color-warning: #e69f00;
-  --color-danger: #d55e00;
-  --color-accent: #cc79a7;
+  --color-info: #1f6f9c;
+  --color-info-soft: #d6ecf8;
+  --color-success: #04705a;
+  --color-success-soft: #d2ece5;
+  --color-warning: #9a6800;
+  --color-warning-soft: #fdefc9;
+  --color-danger: #a8420a;
+  --color-danger-soft: #fbdfd0;
+  --color-accent: #9c4f78;
+  --color-accent-soft: #f6dfeb;
 
-  /* Supply-chain roles, upstream to downstream. */
-  --color-role-retailer: #56b4e9;
-  --color-role-wholesaler: #009e73;
-  --color-role-distributor: #cc79a7;
-  --color-role-factory: #0072b2;
+  /* Supply-chain roles, downstream to upstream. */
+  --color-role-retailer: #1f6f9c;
+  --color-role-retailer-soft: #d6ecf8;
+  --color-role-wholesaler: #04705a;
+  --color-role-wholesaler-soft: #d2ece5;
+  --color-role-distributor: #9c4f78;
+  --color-role-distributor-soft: #f6dfeb;
+  --color-role-factory: #1d5c86;
+  --color-role-factory-soft: #dbe7f2;
 
   /* Game quantities. Backlog additionally carries an icon and a label. */
-  --color-inventory: #56b4e9;
-  --color-backlog: #d55e00;
-  --color-supply-line: #f0e442;
-  --color-demand: #f5f7fa;
-  --color-order: #e69f00;
+  --color-inventory: #1f6f9c;
+  --color-inventory-soft: #d6ecf8;
+  --color-backlog: #a8420a;
+  --color-backlog-soft: #fbdfd0;
+  --color-supply-line: #8a6d00;
+  --color-supply-line-soft: #f7eeb8;
+  --color-demand: #3f3a30;
+  --color-order: #c98a00;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -57,7 +76,7 @@
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -70,7 +89,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-brand);
+    outline: 2px solid var(--color-brand-strong);
     outline-offset: 2px;
   }
 }

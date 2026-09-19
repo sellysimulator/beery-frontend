@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
-import QrCodeImage from './QrCodeImage'
 
 export interface InvitePanelProps {
   roomCode: string
   /**
-   * The invite URL, composed by the caller.
-   *
-   * Passed in rather than read from `window.location.origin` here so the
-   * above-capacity branch — where `encodeQr` returns null and the panel shows
-   * the link as text — is reachable: jsdom's origin makes every invite URL
-   * about 33 bytes, and a fallback no test can enter is a fallback that rots.
+   * The invite URL, composed by the caller rather than read from
+   * `window.location.origin` here, so a test can drive the panel at any origin.
    */
   inviteUrl: string
 }
@@ -57,7 +52,6 @@ async function copyToClipboard(text: string): Promise<boolean> {
  */
 export function InvitePanel({ roomCode, inviteUrl }: InvitePanelProps): ReactElement {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const [showQr, setShowQr] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(
@@ -83,10 +77,6 @@ export function InvitePanel({ roomCode, inviteUrl }: InvitePanelProps): ReactEle
 
       <p className="break-all text-sm text-ink-muted">{inviteUrl}</p>
 
-      {/* The QR toggle keeps one accessible name and lets `aria-expanded`
-          carry its state: a name that flipped to "Hide QR code" would be a
-          control that cannot be found twice, by a test or by anyone using it
-          from a screen reader. */}
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -94,15 +84,6 @@ export function InvitePanel({ roomCode, inviteUrl }: InvitePanelProps): ReactEle
           className="rounded-md border border-border-strong px-4 py-2 text-sm hover:border-brand hover:text-brand"
         >
           Copy invite link
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowQr((shown) => !shown)}
-          aria-expanded={showQr}
-          aria-label="Show QR code"
-          className="rounded-md border border-border-strong px-4 py-2 text-sm hover:border-brand hover:text-brand"
-        >
-          {showQr ? 'Hide QR code' : 'Show QR code'}
         </button>
       </div>
 
@@ -115,13 +96,6 @@ export function InvitePanel({ roomCode, inviteUrl }: InvitePanelProps): ReactEle
           </span>
         ) : null}
       </p>
-
-      {showQr ? (
-        <div className="flex flex-col items-center gap-2">
-          <QrCodeImage value={inviteUrl} size={240} label={`Invite QR code for room ${roomCode}`} />
-          <p className="text-sm text-ink-muted">Point a phone camera at this to join.</p>
-        </div>
-      ) : null}
     </section>
   )
 }
