@@ -23,7 +23,7 @@ import {
   type ChartConfiguration,
   type ChartDataset,
 } from 'chart.js'
-import type { Role } from '../../types/game'
+import { ROLE_ORDER, type Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
 
 /** Only the controllers, elements, scales and plugins this chart uses. */
@@ -88,6 +88,96 @@ export interface ResultsView {
   started_at?: string
   /** URL path only. */
   finished_at?: string
+}
+
+/* ─── The persisted payload, and its normaliser (`15 §2`; §2.0 FROZEN) ─── */
+
+/**
+ * One role's entry in `GET /games/{code}/results` and
+ * `GET /users/me/games/{id}` — the two routes that return the identical
+ * payload (`15 §2`).
+ */
+export interface RoleResult {
+  role: Role
+  display_name: string
+  is_bot: boolean
+  total_cost: number
+  peak_inventory: number
+  peak_backlog: number
+  weeks_in_backlog: number
+  order_variance: number
+  bullwhip_ratio: number | null
+  fill_rate: number | null
+  average_order: number
+  orders: number[]
+  inventory: number[]
+  backlog: number[]
+  cumulative_cost: number[]
+}
+
+export interface ResultsResponse {
+  room_code: string
+  weeks_played: number
+  duration_weeks: number
+  ended_early: boolean
+  currency_symbol: string
+  started_at: string
+  finished_at: string
+  demand_series: number[]
+  chain_total_cost: number
+  demand_variance: number
+  per_role: RoleResult[]
+  preset_name: string | null
+}
+
+/**
+ * The persisted path's normaliser. Everything the screen can show is in the
+ * payload, so the per-week series and the session facts are both present.
+ *
+ * It lives here beside `ResultsView` rather than in `ResultsPage.tsx` because
+ * section 22's match detail renders the same payload through the same
+ * components, and a second mapping of one contract drifts from the first the
+ * moment either changes (`22 §2.4`).
+ */
+export function resultsViewFromResponse(payload: ResultsResponse): ResultsView {
+  const perRole: RoleResultView[] = ROLE_ORDER.flatMap((role) => {
+    const entry = payload.per_role.find((candidate) => candidate.role === role)
+    if (!entry) return []
+    return [
+      {
+        role,
+        display_name: entry.display_name,
+        is_bot: entry.is_bot,
+        total_cost: entry.total_cost,
+        peak_inventory: entry.peak_inventory,
+        peak_backlog: entry.peak_backlog,
+        weeks_in_backlog: entry.weeks_in_backlog,
+        order_variance: entry.order_variance,
+        bullwhip_ratio: entry.bullwhip_ratio,
+        fill_rate: entry.fill_rate,
+        average_order: entry.average_order,
+        orders: entry.orders,
+        inventory: entry.inventory,
+        backlog: entry.backlog,
+        cumulative_cost: entry.cumulative_cost,
+      },
+    ]
+  })
+
+  return {
+    room_code: payload.room_code,
+    weeks_played: payload.weeks_played,
+    demand_series: payload.demand_series,
+    chain_total_cost: payload.chain_total_cost,
+    demand_variance: payload.demand_variance,
+    currency_symbol: payload.currency_symbol,
+    per_role: perRole,
+    duration_weeks: payload.duration_weeks,
+    ended_early: payload.ended_early,
+    preset_name: payload.preset_name,
+    started_at: payload.started_at,
+    finished_at: payload.finished_at,
+  }
 }
 
 /* ─── Series styling ─── */

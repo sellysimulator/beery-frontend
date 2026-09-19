@@ -189,6 +189,8 @@ export interface WeekRecord {
   orders_in_flight_after: number
   order: number
   was_bot: boolean
+  /** The host closed the week without this role's order (`07 §3.6`). */
+  was_forced: boolean
   holding_cost: number
   backlog_cost: number
   fixed_order_cost: number
@@ -279,8 +281,13 @@ export interface PlayerView {
   /** Front first: "4 arriving next week, 6 after". */
   supply_line: number
   supply_line_slots: number[]
+  /**
+   * What this role has ordered and its supplier has not yet received — the
+   * SUPPLIER's order pipeline, never this role's own, which would show the
+   * player next week's incoming demand (`07 §3.8`).
+   */
   orders_in_flight: number
-  /** Always `[]` for RETAILER. */
+  /** The same pipeline as a list. `0` and `[]` for FACTORY, which has no supplier. */
   orders_in_flight_slots: number[]
   incoming_order: number
   last_order: number | null
@@ -318,11 +325,20 @@ export interface PlayerView {
 export interface HostRoleView {
   inventory: number
   backlog: number
+  /** For the FACTORY this is the production line — its inbound pipeline. */
   supply_line: number
+  /**
+   * The role's OWN incoming-order pipeline — orders travelling towards it, the
+   * same figure as `WeekRecord.orders_in_flight_after`. The host view is
+   * unredacted, so this is not the quantity `PlayerView` sends under the same
+   * name (`07 §3.9`).
+   */
   orders_in_flight: number
   last_order: number | null
   incoming_order: number
   accumulated_cost: number
+  /** `0` away from the FACTORY, never null (`07 §3.9`). */
+  production_queue: number
   /** Whether the role has submitted — never the quantity. */
   has_submitted: boolean
   is_bot: boolean

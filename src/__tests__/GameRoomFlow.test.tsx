@@ -228,6 +228,7 @@ function ownHistory(role: Role): WeekRecord[] {
     orders_in_flight_after: 10,
     order: OWN_ORDERS[index],
     was_bot: false,
+    was_forced: false,
     holding_cost: 4,
     backlog_cost: 0,
     fixed_order_cost: 0,

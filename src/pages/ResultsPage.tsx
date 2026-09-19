@@ -8,95 +8,20 @@ import DebriefNotes from '../components/results/DebriefNotes'
 import ExportControls from '../components/results/ExportControls'
 import GuestClaimPrompt from '../components/results/GuestClaimPrompt'
 import RoleStatsTable from '../components/results/RoleStatsTable'
-import type { ResultsView, RoleResultView } from '../components/charts/chartSetup'
+import {
+  resultsViewFromResponse,
+  type ResultsResponse,
+  type ResultsView,
+  type RoleResultView,
+} from '../components/charts/chartSetup'
 import { ROLE_LABEL } from '../components/lobby/roleCopy'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { useGameStore } from '../store/gameStore'
-import { ROLE_ORDER, type GameFinishedPayload, type Participant, type Role } from '../types/game'
+import { ROLE_ORDER, type GameFinishedPayload, type Participant } from '../types/game'
 import { isHostForRoom } from '../utils/storage'
 import type { RouteDescriptor } from '../routes/registry'
 
-/* ─── The persisted payload (`15-results-and-export-api.md §2`) ─── */
-
-interface RoleResult {
-  role: Role
-  display_name: string
-  is_bot: boolean
-  total_cost: number
-  peak_inventory: number
-  peak_backlog: number
-  weeks_in_backlog: number
-  order_variance: number
-  bullwhip_ratio: number | null
-  fill_rate: number | null
-  average_order: number
-  orders: number[]
-  inventory: number[]
-  backlog: number[]
-  cumulative_cost: number[]
-}
-
-interface ResultsResponse {
-  room_code: string
-  weeks_played: number
-  duration_weeks: number
-  ended_early: boolean
-  currency_symbol: string
-  started_at: string
-  finished_at: string
-  demand_series: number[]
-  chain_total_cost: number
-  demand_variance: number
-  per_role: RoleResult[]
-  preset_name: string | null
-}
-
 /* ─── Normalisation: two sources, one view model (section 2.0, FROZEN) ─── */
-
-/**
- * The persisted path. Everything the screen can show is in the payload, so
- * the per-week series and the session facts are both present.
- */
-function viewFromResponse(payload: ResultsResponse): ResultsView {
-  const perRole: RoleResultView[] = ROLE_ORDER.flatMap((role) => {
-    const entry = payload.per_role.find((candidate) => candidate.role === role)
-    if (!entry) return []
-    return [
-      {
-        role,
-        display_name: entry.display_name,
-        is_bot: entry.is_bot,
-        total_cost: entry.total_cost,
-        peak_inventory: entry.peak_inventory,
-        peak_backlog: entry.peak_backlog,
-        weeks_in_backlog: entry.weeks_in_backlog,
-        order_variance: entry.order_variance,
-        bullwhip_ratio: entry.bullwhip_ratio,
-        fill_rate: entry.fill_rate,
-        average_order: entry.average_order,
-        orders: entry.orders,
-        inventory: entry.inventory,
-        backlog: entry.backlog,
-        cumulative_cost: entry.cumulative_cost,
-      },
-    ]
-  })
-
-  return {
-    room_code: payload.room_code,
-    weeks_played: payload.weeks_played,
-    demand_series: payload.demand_series,
-    chain_total_cost: payload.chain_total_cost,
-    demand_variance: payload.demand_variance,
-    currency_symbol: payload.currency_symbol,
-    per_role: perRole,
-    duration_weeks: payload.duration_weeks,
-    ended_early: payload.ended_early,
-    preset_name: payload.preset_name,
-    started_at: payload.started_at,
-    finished_at: payload.finished_at,
-  }
-}
 
 /**
  * The live path — `game_finished` plus the store, available the instant the
@@ -359,7 +284,7 @@ export function ResultsPage(): ReactElement {
         if (cancelled) return
         try {
           const response = await http.get<ResultsResponse>(`/games/${roomCode}/results`)
-          if (!cancelled) setOutcome({ code: roomCode, view: viewFromResponse(response.data) })
+          if (!cancelled) setOutcome({ code: roomCode, view: resultsViewFromResponse(response.data) })
           return
         } catch (err) {
           // Persistence is non-blocking (`12 §3.8`), so a 404 right after the

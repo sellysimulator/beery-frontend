@@ -899,11 +899,23 @@ describe('CRITERION 21: the host participant list badges bots', () => {
 // ---------------------------------------------------------------------------
 
 describe('CRITERION 24: the host shell resolves section 20 by discovery', () => {
-  it('hostConsoleScreen() is null while section 20 does not exist', () => {
-    expect(hostConsoleScreen()).toBeNull();
+  const CONSOLE = './HostConsole.tsx';
+
+  it('resolves an absent console to null rather than a compile error', () => {
+    // Asserted against an explicit module record, never against the live
+    // `hostConsoleScreen()`: `import.meta.glob` is expanded at transform time,
+    // so once section 20 shipped its file the live resolver can never return
+    // null again. The two assertions this replaced said `toBeNull()` and
+    // expected the placeholder, and were true for exactly as long as section
+    // 20 did not exist -- the same expiring criterion as section 16's empty
+    // route registry and section 01's Alembic table set.
+    expect(resolveShellScreen({}, CONSOLE, 'HostConsole')).toBeNull();
+    expect(resolveShellScreen({ [CONSOLE]: {} }, CONSOLE, 'HostConsole')).toBeNull();
   });
 
-  it('renders the placeholder instead of failing, once the room is RUNNING', () => {
+  it('renders the resolved console once the room is RUNNING, not the placeholder', () => {
+    expect(hostConsoleScreen()).toBeTypeOf('function');
+
     armedTab();
     act(() => {
       useGameStore.setState({ roomState: 'RUNNING' });
@@ -911,7 +923,7 @@ describe('CRITERION 24: the host shell resolves section 20 by discovery', () => 
 
     renderHostRoom();
 
-    expect(bodyText()).toContain(SHELL_PLACEHOLDER);
+    expect(bodyText()).not.toContain(SHELL_PLACEHOLDER);
   });
 
   it('still claims the room in a state it cannot yet render', () => {
