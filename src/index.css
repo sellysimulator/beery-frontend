@@ -1,111 +1,84 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+@import "tailwindcss";
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/*
+ * Tailwind v4 is CSS-first: there is no tailwind.config.js. Everything the
+ * theme defines lives here and is emitted as both a CSS variable and a set of
+ * utilities.
+ *
+ * The palette is the Okabe-Ito set, which stays distinguishable under
+ * deuteranopia, protanopia and tritanopia, on a near-black surface so it holds
+ * contrast at projector distance. Colour is never the only signal: backlog, in
+ * particular, always carries an icon and a text label as well.
+ */
+@theme {
+  --color-surface: #0f1115;
+  --color-surface-raised: #171a21;
+  --color-surface-sunken: #0a0c10;
+  --color-border: #2b3039;
+  --color-border-strong: #3d444f;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --color-ink: #f5f7fa;
+  --color-ink-muted: #b6bfcc;
+  --color-ink-subtle: #7f8a99;
+  --color-ink-inverse: #0f1115;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+  --color-brand: #e69f00;
+  --color-brand-strong: #b87e00;
+  --color-brand-soft: #4a3611;
+
+  --color-info: #56b4e9;
+  --color-success: #009e73;
+  --color-warning: #e69f00;
+  --color-danger: #d55e00;
+  --color-accent: #cc79a7;
+
+  /* Supply-chain roles, upstream to downstream. */
+  --color-role-retailer: #56b4e9;
+  --color-role-wholesaler: #009e73;
+  --color-role-distributor: #cc79a7;
+  --color-role-factory: #0072b2;
+
+  /* Game quantities. Backlog additionally carries an icon and a label. */
+  --color-inventory: #56b4e9;
+  --color-backlog: #d55e00;
+  --color-supply-line: #f0e442;
+  --color-demand: #f5f7fa;
+  --color-order: #e69f00;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Readable from the back of a lecture hall. */
+  --text-figure: 2.75rem;
+  --text-figure--line-height: 1.05;
+  --text-figure--font-weight: 700;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+@layer components {
+  /* Tabular figures keep week-by-week columns from jittering as they update. */
+  .numeric {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }
