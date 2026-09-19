@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
-import { auth, firebaseConfigError, googleProvider } from '../../firebase'
+import { auth, googleProvider } from '../../firebase'
 import http from '../api/http'
 import { socket } from '../api/socket'
 import { GUEST_ID_KEY, getOrCreateGuestId } from '../utils/storage'
@@ -82,10 +82,6 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
-    // Firebase is optional configuration: when it is absent this rejects with
-    // the reason rather than letting the SDK fail opaquely (section 4.11).
-    if (firebaseConfigError) throw new Error(firebaseConfigError)
-
     const result = await signInWithPopup(auth, googleProvider)
     setFirebaseUser(result.user)
     setMode('authenticated')

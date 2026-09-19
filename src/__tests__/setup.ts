@@ -55,30 +55,6 @@ function ensureStorage(name: 'localStorage' | 'sessionStorage'): void {
 ensureStorage('localStorage');
 ensureStorage('sessionStorage');
 
-/**
- * Supply the Firebase web config the way `.env` does in development.
- *
- * §4.11 requires `firebase.ts` to fail loudly at module load when a required
- * `VITE_FIREBASE_*` variable is absent — a hardcoded fallback would silently
- * authenticate against a sibling game's project. That rule is correct and is
- * not weakened here: the harness provides the variables instead, so the module
- * is exercised as written. Any value that is really set (a developer's `.env`,
- * or CI) wins.
- */
-const FIREBASE_ENV_KEYS = [
-  'VITE_FIREBASE_API_KEY',
-  'VITE_FIREBASE_AUTH_DOMAIN',
-  'VITE_FIREBASE_PROJECT_ID',
-  'VITE_FIREBASE_STORAGE_BUCKET',
-  'VITE_FIREBASE_MESSAGING_SENDER_ID',
-  'VITE_FIREBASE_APP_ID',
-] as const;
-
-for (const key of FIREBASE_ENV_KEYS) {
-  const env = import.meta.env as unknown as Record<string, string | undefined>;
-  if (!env[key]) vi.stubEnv(key, `test-${key.toLowerCase()}`);
-}
-
 beforeEach(() => {
   try {
     window.localStorage.clear();
