@@ -51,8 +51,11 @@
   --color-role-wholesaler-soft: #d2ece5;
   --color-role-distributor: #9c4f78;
   --color-role-distributor-soft: #f6dfeb;
-  --color-role-factory: #1d5c86;
-  --color-role-factory-soft: #dbe7f2;
+  /* Vermillion, not a second blue: #1d5c86 was a shade of the Retailer's
+     #1f6f9c, and on a projector the two order curves in the bullwhip chart
+     read as one line (21 §2.2). Okabe-Ito keeps them apart by hue. */
+  --color-role-factory: #a8480a;
+  --color-role-factory-soft: #fae0d2;
 
   /* Game quantities. Backlog additionally carries an icon and a label. */
   --color-inventory: #1f6f9c;
