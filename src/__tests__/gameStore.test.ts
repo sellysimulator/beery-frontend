@@ -31,6 +31,9 @@ const DECLARED_FIELDS = [
   'roleToAlias',
   'roleAssignmentMode',
   'config',
+  'canStart',
+  'startBlockedReason',
+  'joinError',
   // play
   'week',
   'durationWeeks',
@@ -89,6 +92,8 @@ describe('gameStore — the declared GameState surface', () => {
     expect(state.hostDisplayName).toBeNull();
     expect(state.roleAssignmentMode).toBeNull();
     expect(state.config).toBeNull();
+    expect(state.startBlockedReason).toBeNull();
+    expect(state.joinError).toBeNull();
     expect(state.week).toBeNull();
     expect(state.durationWeeks).toBeNull();
     expect(state.myState).toBeNull();
@@ -106,6 +111,7 @@ describe('gameStore — the declared GameState surface', () => {
     expect(state.isHost).toBe(false);
     expect(state.hasSubmitted).toBe(false);
     expect(state.paused).toBe(false);
+    expect(state.canStart).toBe(false);
     expect(state.lastSeq).toBe(0);
   });
 
@@ -256,6 +262,8 @@ describe('lobby appliers', () => {
       role_assignment_mode: 'HOST_ASSIGNS',
       seats_total: 4,
       config_locked: false,
+      can_start: false,
+      start_blocked_reason: 'Waiting for 3 more players.',
     });
 
     const state = useGameStore.getState();
@@ -265,6 +273,40 @@ describe('lobby appliers', () => {
     expect(state.roleAssignmentMode).toBe('HOST_ASSIGNS');
     expect(state.roleToAlias.RETAILER).toBe('P1');
     expect(state.lastSeq).toBe(1);
+
+    // The server decides whether the game can start; the client never computes it.
+    expect(state.canStart).toBe(false);
+    expect(state.startBlockedReason).toBe('Waiting for 3 more players.');
+  });
+
+  it('applyLobbyUpdate flips canStart, and the reason is null exactly when it is true', () => {
+    const base = {
+      state: 'READY' as const,
+      host_display_name: 'Host',
+      participants: [],
+      role_to_alias: { RETAILER: 'P1', WHOLESALER: 'P2', DISTRIBUTOR: 'P3', FACTORY: 'P4' },
+      role_assignment_mode: 'HOST_ASSIGNS' as const,
+      seats_total: 4,
+      config_locked: true,
+    };
+
+    useGameStore.getState().applyLobbyUpdate({
+      ...base,
+      seq: 1,
+      can_start: false,
+      start_blocked_reason: 'Two roles are unfilled.',
+    });
+    expect(useGameStore.getState().canStart).toBe(false);
+    expect(useGameStore.getState().startBlockedReason).toBe('Two roles are unfilled.');
+
+    useGameStore.getState().applyLobbyUpdate({
+      ...base,
+      seq: 2,
+      can_start: true,
+      start_blocked_reason: null,
+    });
+    expect(useGameStore.getState().canStart).toBe(true);
+    expect(useGameStore.getState().startBlockedReason).toBeNull();
   });
 
   it('applyLobbyUpdate never leaks a secret into the store', () => {
@@ -277,6 +319,8 @@ describe('lobby appliers', () => {
       role_assignment_mode: 'RANDOM',
       seats_total: 4,
       config_locked: true,
+      can_start: false,
+      start_blocked_reason: 'Nobody has joined yet.',
     });
 
     const text = snapshot().toLowerCase();
@@ -362,6 +406,57 @@ describe('play appliers', () => {
   });
 });
 
+describe('join_error (D18 recovery depends on this, 17 §2.4)', () => {
+  it('applyJoinError records the message', () => {
+    useGameStore.getState().applyJoinError({ message: 'You are not the host of this room.' });
+
+    expect(useGameStore.getState().joinError).toBe('You are not the host of this room.');
+  });
+
+  it('applies with no seq, even after a high seq has been applied', () => {
+    // `join_error` carries no `seq`, so — unlike every sequenced applier — it
+    // must not be gated. Gating it would make a refusal after any game event
+    // invisible, and the refusal is exactly what tells a tab it is not the host.
+    useGameStore.getState().applyWeekClosed({ seq: 40, week: 12, next_week: 13, awaiting_roles: [] });
+
+    useGameStore.getState().applyJoinError({ message: 'Room not found.' });
+
+    expect(useGameStore.getState().joinError).toBe('Room not found.');
+    expect(useGameStore.getState().lastSeq).toBe(40);
+  });
+
+  it('a second refusal replaces the first', () => {
+    useGameStore.getState().applyJoinError({ message: 'first' });
+    useGameStore.getState().applyJoinError({ message: 'second' });
+
+    expect(useGameStore.getState().joinError).toBe('second');
+  });
+
+  it('clearJoinError returns it to null once a screen has acted on it', () => {
+    useGameStore.getState().applyJoinError({ message: 'You are not the host of this room.' });
+
+    useGameStore.getState().clearJoinError();
+
+    expect(useGameStore.getState().joinError).toBeNull();
+  });
+
+  it('clearing is idempotent and harmless when there is no error', () => {
+    useGameStore.getState().clearJoinError();
+    expect(useGameStore.getState().joinError).toBeNull();
+  });
+
+  it('null before the first reply is distinguishable from a refusal', () => {
+    // Section 17 tells "refused" apart from "not answered yet" by this field
+    // alone; before the first reply the two states look identical from the
+    // route plus isHost.
+    expect(useGameStore.getState().joinError).toBeNull();
+
+    useGameStore.getState().applyJoinError({ message: 'Not the host.' });
+
+    expect(useGameStore.getState().joinError).not.toBeNull();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Identity, lifecycle and UI actions
 // ---------------------------------------------------------------------------
@@ -386,6 +481,19 @@ describe('identity and lifecycle actions', () => {
     useGameStore.getState().applyWeekClosed({ seq: 9, week: 4, next_week: 5, awaiting_roles: ['FACTORY'] });
     useGameStore.getState().addAlert({ kind: 'error', message: 'boom' });
     useGameStore.getState().setConnectionError('down');
+    useGameStore.getState().applyJoinError({ message: 'Not the host.' });
+    useGameStore.getState().applyLobbyUpdate({
+      seq: 10,
+      state: 'READY',
+      host_display_name: 'Host',
+      participants: [],
+      role_to_alias: { RETAILER: 'P1', WHOLESALER: 'P2', DISTRIBUTOR: 'P3', FACTORY: 'P4' },
+      role_assignment_mode: 'HOST_ASSIGNS',
+      seats_total: 4,
+      config_locked: true,
+      can_start: true,
+      start_blocked_reason: null,
+    });
 
     useGameStore.getState().reset();
 
@@ -396,6 +504,9 @@ describe('identity and lifecycle actions', () => {
     expect(state.awaitingRoles).toEqual([]);
     expect(state.alerts).toEqual([]);
     expect(state.connectionError).toBeNull();
+    expect(state.canStart).toBe(false);
+    expect(state.startBlockedReason).toBeNull();
+    expect(state.joinError).toBeNull();
     expect(state.roleToAlias).toEqual({
       RETAILER: null,
       WHOLESALER: null,

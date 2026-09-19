@@ -516,6 +516,10 @@ export interface LobbyUpdatePayload {
   role_assignment_mode: RoleAssignmentMode
   seats_total: number
   config_locked: boolean
+  /** The server decides whether the game can start. The client never does. */
+  can_start: boolean
+  /** null exactly when `can_start` is true. */
+  start_blocked_reason: string | null
 }
 
 export interface ConfigUpdatedPayload {

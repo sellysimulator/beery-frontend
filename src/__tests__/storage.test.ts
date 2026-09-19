@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   GUEST_ID_KEY,
+  MAX_DISPLAY_NAME_LENGTH,
   getAlias,
   setAlias,
   getGuestId,
@@ -24,6 +25,8 @@ import {
   setHostRoom,
   isHostForRoom,
   clearHostRoom,
+  getDisplayName,
+  setDisplayName,
 } from '../utils/storage';
 
 const ROOM = 'ABCD12';
@@ -208,5 +211,137 @@ describe('host claim — UI hint only, tab-scoped (criterion 16)', () => {
     setHostRoom(ROOM);
     clearHostRoom();
     expect(isHostForRoom(ROOM)).toBe(false);
+  });
+});
+
+describe('display name — display data, sanitised on write, localStorage', () => {
+  it('exports the one copy of the length limit', () => {
+    // Section 17's input fields need it for maxLength; a second copy of 24 in
+    // another section is a copy that drifts.
+    expect(MAX_DISPLAY_NAME_LENGTH).toBe(24);
+  });
+
+  it('round-trips a clean name and starts null', () => {
+    expect(getDisplayName()).toBeNull();
+    setDisplayName('Ana');
+    expect(getDisplayName()).toBe('Ana');
+  });
+
+  it('writes to localStorage, not sessionStorage — it is browser-scoped, not tab-scoped', () => {
+    setDisplayName('Ana');
+
+    expect(holds(window.localStorage, 'Ana')).toBe(true);
+    expect(holds(window.sessionStorage, 'Ana')).toBe(false);
+
+    openFreshTab();
+    expect(getDisplayName()).toBe('Ana');
+  });
+
+  it('REMOVES a non-whitespace control character — it is invisible junk, not a separator', () => {
+    // NUL, BEL and ESC arrive in pasted text and are not word separators, so
+    // "A<NUL>n<BEL>a<ESC>" is the one word "Ana". Replacing them with a space
+    // instead would split one word into three, and the collapse step cannot put
+    // it back together again (§3, step 1).
+    setDisplayName('A\u0000n\u0007a\u001b');
+    expect(getDisplayName()).toBe('Ana');
+  });
+
+  it('REPLACES a whitespace control character with a space — a spreadsheet paste is tab-separated', () => {
+    // The other half of step 1, and the reason a blanket "strip U+0000–U+001F"
+    // is wrong: \t, \n, \r, \v and \f all live in that range, so deleting them
+    // would join the words around them into "GraceHopper".
+    setDisplayName('Grace\tHopper');
+    expect(getDisplayName()).toBe('Grace Hopper');
+  });
+
+  it('replaces every one of the five whitespace control characters', () => {
+    for (const [name, char] of [
+      ['tab', '\t'],
+      ['newline', '\n'],
+      ['carriage return', '\r'],
+      ['vertical tab', '\v'],
+      ['form feed', '\f'],
+    ] as const) {
+      setDisplayName(`Grace${char}Hopper`);
+      expect(`${name}:${getDisplayName()}`).toBe(`${name}:Grace Hopper`);
+    }
+  });
+
+  it('applies both halves of step 1 in one value', () => {
+    // A tab separates; a NUL vanishes. Getting either class wrong is visible here.
+    setDisplayName('Grace\tHo\u0000pper');
+    expect(getDisplayName()).toBe('Grace Hopper');
+  });
+
+  it('a run of mixed control characters collapses to exactly one space', () => {
+    setDisplayName('Grace\t\u0000\n\u0007 Hopper');
+    expect(getDisplayName()).toBe('Grace Hopper');
+  });
+
+  it('a leading or trailing control character leaves no edge whitespace', () => {
+    setDisplayName('\tGrace Hopper\n');
+    expect(getDisplayName()).toBe('Grace Hopper');
+  });
+
+  it('collapses runs of whitespace and trims', () => {
+    setDisplayName('   Ana    Maria \t\n Silva   ');
+    expect(getDisplayName()).toBe('Ana Maria Silva');
+  });
+
+  it(`clamps to ${24} characters`, () => {
+    const long = 'A'.repeat(40);
+    setDisplayName(long);
+
+    const stored = getDisplayName();
+    expect(stored).not.toBeNull();
+    expect((stored as string).length).toBe(MAX_DISPLAY_NAME_LENGTH);
+    expect(stored).toBe('A'.repeat(MAX_DISPLAY_NAME_LENGTH));
+  });
+
+  it('trims again after clamping, when the boundary lands on a space (§3, step 5)', () => {
+    // 23 characters, a space, then one more: the clamp cuts at 24, which is
+    // exactly the space, and an un-trimmed result would end in it.
+    const input = `${'A'.repeat(23)} B`;
+    expect(input.length).toBeGreaterThan(MAX_DISPLAY_NAME_LENGTH);
+
+    setDisplayName(input);
+
+    const stored = getDisplayName();
+    expect(stored).toBe('A'.repeat(23));
+    expect(stored).not.toMatch(/\s$/);
+  });
+
+  it('clamps after sanitising, not before', () => {
+    // Twenty-four visible characters separated by runs of whitespace: if the
+    // clamp ran first it would cut inside the padding and lose real characters.
+    setDisplayName(`${'  '}${'B'.repeat(10)}${'   '}${'C'.repeat(10)}${'  '}`);
+    expect(getDisplayName()).toBe(`${'B'.repeat(10)} ${'C'.repeat(10)}`);
+  });
+
+  it('a value that sanitises to empty CLEARS the stored name', () => {
+    setDisplayName('Ana');
+    expect(getDisplayName()).toBe('Ana');
+
+    setDisplayName('   \u0000  \t ');
+
+    // Cleared, not stored as an empty string — a stored "" would be echoed back
+    // to the user and put on the wire as a name they never chose.
+    expect(getDisplayName()).toBeNull();
+    expect(holds(window.localStorage, 'Ana')).toBe(false);
+  });
+
+  it('an empty string clears it too', () => {
+    setDisplayName('Ana');
+    setDisplayName('');
+    expect(getDisplayName()).toBeNull();
+  });
+
+  it('is not a secret and is not room-scoped', () => {
+    setDisplayName('Ana');
+    // Nothing about the name is per-room or per-tab; it is the same value for
+    // every room this browser joins.
+    expect(getDisplayName()).toBe('Ana');
+    openFreshTab();
+    expect(getDisplayName()).toBe('Ana');
   });
 });

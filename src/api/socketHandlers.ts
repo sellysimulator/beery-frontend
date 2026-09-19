@@ -14,6 +14,7 @@ import { socket } from './socket'
 import { join, joinWaiting } from './games'
 import { useGameStore } from '../store/gameStore'
 import {
+  getDisplayName,
   getHostSecret,
   getSessionToken,
   isHostForRoom,
@@ -32,6 +33,7 @@ import type {
   GameStartedPayload,
   HostClaimedPayload,
   HostStatePayload,
+  JoinEmit,
   JoinErrorPayload,
   JoinedPayload,
   LobbyUpdatePayload,
@@ -114,8 +116,17 @@ export function rejoinAfterConnect(): void {
     return
   }
 
+  // The display name goes back out too, so a reconnect does not silently drop
+  // the name the player chose. A shell may also emit `join` on mount, so a cold
+  // load can produce two: that is intended and harmless, because `join` is
+  // idempotent by identity and the alternative — one emitter inferring whether
+  // the other has already fired — breaks on a slow connect.
+  const payload: JoinEmit = { room_id: roomCode }
+  const displayName = getDisplayName()
+  if (displayName) payload.display_name = displayName
   const sessionToken = getSessionToken(roomCode)
-  join(sessionToken ? { room_id: roomCode, session_token: sessionToken } : { room_id: roomCode })
+  if (sessionToken) payload.session_token = sessionToken
+  join(payload)
 }
 
 /* ─── connection lifecycle ─── */
@@ -167,7 +178,12 @@ socket.on('host_claimed', (payload: HostClaimedPayload) => {
 })
 
 socket.on('join_error', (payload: JoinErrorPayload) => {
-  store().addAlert({ kind: 'error', message: payload?.message || 'Could not join the room.' })
+  const message = payload?.message || 'Could not join the room.'
+  // The store field is what lets a screen tell a refusal apart from silence —
+  // D18's recovery path depends on it. The alert is the generic surfacing, in
+  // the same shape as `connect_error` above.
+  store().applyJoinError({ message })
+  store().addAlert({ kind: 'error', message })
 })
 
 socket.on('lobby_update', (payload: LobbyUpdatePayload) => {

@@ -9,6 +9,7 @@ import type {
   GameStartedPayload,
   HostStatePayload,
   HostView,
+  JoinErrorPayload,
   JoinedPayload,
   LobbyUpdatePayload,
   OrderSubmittedPayload,
@@ -48,6 +49,12 @@ export interface GameState {
   roleAssignmentMode: RoleAssignmentMode | null
   /** Host only; null for players. */
   config: GameConfig | null
+  /** From `lobby_update`. The server decides; the client never does. */
+  canStart: boolean
+  /** null exactly when `canStart` is true. */
+  startBlockedReason: string | null
+  /** The last `join_error` message, or null. */
+  joinError: string | null
 
   // play
   week: number | null
@@ -83,8 +90,12 @@ export interface GameActions {
   reset(): void
 
   // section 11 events
-  /** The one applier with no `seq`. */
+  /** No `seq`: `joined` does not carry one. */
   applyJoined(p: JoinedPayload): void
+  /** No `seq`: `join_error` does not carry one. Sets `joinError`. */
+  applyJoinError(p: JoinErrorPayload): void
+  /** A screen dismisses the error after acting on it. */
+  clearJoinError(): void
   applyLobbyUpdate(p: LobbyUpdatePayload): void
   applyConfigUpdated(p: ConfigUpdatedPayload): void
   applyRolesAssigned(p: RolesAssignedPayload): void
@@ -130,6 +141,9 @@ const initialState: GameState = {
   roleToAlias: { ...EMPTY_ROLE_TO_ALIAS },
   roleAssignmentMode: null,
   config: null,
+  canStart: false,
+  startBlockedReason: null,
+  joinError: null,
 
   week: null,
   durationWeeks: null,
@@ -194,8 +208,23 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
     setIsHost: (isHost) => set({ isHost }),
     reset: () => set({ ...initialState, roleToAlias: { ...EMPTY_ROLE_TO_ALIAS } }),
 
+    /**
+     * A successful join makes any earlier refusal stale, so it clears
+     * `joinError`. `clearJoinError()` remains for a screen that has shown the
+     * error and wants it gone without a join; the two are not alternatives.
+     */
     applyJoined: (p) =>
-      set({ myAlias: p.alias, myRole: p.role, isHost: p.is_host }),
+      set({ myAlias: p.alias, myRole: p.role, isHost: p.is_host, joinError: null }),
+
+    /**
+     * `joinError` is what lets a screen tell "the server refused this tab's
+     * host claim" apart from "the server has not answered yet". D18's recovery
+     * path turns on that distinction: showing the recovery screen before the
+     * first reply makes the path invisible to the one person who needs it.
+     */
+    applyJoinError: (p) => set({ joinError: p?.message ?? null }),
+
+    clearJoinError: () => set({ joinError: null }),
 
     applyLobbyUpdate: (p) =>
       applySequenced(p.seq, (state) => {
@@ -206,6 +235,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
           participants: p.participants,
           roleToAlias: p.role_to_alias,
           roleAssignmentMode: p.role_assignment_mode,
+          canStart: p.can_start,
+          startBlockedReason: p.start_blocked_reason,
           myRole: mine ? mine.role : state.myRole,
         }
       }),

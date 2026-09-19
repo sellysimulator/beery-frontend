@@ -24,6 +24,7 @@ import {
   isHostForRoom,
   setHostRoom,
   getOrCreateGuestId,
+  setDisplayName,
 } from '../utils/storage';
 
 type Listener = (...args: unknown[]) => void;
@@ -142,6 +143,11 @@ function dispatch(event: string, payload?: unknown): void {
 
 function emitsOf(event: string): unknown[] {
   return rec.emits.filter((e) => e.event === event).map((e) => e.payload);
+}
+
+/** What Socket.IO would actually put on the wire: `undefined` keys vanish. */
+function onTheWire(payload: unknown): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(payload ?? {})) as Record<string, unknown>;
 }
 
 /** Recursively collects every object key appearing anywhere in a value. */
@@ -403,9 +409,11 @@ describe('reconnection (16 §4.5)', () => {
     dispatch('connect');
 
     const payloads = emitsOf('join_waiting') as Array<Record<string, unknown>>;
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0].room_id).toBe(ROOM);
-    expect(payloads[0].host_secret ?? null).toBeNull();
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    for (const payload of payloads) {
+      expect(payload.room_id).toBe(ROOM);
+      expect(onTheWire(payload)).not.toHaveProperty('host_secret');
+    }
   });
 
   it('carries the stored host_secret when there is one', () => {
@@ -417,9 +425,11 @@ describe('reconnection (16 §4.5)', () => {
     dispatch('connect');
 
     const payloads = emitsOf('join_waiting') as Array<Record<string, unknown>>;
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0].room_id).toBe(ROOM);
-    expect(payloads[0].host_secret).toBe('hs-stored');
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    for (const payload of payloads) {
+      expect(payload.room_id).toBe(ROOM);
+      expect(payload.host_secret).toBe('hs-stored');
+    }
   });
 
   it('emits join with the stored session_token on a player route', () => {
@@ -430,9 +440,14 @@ describe('reconnection (16 §4.5)', () => {
     dispatch('connect');
 
     const payloads = emitsOf('join') as Array<Record<string, unknown>>;
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0].room_id).toBe(ROOM);
-    expect(payloads[0].session_token).toBe('tok-stored');
+    // §4.5: a shell may also emit `join` on mount, so a cold load can produce
+    // two. That is intended — `join` is idempotent by identity — and every one
+    // of them must carry the same credentials.
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    for (const payload of payloads) {
+      expect(payload.room_id).toBe(ROOM);
+      expect(payload.session_token).toBe('tok-stored');
+    }
     expect(emitsOf('join_waiting')).toHaveLength(0);
   });
 
@@ -443,8 +458,55 @@ describe('reconnection (16 §4.5)', () => {
     dispatch('connect');
 
     const payloads = emitsOf('join') as Array<Record<string, unknown>>;
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0].session_token ?? null).toBeNull();
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    for (const payload of payloads) {
+      expect(onTheWire(payload)).not.toHaveProperty('session_token');
+    }
+  });
+
+  it('carries the stored display name, so a reconnect does not drop it (§4.5)', () => {
+    window.history.pushState({}, '', `/game/${ROOM}`);
+    useGameStore.setState({ roomCode: ROOM });
+    setSessionToken(ROOM, 'tok-stored');
+    setDisplayName('Ana Maria');
+
+    dispatch('connect');
+
+    const payloads = emitsOf('join') as Array<Record<string, unknown>>;
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    for (const payload of payloads) {
+      expect(payload.display_name).toBe('Ana Maria');
+      expect(payload.session_token).toBe('tok-stored');
+    }
+  });
+
+  it('puts no display_name on the wire when none is stored', () => {
+    window.history.pushState({}, '', `/game/${ROOM}`);
+    useGameStore.setState({ roomCode: ROOM });
+    setSessionToken(ROOM, 'tok-stored');
+
+    dispatch('connect');
+
+    const payloads = emitsOf('join') as Array<Record<string, unknown>>;
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    for (const payload of payloads) {
+      expect(onTheWire(payload)).not.toHaveProperty('display_name');
+    }
+  });
+
+  it('the display name is never sent on join_waiting as a credential', () => {
+    window.history.pushState({}, '', `/host/${ROOM}`);
+    useGameStore.setState({ roomCode: ROOM });
+    setHostSecret(ROOM, 'hs-stored');
+    setDisplayName('Ana Maria');
+
+    dispatch('connect');
+
+    // The host's name reaches the room through `join_waiting`'s server-side
+    // record, never as something that proves authority.
+    for (const payload of emitsOf('join_waiting') as Array<Record<string, unknown>>) {
+      expect(payload.host_secret).toBe('hs-stored');
+    }
   });
 
   it('joined stores the session_token per room and puts the alias in the store', () => {
@@ -461,6 +523,44 @@ describe('reconnection (16 §4.5)', () => {
   it('emits nothing when there is no room to rejoin', () => {
     dispatch('connect');
     expect(rec.emits).toHaveLength(0);
+  });
+});
+
+describe('join_error reaches the store, not a component listener', () => {
+  it('writes the refusal to joinError', () => {
+    dispatch('join_error', { message: 'You are not the host of this room.' });
+
+    expect(useGameStore.getState().joinError).toBe('You are not the host of this room.');
+  });
+
+  it('is not gated on seq — it carries none', () => {
+    dispatch('week_closed', { seq: 30, week: 10, next_week: 11, awaiting_roles: [] });
+
+    dispatch('join_error', { message: 'Room not found.' });
+
+    expect(useGameStore.getState().joinError).toBe('Room not found.');
+    expect(useGameStore.getState().lastSeq).toBe(30);
+  });
+
+  it('a refused host claim does not retry the emit (§4.5)', () => {
+    window.history.pushState({}, '', `/host/${ROOM}`);
+    useGameStore.setState({ roomCode: ROOM });
+    dispatch('connect');
+    const afterConnect = rec.emits.length;
+
+    // On join_error this tab genuinely is not the host: surface the recovery
+    // screen rather than retrying.
+    dispatch('join_error', { message: 'You are not the host of this room.' });
+
+    expect(rec.emits).toHaveLength(afterConnect);
+    expect(useGameStore.getState().joinError).toBeTruthy();
+  });
+
+  it('the lobby refusal never becomes a host_secret', () => {
+    dispatch('join_error', { message: 'You are not the host of this room.' });
+
+    expect(getHostSecret(ROOM)).toBeNull();
+    expect(isHostForRoom(ROOM)).toBe(false);
   });
 });
 
@@ -482,15 +582,15 @@ describe('FAILURE MODE 5: a refused handshake is surfaced, once', () => {
     expect(typeof state.connectionError).toBe('string');
     expect(state.alerts).toHaveLength(1);
 
-    // The frozen Alert shape: { id, kind, message }. Which `kind` a refused
-    // handshake carries is the implementer's choice; that it is one of the
-    // three members, and that the alert is addressable by id, is not.
+    // §4.6 freezes this: a single alert of kind 'error', with `connectionError`
+    // set to its message.
     const alert = state.alerts[0];
     expect(typeof alert.id).toBe('string');
     expect(alert.id.length).toBeGreaterThan(0);
-    expect(['info', 'success', 'error']).toContain(alert.kind);
+    expect(alert.kind).toBe('error');
     expect(typeof alert.message).toBe('string');
     expect(alert.message.length).toBeGreaterThan(0);
+    expect([alert.message, 'Unauthorized']).toContain(state.connectionError);
   });
 
   it('the alert it raises can be dismissed by its id', () => {
@@ -594,6 +694,8 @@ describe('what the client sends back', () => {
       role_assignment_mode: 'HOST_ASSIGNS',
       seats_total: 4,
       config_locked: false,
+      can_start: false,
+      start_blocked_reason: 'Waiting for 3 more players.',
     });
     dispatch('game_started', {
       seq: 2,

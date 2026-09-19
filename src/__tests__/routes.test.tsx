@@ -18,7 +18,7 @@ import { createElement, StrictMode, useEffect, type ReactElement, type ReactNode
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
@@ -27,7 +27,7 @@ import { AuthGuard } from '../components/shared/AuthGuard';
 import { BackendGuard } from '../components/shared/BackendGuard';
 import { Avatar } from '../components/shared/Avatar';
 import { NotFound } from '../components/shared/NotFound';
-import { discoverRoutes, type RouteDescriptor } from '../routes/registry';
+import { collectRoutes, type RouteDescriptor } from '../routes/registry';
 import { ROLE_ORDER } from '../types/game';
 import type { DemandKind, Distribution, Role, RoleAssignmentMode, RoomState } from '../types/game';
 import { getGuestId } from '../utils/storage';
@@ -539,19 +539,60 @@ describe('toolchain gates', () => {
 // The route registry with src/pages/ empty or absent (criterion 19)
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 19: the registry works with src/pages/ empty or absent', () => {
-  it('discoverRoutes() returns [] when section 16 has shipped no page', () => {
-    // §7: section 16 writes NO module into src/pages/. This is what lets the
-    // section build and gate on its own, before any screen exists.
-    if (existsSync(PAGES_DIR)) {
-      expect(readdirSync(PAGES_DIR).filter((f) => /\.tsx?$/.test(f))).toEqual([]);
-    }
-
-    expect(discoverRoutes()).toEqual([]);
+describe('CRITERION 19: an empty module record produces an empty route table', () => {
+  /**
+   * Asserted through `collectRoutes`, never `discoverRoutes()`.
+   *
+   * `import.meta.glob` is expanded at TRANSFORM time, so once section 17 ships
+   * its pages the live registry can never return `[]` again — an assertion
+   * against it would be true for exactly one wave and false forever after.
+   * `collectRoutes({})` stays assertable for the life of the project (§3).
+   */
+  it('collectRoutes({}) returns []', () => {
+    expect(collectRoutes({})).toEqual([]);
   });
 
-  it('every path renders NotFound when the registry is empty', async () => {
-    const shell = await loadShell([]);
+  it('ignores a module that exports no route', () => {
+    expect(
+      collectRoutes({
+        '../pages/NotAPage.tsx': { default: () => null },
+        '../pages/AlsoNot.tsx': {},
+      }),
+    ).toEqual([]);
+  });
+
+  it('collects one descriptor per module, in module-name order', () => {
+    const descriptor = (path: string): RouteDescriptor => ({
+      path,
+      guard: 'public',
+      element: createElement('div', null, path),
+    });
+
+    const routes = collectRoutes({
+      '../pages/Zebra.tsx': { route: descriptor('/zebra') },
+      '../pages/Alpha.tsx': { route: descriptor('/alpha') },
+      '../pages/Middle.tsx': { route: descriptor('/middle') },
+    });
+
+    expect(routes.map((r) => r.path)).toEqual(['/alpha', '/middle', '/zebra']);
+  });
+
+  it('accepts an array of descriptors from one module (a page that owns a redirect)', () => {
+    const routes = collectRoutes({
+      '../pages/Join.tsx': {
+        route: [
+          { path: '/join/:roomCode', guard: 'public', element: createElement('div') },
+          { path: '/game/:roomCode', guard: 'auth+backend', element: createElement('div') },
+        ] satisfies RouteDescriptor[],
+      },
+    });
+
+    expect(routes.map((r) => r.path)).toEqual(['/join/:roomCode', '/game/:roomCode']);
+    expect(routes.map((r) => r.guard)).toEqual(['public', 'auth+backend']);
+  });
+
+  it('every path renders NotFound for a route table built from collectRoutes({})', async () => {
+    const shell = await loadShell(collectRoutes({}));
 
     for (const path of ['/', '/game/ABCD12', '/host/ABCD12', '/nonsense/deep/link']) {
       const { unmount } = renderShell(shell, path);
@@ -586,7 +627,9 @@ describe('CRITERION 20: a module dropped into src/pages/ is discovered', () => {
    */
   const specifier = (tag: string): string => `../routes/registry.ts?discover=${tag}`;
 
-  beforeAll(() => {
+  let discovered: RouteDescriptor[] = [];
+
+  beforeAll(async () => {
     if (!existsSync(PAGES_DIR)) {
       mkdirSync(PAGES_DIR, { recursive: true });
       createdPagesDir = true;
@@ -617,6 +660,16 @@ describe('CRITERION 20: a module dropped into src/pages/ is discovered', () => {
         '',
       ].join('\n'),
     );
+
+    // One cache-busted import, and every assertion below reads its result.
+    // `import.meta.glob` is expanded at transform time and Vite re-globs only
+    // for a module id it has not transformed yet, so a second busted id in the
+    // same process is not guaranteed to see the filesystem again.
+    vi.resetModules();
+    const mod = (await import(/* @vite-ignore */ specifier('dropped'))) as {
+      discoverRoutes: () => RouteDescriptor[];
+    };
+    discovered = mod.discoverRoutes();
   });
 
   afterAll(() => {
@@ -625,31 +678,20 @@ describe('CRITERION 20: a module dropped into src/pages/ is discovered', () => {
     if (createdPagesDir) rmSync(PAGES_DIR, { recursive: true, force: true });
   });
 
-  it('discoverRoutes() picks up both descriptors, with no edit to App.tsx', async () => {
-    vi.resetModules();
-    const mod = (await import(/* @vite-ignore */ specifier('dropped'))) as {
-      discoverRoutes: () => RouteDescriptor[];
-    };
+  it('discoverRoutes() picks up both descriptors among whatever else exists', () => {
+    const byPath = Object.fromEntries(discovered.map((r) => [r.path, r]));
 
-    const routes = mod.discoverRoutes();
-    const byPath = Object.fromEntries(routes.map((r) => [r.path, r]));
-
+    // Sections 17+ ship pages of their own; the probes are additions to that
+    // tree, not the whole of it.
+    expect(discovered.length).toBeGreaterThanOrEqual(2);
     expect(byPath['/__tmp-probe-public']).toBeDefined();
     expect(byPath['/__tmp-probe-public'].guard).toBe('public');
     expect(byPath['/__tmp-probe-secret']).toBeDefined();
     expect(byPath['/__tmp-probe-secret'].guard).toBe('auth');
   });
 
-  it('returns descriptors in module-name order (§4.8)', async () => {
-    vi.resetModules();
-    const mod = (await import(/* @vite-ignore */ specifier('order'))) as {
-      discoverRoutes: () => RouteDescriptor[];
-    };
-
-    const probes = mod
-      .discoverRoutes()
-      .map((r) => r.path)
-      .filter((p) => p.startsWith('/__tmp-probe'));
+  it('places the probes in module-name order among the discovered routes (§4.8)', () => {
+    const probes = discovered.map((r) => r.path).filter((p) => p.startsWith('/__tmp-probe'));
     expect(probes).toEqual(['/__tmp-probe-public', '/__tmp-probe-secret']);
   });
 });

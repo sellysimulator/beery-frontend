@@ -87,6 +87,75 @@ export function clearHostSecret(roomCode: string): void {
   sessionStorage.removeItem(hostSecretKey(roomCode))
 }
 
+/* ─── display name — DISPLAY DATA, not a credential; browser-scoped ─── */
+//
+// It lives here with every other browser-storage accessor rather than in a
+// per-section helper because BOTH emitters need it: section 17's shells on
+// mount, and this section's `rejoinAfterConnect` on every reconnect. The server
+// sanitises and truncates it (11 section 2) and it grants nothing, so it is
+// deliberately not tab-scoped and not treated as a secret.
+
+const DISPLAY_NAME_KEY = 'display_name'
+
+/** `00-decisions.md` section 5. Exported so section 17's inputs can set `maxLength`. */
+export const MAX_DISPLAY_NAME_LENGTH = 24
+
+// Word separators: they must become a space, or the words around them join.
+// eslint-disable-next-line no-control-regex
+const WHITESPACE_CONTROLS = /[\u0009\u000a\u000b\u000c\u000d]/g
+
+// Everything else in the control range: invisible junk that must simply vanish,
+// or one word is split into several.
+// eslint-disable-next-line no-control-regex
+const OTHER_CONTROLS = /[\u0000-\u0008\u000e-\u001f\u007f]/g
+
+/** A thin read. Sanitisation happens once, on the way in. */
+export function getDisplayName(): string | null {
+  return localStorage.getItem(DISPLAY_NAME_KEY)
+}
+
+/**
+ * Stores a name, sanitised. In this order: each WHITESPACE control character
+ * becomes a space and every OTHER control character is removed, runs of
+ * whitespace collapse to one, the result is trimmed, clamped to
+ * `MAX_DISPLAY_NAME_LENGTH`, and trimmed again. A value that sanitises to empty
+ * CLEARS the stored name rather than storing `''`.
+ *
+ * The two classes are treated differently on purpose, and neither blanket rule
+ * is correct — each was tried and each mangles a real paste:
+ *   - DELETING a whitespace control joins the words around it. `\t`, `\n` and
+ *     `\r` are all in U+0000-U+001F, so "strip controls, then collapse" turns
+ *     `'Grace\tHopper'` into `'GraceHopper'`. A name pasted out of a spreadsheet
+ *     cell is tab-separated, which makes that the common case.
+ *   - REPLACING a non-whitespace control with a space splits one word into
+ *     several: `'A\u0000n\u0007a'` becomes `'A n a'`. NUL, BEL and ESC are not
+ *     word separators, they are invisible junk, and they should vanish.
+ *
+ * Clamping is followed by a second trim because the length boundary can land on
+ * a space and reintroduce a trailing one.
+ *
+ * One choke point, on the write side, because more than one screen collects a
+ * name and a rule applied at each collection point is a rule the next
+ * collection point forgets. The server sanitises and truncates regardless
+ * (11 section 2), so this is not a security boundary — it is about what the
+ * user sees echoed back and what goes out on the wire.
+ */
+export function setDisplayName(name: string): void {
+  const clean = name
+    .replace(WHITESPACE_CONTROLS, ' ')
+    .replace(OTHER_CONTROLS, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_DISPLAY_NAME_LENGTH)
+    .trim()
+
+  if (clean.length === 0) {
+    localStorage.removeItem(DISPLAY_NAME_KEY)
+    return
+  }
+  localStorage.setItem(DISPLAY_NAME_KEY, clean)
+}
+
 /* ─── host claim — UI HINT ONLY, tab-scoped ─── */
 
 const HOST_ROOM_KEY = 'host_room'

@@ -7,10 +7,6 @@ import type { ReactElement } from 'react'
  * by exporting `route` — a descriptor, or an array of them for a page that
  * also owns a redirect — and the registry collects them in module-name order.
  * Adding a screen means dropping in a file; nothing upstream is edited.
- *
- * The registry must work with `src/pages/` empty or absent: section 16 ships
- * no page at all, so `discoverRoutes()` returns `[]` and every path falls
- * through to the shared `NotFound`.
  */
 
 export type RouteGuard = 'public' | 'auth' | 'backend' | 'auth+backend'
@@ -38,20 +34,21 @@ function isRouteDescriptor(value: unknown): value is RouteDescriptor {
 }
 
 /**
- * Every `route` export found in `src/pages/`, in module-name order.
+ * The collection logic, over an explicit module record — the testable form.
  *
- * `import.meta.glob` resolves at build time and yields `{}` when the directory
- * is empty or does not exist, which is exactly the state this section ships in.
+ * `collectRoutes({})` is the empty case, and stays assertable for the life of
+ * the project. The live `discoverRoutes()` cannot serve that purpose because
+ * `import.meta.glob` is expanded at transform time: once section 17 ships
+ * pages, it can never return `[]` again.
  */
-export function discoverRoutes(): RouteDescriptor[] {
-  const modules = import.meta.glob<Record<string, unknown>>('../pages/*.tsx', {
-    eager: true,
-  })
-
+export function collectRoutes(modules: Record<string, unknown>): RouteDescriptor[] {
   const routes: RouteDescriptor[] = []
 
   for (const path of Object.keys(modules).sort()) {
-    const exported = modules[path]?.route
+    const module = modules[path]
+    if (!module || typeof module !== 'object') continue
+
+    const exported = (module as Record<string, unknown>).route
     if (Array.isArray(exported)) {
       routes.push(...exported.filter(isRouteDescriptor))
     } else if (isRouteDescriptor(exported)) {
@@ -60,4 +57,14 @@ export function discoverRoutes(): RouteDescriptor[] {
   }
 
   return routes
+}
+
+/**
+ * Every `route` export found in `src/pages/`, in module-name order.
+ *
+ * `import.meta.glob` yields `{}` when the directory is empty or absent, so the
+ * registry works before any page exists.
+ */
+export function discoverRoutes(): RouteDescriptor[] {
+  return collectRoutes(import.meta.glob('../pages/*.tsx', { eager: true }))
 }
