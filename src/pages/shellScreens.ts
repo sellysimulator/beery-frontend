@@ -34,8 +34,15 @@ const configPanels = import.meta.glob<ScreenModule>(
  * The named export if the module has one, else its default. Anything that is
  * not callable is treated as absent, so a half-written module degrades to the
  * placeholder instead of crashing the shell.
+ *
+ * Exported in this injectable form for the same reason `collectRoutes` is
+ * (`16 §3`): the three resolvers below read a glob that is expanded at
+ * transform time, so once a screen's file exists they can never return `null`
+ * again. An assertion about the absent case must be made against an explicit
+ * module record here, never against the live wiring, or it is true for exactly
+ * one wave and false forever after.
  */
-function resolve(
+export function resolveShellScreen(
   modules: Record<string, ScreenModule>,
   path: string,
   name: string,
@@ -49,15 +56,15 @@ function resolve(
 
 /** Section 19's playing screen, or `null` while section 19 is unbuilt. */
 export function playingScreen(): ShellScreen | null {
-  return resolve(delegatedScreens, './GameRoomPlaying.tsx', 'GameRoomPlaying')
+  return resolveShellScreen(delegatedScreens, './GameRoomPlaying.tsx', 'GameRoomPlaying')
 }
 
 /** Section 20's host console, or `null` while section 20 is unbuilt. */
 export function hostConsoleScreen(): ShellScreen | null {
-  return resolve(delegatedScreens, './HostConsole.tsx', 'HostConsole')
+  return resolveShellScreen(delegatedScreens, './HostConsole.tsx', 'HostConsole')
 }
 
 /** Section 18's configuration panel, or `null` while section 18 is unbuilt. */
 export function configPanelScreen(): ShellScreen | null {
-  return resolve(configPanels, '../components/config/ConfigPanel.tsx', 'ConfigPanel')
+  return resolveShellScreen(configPanels, '../components/config/ConfigPanel.tsx', 'ConfigPanel')
 }

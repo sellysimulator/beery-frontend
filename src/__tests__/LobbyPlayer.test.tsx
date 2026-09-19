@@ -25,7 +25,7 @@ import { setDisplayName, setSessionToken } from '../utils/storage';
 import type { GameConfig, Role } from '../types/game';
 import type { RouteDescriptor } from '../routes/registry';
 import * as GameRoomModule from '../pages/GameRoom';
-import { playingScreen } from '../pages/shellScreens';
+import { playingScreen, resolveShellScreen } from '../pages/shellScreens';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -704,21 +704,42 @@ describe('CRITERION 14 / FAILURE MODE 3: the claim is never optimistic', () => {
 // ---------------------------------------------------------------------------
 
 describe('CRITERION 24: the player shell resolves section 19 by discovery', () => {
-  it('playingScreen() is null while section 19 does not exist', () => {
-    // The analogue of section 16's empty route registry: `import.meta.glob`
-    // yields an empty record for a file that is not there, rather than the
-    // compile error a static import would produce.
-    expect(playingScreen()).toBeNull();
+  const PLAYING = './GameRoomPlaying.tsx';
+
+  it('resolves an absent screen to null rather than a compile error', () => {
+    // The analogue of section 16's empty route registry, and asserted the same
+    // way: against an explicit module record, never the live glob. The glob is
+    // expanded at transform time, so once section 19's file exists
+    // `playingScreen()` can never return null again -- an assertion against it
+    // is true for exactly one wave and false forever after.
+    expect(resolveShellScreen({}, PLAYING, 'GameRoomPlaying')).toBeNull();
   });
 
-  it('renders the placeholder instead of failing, once the room is RUNNING', () => {
+  it('treats a module with nothing callable as absent', () => {
+    expect(resolveShellScreen({ [PLAYING]: {} }, PLAYING, 'GameRoomPlaying')).toBeNull();
+    expect(
+      resolveShellScreen({ [PLAYING]: { GameRoomPlaying: 'not a component' } }, PLAYING, 'GameRoomPlaying'),
+    ).toBeNull();
+  });
+
+  it('prefers the named export and falls back to the default', () => {
+    const named = () => null as never;
+    const fallback = () => null as never;
+
+    expect(resolveShellScreen({ [PLAYING]: { GameRoomPlaying: named } }, PLAYING, 'GameRoomPlaying')).toBe(named);
+    expect(resolveShellScreen({ [PLAYING]: { default: fallback } }, PLAYING, 'GameRoomPlaying')).toBe(fallback);
+  });
+
+  it('renders the delegated screen, not the placeholder, once the room is RUNNING', () => {
+    expect(playingScreen()).toBeTypeOf('function');
+
     act(() => {
       useGameStore.setState({ roomState: 'RUNNING' });
     });
 
     renderPlayerRoom();
 
-    expect(bodyText()).toMatch(/This screen is not available yet/i);
+    expect(bodyText()).not.toMatch(/This screen is not available yet/i);
   });
 
   it('still joins the room in a state it cannot yet render', () => {

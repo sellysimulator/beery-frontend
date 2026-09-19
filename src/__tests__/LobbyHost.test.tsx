@@ -27,7 +27,7 @@ import { getHostSecret, setHostSecret, setHostRoom } from '../utils/storage';
 import type { Role } from '../types/game';
 import type { RouteDescriptor } from '../routes/registry';
 import * as HostRoomModule from '../pages/HostRoom';
-import { configPanelScreen, hostConsoleScreen } from '../pages/shellScreens';
+import { configPanelScreen, hostConsoleScreen, resolveShellScreen } from '../pages/shellScreens';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -936,23 +936,29 @@ describe('CRITERION 24: the host shell resolves section 20 by discovery', () => 
 });
 
 describe('§2.0: the host lobby resolves section 18 by discovery too', () => {
-  it('configPanelScreen() is null while section 18 does not exist', () => {
+  const PANEL = '../components/config/ConfigPanel.tsx';
+
+  it('resolves an absent panel to null rather than a compile error', () => {
     // The settings panel had the same static-import problem as the two shells:
     // without a resolver, section 18 would have to edit HostLobby.tsx, which
-    // D19 forbids.
-    expect(configPanelScreen()).toBeNull();
+    // D19 forbids. Asserted against an explicit module record, because the live
+    // glob can never yield null again now that section 18 has shipped.
+    expect(resolveShellScreen({}, PANEL, 'ConfigPanel')).toBeNull();
+    expect(resolveShellScreen({ [PANEL]: {} }, PANEL, 'ConfigPanel')).toBeNull();
   });
 
-  it('renders its own placeholder in the lobby, worded so it cannot be confused with the shell one', () => {
+  it('renders the resolved panel in the lobby, not its placeholder', () => {
+    expect(configPanelScreen()).toBeTypeOf('function');
+
     armedTab();
     renderHostRoom();
     settleClaim();
 
-    expect(bodyText()).toContain(CONFIG_PLACEHOLDER);
+    expect(bodyText()).not.toContain(CONFIG_PLACEHOLDER);
     expect(bodyText()).not.toContain(SHELL_PLACEHOLDER);
   });
 
-  it('shows the shell placeholder and not the settings one once the game is running', () => {
+  it('does not render the settings panel once the game is running', () => {
     armedTab();
     act(() => {
       useGameStore.setState({ roomState: 'RUNNING' });
@@ -960,7 +966,6 @@ describe('§2.0: the host lobby resolves section 18 by discovery too', () => {
 
     renderHostRoom();
 
-    expect(bodyText()).toContain(SHELL_PLACEHOLDER);
     expect(bodyText()).not.toContain(CONFIG_PLACEHOLDER);
   });
 });

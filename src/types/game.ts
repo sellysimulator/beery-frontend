@@ -295,6 +295,12 @@ export interface PlayerView {
   allow_negative_orders: boolean
   show_supply_line_prominently: boolean
 
+  /** Weeks from placing an order now to that order arriving; the server computes it. */
+  order_arrival_lead_weeks: number
+  /** This role's own rates, for the recap's "8 units x $0.50" line. */
+  holding_cost_per_unit_week: number
+  backlog_cost_per_unit_week: number
+
   accumulated_cost?: number
   week_cost?: number
   /** `starting_capital - accumulated_cost` (D8). */

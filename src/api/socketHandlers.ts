@@ -249,5 +249,10 @@ socket.on('game_finished', (payload: GameFinishedPayload) => {
 })
 
 socket.on('error', (payload: ErrorPayload) => {
-  store().addAlert({ kind: 'error', message: payload?.message || 'A server error occurred.' })
+  const message = payload?.message || 'A server error occurred.'
+  // Two pieces of store state from one handler, exactly as `join_error` does:
+  // the field is the durable signal a screen maps to its own copy by `code`,
+  // the alert is the transient one every other screen gets for free.
+  store().applyError({ message, code: payload?.code ?? '' })
+  store().addAlert({ kind: 'error', message })
 })

@@ -73,6 +73,20 @@ export interface GameState {
   // ui
   alerts: Alert[]
   connectionError: string | null
+  /**
+   * The last `error` event's message and code, or null. The code is what a
+   * screen needs to map a specific failure to its own copy -- section 19's
+   * `TOO_MANY_SUBMISSIONS` is the first. It lives here rather than in a
+   * component-level `socket.on('error')` listener because the store is the
+   * single reader of the wire (`00-conventions.md 4`); a second interpreter is
+   * what StrictMode double-registers and a reconnect leaves stale.
+   */
+  lastError: ServerError | null
+}
+
+export interface ServerError {
+  message: string
+  code: string
 }
 
 export interface Alert {
@@ -114,8 +128,17 @@ export interface GameActions {
   applyBotSubstituted(p: BotSubstitutedPayload): void
   applyGameFinished(p: GameFinishedPayload): void
 
+  // config, written by the REST fallback in section 18 when the socket is not
+  // connected. `PUT /rooms/{code}/config` returns the same stored, post-clamp
+  // config that `config_updated` carries, but without a `seq`, so it cannot go
+  // through `applyConfigUpdated`'s sequence gate -- minting a `seq` there would
+  // make the next genuine socket event look stale and be dropped.
+  setConfig(config: GameConfig | null): void
+
   // ui
   setConnectionError(message: string | null): void
+  applyError(p: ServerError): void
+  clearLastError(): void
   /** Returns the minted id. */
   addAlert(alert: Omit<Alert, 'id'>): string
   dismissAlert(id: string): void
@@ -159,6 +182,7 @@ const initialState: GameState = {
 
   alerts: [],
   connectionError: null,
+  lastError: null,
 }
 
 /** Drops the envelope's `seq`, leaving just the view the server sent. */
@@ -352,7 +376,14 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         awaitingRoles: [],
       })),
 
+    setConfig: (config) => set({ config }),
+
     setConnectionError: (message) => set({ connectionError: message }),
+
+    applyError: (p) =>
+      set({ lastError: { message: p.message, code: p.code } }),
+
+    clearLastError: () => set({ lastError: null }),
 
     addAlert: (alert) => {
       const id = mintAlertId()
