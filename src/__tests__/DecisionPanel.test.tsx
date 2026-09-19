@@ -1,8 +1,8 @@
 /**
  * `19-frontend-game-room.md §2.2` — `DecisionPanel`, "what you have".
  *
- * Covers acceptance criteria 3, 4, 5, 6 (the panel half), 7, 8 and 23, and
- * failure modes 3, 8 and 13.
+ * Covers acceptance criteria 3, 4, 5, 6 (the panel half), 7, 7b, 8 and 23,
+ * and failure modes 3, 8 and 13.
  *
  * Harness notes:
  *  - The panel is driven through `GameRoomPlaying`, not rendered directly.
@@ -191,6 +191,8 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     max_order_quantity: null,
     allow_negative_orders: false,
     show_supply_line_prominently: true,
+    // `07 §3.8`: the Factory's unstarted production, `null` for the others.
+    production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
@@ -475,6 +477,57 @@ describe('CRITERION 7: "Orders you’ve placed" is absent for the Factory', () =
     const text = panelText();
     expect(text).toMatch(/incoming shipment/i);
     expect(text).toMatch(/\b103\b/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Criterion 7b — "Waiting to be produced"
+// ---------------------------------------------------------------------------
+
+const QUEUE_BLOCK = /waiting to be produced/i;
+
+describe('CRITERION 7b: the Factory sees its unstarted production, and only then', () => {
+  it('renders the block with production_queue when it is above zero', () => {
+    // `beer-game-spec.md §7` Phase C: "excess is queued, not lost, and the
+    // queue is visible to the Factory player".
+    renderPanel(viewFor('FACTORY', { production_queue: 34 }));
+
+    const text = panelText();
+    expect(text).toMatch(QUEUE_BLOCK);
+    expect(text).toMatch(/\b34\b/);
+  });
+
+  it('omits the block when the queue is empty', () => {
+    // The discriminating case: `production_queue` is 0, not null, so a panel
+    // that renders the block whenever the field is non-null still renders it
+    // here — and says the Factory is waiting on nothing.
+    renderPanel(viewFor('FACTORY', { production_queue: 0 }));
+
+    expect(panelText()).not.toMatch(QUEUE_BLOCK);
+  });
+
+  const others: Role[] = ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR'];
+
+  it.each(others)('omits the block for %s, whose production_queue is null', (role) => {
+    renderPanel(viewFor(role, { production_queue: null }));
+
+    expect(panelText()).not.toMatch(QUEUE_BLOCK);
+  });
+
+  it('places the block where §2.2 puts it, before this week’s incoming order', () => {
+    renderPanel(viewFor('FACTORY', { production_queue: 34 }));
+
+    const text = panelText();
+    expect(text.search(/incoming shipment/i)).toBeLessThan(text.search(QUEUE_BLOCK));
+    expect(text.search(QUEUE_BLOCK)).toBeLessThan(text.search(/incoming order/i));
+  });
+
+  it('never invents a queue figure for a role that has none', () => {
+    // 34 is the Factory's number in this fixture; it must not follow a
+    // Wholesaler around.
+    renderPanel(viewFor('WHOLESALER', { production_queue: null }));
+
+    expect(panelText()).not.toMatch(/\b34\b/);
   });
 });
 

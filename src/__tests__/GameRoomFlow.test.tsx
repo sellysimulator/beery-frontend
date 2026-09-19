@@ -262,6 +262,8 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     max_order_quantity: 500,
     allow_negative_orders: false,
     show_supply_line_prominently: true,
+    // `07 §3.8`: the Factory's unstarted production, `null` for the others.
+    production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,

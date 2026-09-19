@@ -297,6 +297,8 @@ export interface PlayerView {
 
   /** Weeks from placing an order now to that order arriving; the server computes it. */
   order_arrival_lead_weeks: number
+  /** FACTORY only: units that exceeded capacity and are waiting for the line. */
+  production_queue: number | null
   /** This role's own rates, for the recap's "8 units x $0.50" line. */
   holding_cost_per_unit_week: number
   backlog_cost_per_unit_week: number

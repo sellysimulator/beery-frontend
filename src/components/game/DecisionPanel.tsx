@@ -133,6 +133,21 @@ export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
         />
       )}
 
+      {/* Factory only, and only when there is something in it. The spec
+          requires the queue to be visible to that player: without it a
+          capacity-limited Factory that ordered 14 and saw 10 enter the line
+          cannot tell whether the other 4 are waiting or were thrown away
+          (`beer-game-spec.md` section 7 Phase C, AC 7b). The other three roles
+          have no production and the server sends `null`. */}
+      {view.production_queue !== null && view.production_queue > 0 ? (
+        <Figure
+          label="Waiting to be produced"
+          value={view.production_queue}
+          detail="Past this week's capacity. Queued, not lost — it starts as soon as the line has room."
+          tone="text-warning"
+        />
+      ) : null}
+
       <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface-raised px-4 py-3">
         <h3 className="text-sm uppercase tracking-wide text-ink-muted">
           This week&apos;s incoming order
