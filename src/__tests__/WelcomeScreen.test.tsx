@@ -22,7 +22,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AuthProvider } from '../auth/AuthContext';
-import { getDisplayName, getGuestId } from '../utils/storage';
+import { GUEST_ID_KEY, getDisplayName, getGuestId } from '../utils/storage';
 import type { RouteDescriptor } from '../routes/registry';
 import * as WelcomeScreenModule from '../pages/WelcomeScreen';
 
@@ -109,6 +109,19 @@ vi.mock('firebase/app', () =>
 vi.mock('firebase/auth', () =>
   firebaseStub({
     getAuth: vi.fn(() => ({ currentUser: null })),
+    // firebase.ts uses initializeAuth, not getAuth, so that no popup/redirect
+    // resolver is registered at start-up. Both are stubbed: the Proxy default
+    // would hand back a vi.fn() returning undefined, and `auth` would then be
+    // undefined for every consumer that reads `auth.currentUser`.
+    initializeAuth: vi.fn(() => ({ currentUser: null })),
+    // These are imported by name, and vitest validates named exports against
+    // the object returned here before the Proxy's get trap ever runs, so each
+    // one has to be present explicitly. Their values are never inspected:
+    // firebase.ts only hands the persistences to initializeAuth, and
+    // AuthContext passes the resolver straight to signInWithPopup.
+    indexedDBLocalPersistence: {},
+    browserLocalPersistence: {},
+    browserPopupRedirectResolver: {},
     onAuthStateChanged: vi.fn((_auth: unknown, cb: (user: unknown) => void) => {
       rec.authCallbacks.push(cb);
       return () => {};
@@ -279,6 +292,60 @@ describe('CRITERION 1: WelcomeScreen renders with no backend', () => {
     // §2.1: "One short paragraph explaining what the game is".
     const text = (document.body.textContent ?? '').replace(/\s+/g, ' ').trim();
     expect(text.length).toBeGreaterThan(80);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A restored Firebase session skips the screen
+// ---------------------------------------------------------------------------
+
+describe('a visitor who is already signed in is not asked to sign in again', () => {
+  const SIGNED_IN = { uid: 'uid-1', displayName: 'Ana', getIdToken: async () => 'tok' };
+
+  it('redirects to /home once Firebase restores the session', () => {
+    renderWelcome('/');
+    // The screen deliberately does not wait on `loading`, so it paints for
+    // everyone first; the redirect is what happens when Firebase answers.
+    expect(screen.getByRole('button', { name: /sign in with google/i })).toBeInTheDocument();
+
+    resolveAuthState(SIGNED_IN);
+
+    expect(currentPath()).toBe('/home');
+  });
+
+  it('returns to `state.from` instead of /home, so an invite link survives a reload', () => {
+    renderWelcome({
+      pathname: '/',
+      state: {
+        from: { pathname: '/game/ABC234', search: '?seat=RETAILER', hash: '#board', state: null, key: 'k' },
+      },
+    });
+
+    resolveAuthState(SIGNED_IN);
+
+    expect(currentHref()).toBe('/game/ABC234?seat=RETAILER#board');
+  });
+
+  it('replaces rather than pushes, so Back out of /home is not bounced forward again', () => {
+    renderWelcome('/');
+    resolveAuthState(SIGNED_IN);
+
+    // `/` must not remain as a separate history entry behind /home.
+    expect(currentPath()).toBe('/home');
+    expect(seen.filter((l) => l.pathname === '/home')).toHaveLength(1);
+  });
+
+  it('still shows the choice to a returning guest, who may want a real account', () => {
+    // A stored guest id is only a localStorage key, a weaker signal than a
+    // Firebase session, and this screen is the one route to an account. On a
+    // reload AuthContext reads that key and resolves `mode` to 'guest', which
+    // must NOT redirect.
+    localStorage.setItem(GUEST_ID_KEY, 'guest_11111111-2222-3333-4444-555555555555');
+
+    renderWelcome('/');
+
+    expect(screen.getByRole('button', { name: /sign in with google/i })).toBeInTheDocument();
+    expect(currentPath()).toBe('/');
   });
 });
 

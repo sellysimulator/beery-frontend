@@ -16,7 +16,12 @@
  * is exactly one place to look.
  */
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import {
+  browserLocalPersistence,
+  indexedDBLocalPersistence,
+  initializeAuth,
+  GoogleAuthProvider,
+} from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyD1dNjUNASHSyq_T7b-QCc17w7ksAU8o2U',
@@ -28,5 +33,38 @@ const firebaseConfig = {
 }
 
 export const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+
+/**
+ * `initializeAuth`, NOT `getAuth`.
+ *
+ * `getAuth()` is a shorthand that calls `initializeAuth` with
+ * `popupRedirectResolver: browserPopupRedirectResolver` already set. Auth then
+ * awaits that resolver during start-up — `initializeCurrentUser` runs
+ * `tryRedirectSignIn`, which loads a cross-origin gapi iframe from
+ * `authDomain` (`beery-30d23.firebaseapp.com/__/auth/iframe.js`, ~288 KB, plus
+ * `apis.google.com/js/api.js`) to check for a pending redirect result. That
+ * await sits directly in front of the auth-state resolution, so it delays
+ * `onAuthStateChanged`, which delays every guarded route and the socket
+ * handshake with it (`src/api/socket.ts` never auto-connects).
+ *
+ * This app is served from `beersim.web.app`, so it is always cross-origin from
+ * `authDomain` and always paid that cost — for machinery only needed when
+ * somebody clicks "Sign in with Google". Omitting the resolver here makes it
+ * load on demand instead; `AuthContext.tsx` passes
+ * `browserPopupRedirectResolver` to `signInWithPopup` explicitly, which is
+ * what keeps sign-in working. A call site that forgets it gets a loud
+ * `auth/operation-not-supported-in-this-environment`, not a quiet failure.
+ *
+ * The `AUTH_INIT_TIMEOUT_MS` watchdog in `AuthContext.tsx` stays: this removes
+ * the iframe leg of the start-up chain, but the `securetoken` refresh and
+ * `accounts:lookup` calls it documents still have no deadline of their own.
+ *
+ * The persistence list is the browser default minus `browserSessionPersistence`,
+ * which was never reachable — the first entry that works wins, and localStorage
+ * is always available before session storage is consulted.
+ */
+export const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+})
+
 export const googleProvider = new GoogleAuthProvider()

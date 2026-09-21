@@ -112,6 +112,19 @@ vi.mock('firebase/app', () =>
 vi.mock('firebase/auth', () =>
   firebaseStub({
     getAuth: vi.fn(() => ({ currentUser: null })),
+    // firebase.ts uses initializeAuth, not getAuth, so that no popup/redirect
+    // resolver is registered at start-up. Both are stubbed: the Proxy default
+    // would hand back a vi.fn() returning undefined, and `auth` would then be
+    // undefined for every consumer that reads `auth.currentUser`.
+    initializeAuth: vi.fn(() => ({ currentUser: null })),
+    // These are imported by name, and vitest validates named exports against
+    // the object returned here before the Proxy's get trap ever runs, so each
+    // one has to be present explicitly. Their values are never inspected:
+    // firebase.ts only hands the persistences to initializeAuth, and
+    // AuthContext passes the resolver straight to signInWithPopup.
+    indexedDBLocalPersistence: {},
+    browserLocalPersistence: {},
+    browserPopupRedirectResolver: {},
     onAuthStateChanged: vi.fn((_auth: unknown, cb: (user: unknown) => void) => {
       rec.authCallbacks.push(cb);
       return () => {};

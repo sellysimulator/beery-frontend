@@ -8,7 +8,13 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react'
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
+import {
+  browserPopupRedirectResolver,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  type User,
+} from 'firebase/auth'
 import { auth, googleProvider } from '../../firebase'
 import http from '../api/http'
 import { socket } from '../api/socket'
@@ -126,7 +132,12 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
-    const result = await signInWithPopup(auth, googleProvider)
+    // The resolver is passed here rather than registered on the Auth instance:
+    // `firebase.ts` deliberately leaves it out of `initializeAuth` so the
+    // cross-origin auth iframe is not loaded on every page load. This is the
+    // only call that needs it, and without the third argument Firebase throws
+    // `auth/operation-not-supported-in-this-environment`.
+    const result = await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver)
     setFirebaseUser(result.user)
     setMode('authenticated')
     syncUserWithBackend(result.user)

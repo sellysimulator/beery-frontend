@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from 'react'
-import { Link, useLocation, useNavigate, type Location } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { MAX_DISPLAY_NAME_LENGTH, setDisplayName } from '../utils/storage'
 import type { RouteDescriptor } from '../routes/registry'
@@ -19,7 +19,7 @@ import type { RouteDescriptor } from '../routes/registry'
  * cannot render until the identity is known.
  */
 export function WelcomeScreen(): ReactElement {
-  const { signInWithGoogle, continueAsGuest, initTimedOut } = useAuth()
+  const { signInWithGoogle, continueAsGuest, initTimedOut, mode } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -52,6 +52,28 @@ export function WelcomeScreen(): ReactElement {
     setDisplayName(name)
     continueAsGuest()
     navigate(destination, { replace: true })
+  }
+
+  // A visitor whose Firebase session was restored has nothing to choose here,
+  // so send them on instead of showing them a sign-in page they have already
+  // used. `destination` is the same target the two handlers above navigate to,
+  // so an invite link survives a reload: AuthGuard parked the attempted
+  // location in `state.from`, and it is honoured whether the identity is
+  // chosen now or was restored a moment ago.
+  //
+  // This screen still does not WAIT on `loading` (see above), so for a
+  // returning signed-in visitor the screen paints first and this redirect
+  // follows when Firebase answers. That brief flash is the deliberate trade:
+  // blocking the public front door to avoid it would put a spinner in front of
+  // every first-time visitor to fix a returning-visitor problem.
+  //
+  // Guests are not redirected. A guest id is only a localStorage key, and this
+  // screen is the one place to upgrade to a real account, so the choice stays.
+  //
+  // `replace` keeps `/` out of the history stack: without it, Back from /home
+  // lands here and is redirected forward again, trapping the visitor.
+  if (mode === 'authenticated') {
+    return <Navigate to={destination} replace />
   }
 
   return (
