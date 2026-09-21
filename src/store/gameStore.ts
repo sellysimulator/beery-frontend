@@ -55,6 +55,16 @@ export interface GameState {
   startBlockedReason: string | null
   /** The last `join_error` message, or null. */
   joinError: string | null
+  /**
+   * True between the server's `leave_ack` and the shell unmounting the room.
+   *
+   * It exists because the ack arrives on the socket, and the socket is read in
+   * `socketHandlers.ts` — outside React, where there is no router to navigate
+   * with. So the handler records the fact and `GameRoom` turns it into a
+   * redirect, which keeps the store the single reader of the wire (16 section 3)
+   * instead of adding a second `socket.on` inside a component.
+   */
+  leftRoom: boolean
 
   // play
   week: number | null
@@ -110,6 +120,10 @@ export interface GameActions {
   applyJoinError(p: JoinErrorPayload): void
   /** A screen dismisses the error after acting on it. */
   clearJoinError(): void
+  /** Wipes the room from the store and raises `leftRoom`. */
+  applyLeaveAck(): void
+  /** Lowered by the shell once it has acted on `leftRoom`. */
+  clearLeftRoom(): void
   applyLobbyUpdate(p: LobbyUpdatePayload): void
   applyConfigUpdated(p: ConfigUpdatedPayload): void
   applyRolesAssigned(p: RolesAssignedPayload): void
@@ -167,6 +181,7 @@ const initialState: GameState = {
   canStart: false,
   startBlockedReason: null,
   joinError: null,
+  leftRoom: false,
 
   week: null,
   durationWeeks: null,
@@ -249,6 +264,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
     applyJoinError: (p) => set({ joinError: p?.message ?? null }),
 
     clearJoinError: () => set({ joinError: null }),
+
+    /**
+     * A full reset, not a field edit. The seat is gone server-side, so leaving
+     * `participants`, `roleToAlias` or `myAlias` behind would let the next
+     * screen render a room this browser is no longer in. `leftRoom` is set on
+     * top of the reset, which is why this cannot just call `reset()`.
+     */
+    applyLeaveAck: () =>
+      set({ ...initialState, roleToAlias: { ...EMPTY_ROLE_TO_ALIAS }, leftRoom: true }),
+
+    clearLeftRoom: () => set({ leftRoom: false }),
 
     applyLobbyUpdate: (p) =>
       applySequenced(p.seq, (state) => {

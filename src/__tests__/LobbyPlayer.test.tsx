@@ -15,13 +15,13 @@
  *  - The store is section 16's, and is read through its public appliers only.
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { StrictMode } from 'react';
+import { StrictMode, Suspense } from 'react';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { useGameStore } from '../store/gameStore';
-import { setDisplayName, setSessionToken } from '../utils/storage';
+import { getSessionToken, setDisplayName, setSessionToken } from '../utils/storage';
 import type { GameConfig, Role } from '../types/game';
 import type { RouteDescriptor } from '../routes/registry';
 import * as GameRoomModule from '../pages/GameRoom';
@@ -708,36 +708,79 @@ describe('CRITERION 24: the player shell resolves section 19 by discovery', () =
 
   it('resolves an absent screen to null rather than a compile error', () => {
     // The analogue of section 16's empty route registry, and asserted the same
-    // way: against an explicit module record, never the live glob. The glob is
+    // way: against an explicit loader record, never the live glob. The glob is
     // expanded at transform time, so once section 19's file exists
     // `playingScreen()` can never return null again -- an assertion against it
     // is true for exactly one wave and false forever after.
     expect(resolveShellScreen({}, PLAYING, 'GameRoomPlaying')).toBeNull();
   });
 
-  it('treats a module with nothing callable as absent', () => {
-    expect(resolveShellScreen({ [PLAYING]: {} }, PLAYING, 'GameRoomPlaying')).toBeNull();
+  it('treats an entry that is not a loader as absent, without importing anything', () => {
+    // The record maps a path to the module's LOADER, because the screen is
+    // fetched on first use rather than shipped in the initial bundle. "Is the
+    // section built?" is still answered synchronously -- no key, or a key
+    // holding something uncallable, is absent -- so the shell still gets its
+    // `null` before it renders anything.
+    expect(resolveShellScreen({ [PLAYING]: undefined }, PLAYING, 'GameRoomPlaying')).toBeNull();
     expect(
-      resolveShellScreen({ [PLAYING]: { GameRoomPlaying: 'not a component' } }, PLAYING, 'GameRoomPlaying'),
+      resolveShellScreen(
+        { [PLAYING]: 'not a loader' as unknown as () => Promise<Record<string, unknown>> },
+        PLAYING,
+        'GameRoomPlaying',
+      ),
     ).toBeNull();
   });
 
-  it('prefers the named export and falls back to the default', () => {
-    const named = () => null as never;
-    const fallback = () => null as never;
+  it('prefers the named export and falls back to the default', async () => {
+    const Named = () => <div data-testid="from-named" />;
+    const Fallback = () => <div data-testid="from-default" />;
 
-    expect(resolveShellScreen({ [PLAYING]: { GameRoomPlaying: named } }, PLAYING, 'GameRoomPlaying')).toBe(named);
-    expect(resolveShellScreen({ [PLAYING]: { default: fallback } }, PLAYING, 'GameRoomPlaying')).toBe(fallback);
+    // Both shapes in one tree: the first proves the named export wins over a
+    // default sitting beside it, the second that a module with only a default
+    // still resolves. Asserted by rendering, because `lazy()` keeps the
+    // resolved component behind its own payload and there is nothing to
+    // compare with `toBe`.
+    const Preferred = resolveShellScreen(
+      { [PLAYING]: async () => ({ GameRoomPlaying: Named, default: Fallback }) },
+      PLAYING,
+      'GameRoomPlaying',
+    )!;
+    const OnlyDefault = resolveShellScreen(
+      { [PLAYING]: async () => ({ default: Fallback }) },
+      PLAYING,
+      'GameRoomPlaying',
+    )!;
+
+    expect(Preferred).not.toBeNull();
+    expect(OnlyDefault).not.toBeNull();
+
+    render(
+      <Suspense fallback={null}>
+        <Preferred />
+        <OnlyDefault />
+      </Suspense>,
+    );
+
+    expect(await screen.findByTestId('from-named')).toBeInTheDocument();
+    expect(await screen.findByTestId('from-default')).toBeInTheDocument();
   });
 
-  it('renders the delegated screen, not the placeholder, once the room is RUNNING', () => {
-    expect(playingScreen()).toBeTypeOf('function');
+  it('renders the delegated screen, not the placeholder, once the room is RUNNING', async () => {
+    // `not.toBeNull()` rather than `toBeTypeOf('function')`: the playing screen
+    // is fetched on first use, and `React.lazy` hands back an exotic component
+    // object rather than a function. Whether section 19 exists at all is still
+    // decided synchronously, which is all the shell asks.
+    expect(playingScreen()).not.toBeNull();
 
     act(() => {
       useGameStore.setState({ roomState: 'RUNNING' });
     });
 
     renderPlayerRoom();
+
+    // Waiting out the Suspense fallback is what keeps the assertion below about
+    // the real screen rather than about the fallback standing in for it.
+    await waitFor(() => expect(bodyText()).not.toContain('Loading the game screen'));
 
     expect(bodyText()).not.toMatch(/This screen is not available yet/i);
   });
@@ -759,5 +802,101 @@ describe('CRITERION 24: the player shell resolves section 19 by discovery', () =
 
     expect(bodyText()).not.toMatch(/This screen is not available yet/i);
     expect(bodyText()).toContain(ROOM);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Leaving a lobby
+// ---------------------------------------------------------------------------
+
+/** The tightest keyboard-operable control whose text matches. */
+function control(pattern: RegExp): HTMLElement {
+  const matches = operableElements()
+    .filter((el) => pattern.test(el.textContent ?? ''))
+    .sort((a, b) => (a.textContent ?? '').length - (b.textContent ?? '').length);
+  if (matches.length === 0) throw new Error(`No keyboard-operable control matching ${pattern}.`);
+  return matches[0];
+}
+
+describe('a waiting player can leave the lobby', () => {
+  const LEAVE = /leave room/i;
+  const CONFIRM = /yes, leave the room/i;
+
+  it('offers a keyboard-operable way out while waiting for the host', () => {
+    renderPlayerRoom();
+    dispatch('lobby_update', lobbyUpdate({ state: 'CONFIGURING' }));
+
+    expect(control(LEAVE)).toBeInTheDocument();
+    expect(isDisabled(control(LEAVE))).toBe(false);
+  });
+
+  it('asks before giving the seat up, and emits nothing until it is confirmed', async () => {
+    const user = userEvent.setup();
+    renderPlayerRoom();
+    dispatch('lobby_update', lobbyUpdate({ state: 'CONFIGURING' }));
+
+    await user.click(control(LEAVE));
+
+    // The seat is freed server-side and the whole room sees it go, so a
+    // misclick is not a recoverable client-side navigation.
+    expect(emitsOf('leave')).toHaveLength(0);
+    expect(bodyText()).toMatch(/your seat is freed/i);
+  });
+
+  it('emits leave once, carrying only the room id', async () => {
+    const user = userEvent.setup();
+    renderPlayerRoom();
+    dispatch('lobby_update', lobbyUpdate({ state: 'CONFIGURING' }));
+
+    await user.click(control(LEAVE));
+    await user.click(control(CONFIRM));
+
+    const payloads = emitsOf('leave');
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]).toEqual({ room_id: ROOM });
+  });
+
+  it('backs out without emitting anything', async () => {
+    const user = userEvent.setup();
+    renderPlayerRoom();
+    dispatch('lobby_update', lobbyUpdate({ state: 'CONFIGURING' }));
+
+    await user.click(control(LEAVE));
+    await user.click(control(/^stay$/i));
+
+    expect(emitsOf('leave')).toHaveLength(0);
+    expect(control(LEAVE)).toBeInTheDocument();
+  });
+
+  it('drops the session token and leaves the room route once the server acks', async () => {
+    const user = userEvent.setup();
+    setSessionToken(ROOM, 'tok-seated');
+
+    renderPlayerRoom();
+    dispatch('lobby_update', lobbyUpdate({ state: 'CONFIGURING' }));
+
+    await user.click(control(LEAVE));
+    await user.click(control(CONFIRM));
+    dispatch('leave_ack', { room_id: ROOM });
+
+    // Keeping it would put this browser straight back into the room on the
+    // next connect, because `rejoinAfterConnect` presents whatever is stored.
+    expect(getSessionToken(ROOM)).toBeNull();
+    expect(await screen.findByTestId('elsewhere')).toBeInTheDocument();
+    expect(useGameStore.getState().roomCode).toBeNull();
+  });
+
+  it('hands the button back when the server refuses, rather than waiting forever', async () => {
+    const user = userEvent.setup();
+    renderPlayerRoom();
+    dispatch('lobby_update', lobbyUpdate({ state: 'CONFIGURING' }));
+
+    await user.click(control(LEAVE));
+    await user.click(control(CONFIRM));
+
+    // §3.3: a stale tab can reach the control a moment after the host starts.
+    dispatch('join_error', { message: 'Cannot leave once the game has started.' });
+
+    await waitFor(() => expect(isDisabled(control(LEAVE))).toBe(false));
   });
 });

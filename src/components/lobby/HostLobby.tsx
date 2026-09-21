@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { Suspense, type ReactElement } from 'react'
 import { assignRole, setRoleMode, startGame } from '../../api/games'
 import { useGameStore } from '../../store/gameStore'
 import { getHostSecret } from '../../utils/storage'
@@ -143,7 +143,15 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold">Game settings</h2>
           {ConfigPanel ? (
-            <ConfigPanel />
+            <Suspense
+              fallback={
+                <p className="rounded-lg border border-border px-4 py-6 text-sm text-ink-muted">
+                  Loading the settings panel…
+                </p>
+              }
+            >
+              <ConfigPanel />
+            </Suspense>
           ) : (
             <p className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-ink-muted">
               The settings panel is not available yet. The game will run on its defaults.

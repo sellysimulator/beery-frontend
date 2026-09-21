@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { Suspense, useEffect, useRef, type ReactElement } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { join } from '../api/games'
 import { useGameStore } from '../store/gameStore'
@@ -6,6 +6,7 @@ import { getDisplayName, getSessionToken } from '../utils/storage'
 import PlayerLobby from '../components/lobby/PlayerLobby'
 import ScreenUnavailable from '../components/lobby/ScreenUnavailable'
 import NotFound from '../components/shared/NotFound'
+import ScreenLoading from '../components/shared/ScreenLoading'
 import type { JoinEmit, RoomState } from '../types/game'
 import type { RouteDescriptor } from '../routes/registry'
 import { playingScreen } from './shellScreens'
@@ -28,6 +29,7 @@ export function GameRoom(): ReactElement {
   const { roomCode } = useParams<{ roomCode: string }>()
   const roomState = useGameStore((state) => state.roomState)
   const setRoomCode = useGameStore((state) => state.setRoomCode)
+  const leftRoom = useGameStore((state) => state.leftRoom)
   const joined = useRef(false)
 
   useEffect(() => {
@@ -54,11 +56,36 @@ export function GameRoom(): ReactElement {
 
   if (!roomCode) return <NotFound />
 
+  // Checked before the room states, so an ack that lands in the same tick as a
+  // `game_started` still takes the player out rather than into the play screen.
+  if (leftRoom) return <LeftRoomRedirect />
+
   if (STARTED.includes(roomState as RoomState)) {
-    return PlayingScreen ? <PlayingScreen /> : <ScreenUnavailable />
+    if (!PlayingScreen) return <ScreenUnavailable />
+    return (
+      <Suspense fallback={<ScreenLoading label="Loading the game screen" />}>
+        <PlayingScreen />
+      </Suspense>
+    )
   }
 
   return <PlayerLobby roomCode={roomCode} />
+}
+
+/**
+ * Sends a player who has left back to their home screen, and lowers the flag
+ * on the way out.
+ *
+ * The flag is cleared in an unmount cleanup rather than on mount: clearing it
+ * on mount would re-render this component with `leftRoom` false, and `GameRoom`
+ * would put the lobby back on screen for a frame before the redirect commits.
+ * Clearing it on unmount means the next room this browser joins starts from a
+ * lowered flag, which is what stops one leave from bouncing every later join.
+ */
+function LeftRoomRedirect(): ReactElement {
+  const clearLeftRoom = useGameStore((state) => state.clearLeftRoom)
+  useEffect(() => clearLeftRoom, [clearLeftRoom])
+  return <Navigate to="/home" replace />
 }
 
 /**

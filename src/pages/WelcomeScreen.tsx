@@ -1,7 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { Link, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import LoadingSpinner from '../components/shared/LoadingSpinner'
 import { MAX_DISPLAY_NAME_LENGTH, setDisplayName } from '../utils/storage'
 import type { RouteDescriptor } from '../routes/registry'
 
@@ -11,9 +10,16 @@ import type { RouteDescriptor } from '../routes/registry'
  * Hosting is a capability, not an account (**D3**), so neither choice is the
  * "real" one: a guest can create and run a game exactly as a signed-in user
  * can. Signing in buys results tracked across games, and nothing else.
+ *
+ * It deliberately does NOT wait on `loading`. Both choices are valid whatever
+ * Firebase decides — signing in is valid for someone already signed in, and
+ * Firebase queues the call until initialisation finishes — so blocking the
+ * public front door on an auth round trip bought nothing and cost every first
+ * visitor a spinner. `AuthGuard` still waits, because a guarded route genuinely
+ * cannot render until the identity is known.
  */
 export function WelcomeScreen(): ReactElement {
-  const { signInWithGoogle, continueAsGuest, loading } = useAuth()
+  const { signInWithGoogle, continueAsGuest, initTimedOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -48,14 +54,6 @@ export function WelcomeScreen(): ReactElement {
     navigate(destination, { replace: true })
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <LoadingSpinner size="lg" label="Checking your sign-in" />
-      </div>
-    )
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="flex w-full max-w-md flex-col gap-8">
@@ -68,6 +66,13 @@ export function WelcomeScreen(): ReactElement {
             see yet.
           </p>
         </header>
+
+        {initTimedOut ? (
+          <p className="rounded-lg border border-border-strong px-4 py-3 text-sm text-ink-muted">
+            We could not reach the sign-in service to check whether you are already signed in.
+            Sign in again, or continue as a guest.
+          </p>
+        ) : null}
 
         {error ? (
           <p role="alert" className="rounded-lg border border-danger px-4 py-3 text-sm text-danger">

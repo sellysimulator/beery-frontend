@@ -531,6 +531,19 @@ export interface JoinErrorPayload {
   message: string
 }
 
+/**
+ * The server's acknowledgement of a `leave` emit. It carries the room code the
+ * seat was given up in, and nothing else: the server has already dropped this
+ * `sid` from the room and re-broadcast `lobby_update` to everyone still in it.
+ *
+ * `leave` is refused once the game has started (`11 §3.3`), and the refusal
+ * arrives as `join_error` rather than as an ack, so a screen that never offers
+ * the control after the start never sees one.
+ */
+export interface LeaveAckPayload {
+  room_id: string
+}
+
 export interface LobbyUpdatePayload {
   seq: number
   state: RoomState

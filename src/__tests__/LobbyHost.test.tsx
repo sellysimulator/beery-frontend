@@ -362,6 +362,10 @@ async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName
 const RECOVERY = /isn.?t the host of that room/i;
 const IN_FLIGHT = /reconnecting as host/i;
 const SHELL_PLACEHOLDER = 'This screen is not available yet.';
+
+/** The Suspense fallbacks the shells show while a lazily fetched screen arrives. */
+const CONSOLE_LOADING = 'Loading the host console';
+const PANEL_LOADING = 'Loading the settings panel';
 const CONFIG_PLACEHOLDER = 'The settings panel is not available yet.';
 
 beforeAll(async () => {
@@ -908,13 +912,20 @@ describe('CRITERION 24: the host shell resolves section 20 by discovery', () => 
     // null again. The two assertions this replaced said `toBeNull()` and
     // expected the placeholder, and were true for exactly as long as section
     // 20 did not exist -- the same expiring criterion as section 16's empty
-    // route registry and section 01's Alembic table set.
+    // route registry and section 01's Alembic table set. The record now maps a
+    // path to the module's LOADER, because the console is fetched on first use
+    // rather than shipped in the initial bundle; "is it built?" is still
+    // answered synchronously, from whether a loader is there at all.
     expect(resolveShellScreen({}, CONSOLE, 'HostConsole')).toBeNull();
-    expect(resolveShellScreen({ [CONSOLE]: {} }, CONSOLE, 'HostConsole')).toBeNull();
+    expect(resolveShellScreen({ [CONSOLE]: undefined }, CONSOLE, 'HostConsole')).toBeNull();
   });
 
-  it('renders the resolved console once the room is RUNNING, not the placeholder', () => {
-    expect(hostConsoleScreen()).toBeTypeOf('function');
+  it('renders the resolved console once the room is RUNNING, not the placeholder', async () => {
+    // `not.toBeNull()` rather than `toBeTypeOf('function')`: the console is
+    // fetched on first use, and `React.lazy` hands back an exotic component
+    // object rather than a function. What the shell needs to know is only
+    // whether section 20 is there at all.
+    expect(hostConsoleScreen()).not.toBeNull();
 
     armedTab();
     act(() => {
@@ -922,6 +933,11 @@ describe('CRITERION 24: the host shell resolves section 20 by discovery', () => 
     });
 
     renderHostRoom();
+
+    // The fetch means the shell shows its Suspense fallback first, so waiting
+    // for that to go is what makes the assertion below about the real console
+    // rather than about the fallback standing in for it.
+    await waitFor(() => expect(bodyText()).not.toContain(CONSOLE_LOADING));
 
     expect(bodyText()).not.toContain(SHELL_PLACEHOLDER);
   });
@@ -953,18 +969,20 @@ describe('§2.0: the host lobby resolves section 18 by discovery too', () => {
   it('resolves an absent panel to null rather than a compile error', () => {
     // The settings panel had the same static-import problem as the two shells:
     // without a resolver, section 18 would have to edit HostLobby.tsx, which
-    // D19 forbids. Asserted against an explicit module record, because the live
+    // D19 forbids. Asserted against an explicit loader record, because the live
     // glob can never yield null again now that section 18 has shipped.
     expect(resolveShellScreen({}, PANEL, 'ConfigPanel')).toBeNull();
-    expect(resolveShellScreen({ [PANEL]: {} }, PANEL, 'ConfigPanel')).toBeNull();
+    expect(resolveShellScreen({ [PANEL]: undefined }, PANEL, 'ConfigPanel')).toBeNull();
   });
 
-  it('renders the resolved panel in the lobby, not its placeholder', () => {
-    expect(configPanelScreen()).toBeTypeOf('function');
+  it('renders the resolved panel in the lobby, not its placeholder', async () => {
+    expect(configPanelScreen()).not.toBeNull();
 
     armedTab();
     renderHostRoom();
     settleClaim();
+
+    await waitFor(() => expect(bodyText()).not.toContain(PANEL_LOADING));
 
     expect(bodyText()).not.toContain(CONFIG_PLACEHOLDER);
     expect(bodyText()).not.toContain(SHELL_PLACEHOLDER);

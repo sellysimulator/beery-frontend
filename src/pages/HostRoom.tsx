@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { Suspense, useEffect, useRef, type ReactElement } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { joinWaiting } from '../api/games'
 import { useGameStore } from '../store/gameStore'
@@ -7,6 +7,7 @@ import HostLobby from '../components/lobby/HostLobby'
 import ScreenUnavailable from '../components/lobby/ScreenUnavailable'
 import WaitingNotice from '../components/lobby/WaitingNotice'
 import NotFound from '../components/shared/NotFound'
+import ScreenLoading from '../components/shared/ScreenLoading'
 import type { RoomState } from '../types/game'
 import type { RouteDescriptor } from '../routes/registry'
 import { hostConsoleScreen } from './shellScreens'
@@ -97,7 +98,12 @@ export function HostRoom(): ReactElement {
   }
 
   if (STARTED.includes(roomState as RoomState)) {
-    return ConsoleScreen ? <ConsoleScreen /> : <ScreenUnavailable />
+    if (!ConsoleScreen) return <ScreenUnavailable />
+    return (
+      <Suspense fallback={<ScreenLoading label="Loading the host console" />}>
+        <ConsoleScreen />
+      </Suspense>
+    )
   }
 
   return <HostLobby roomCode={roomCode} />

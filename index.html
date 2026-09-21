@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Firebase Auth restores a persisted session before the app can render
+      anything behind the auth guard, and doing so costs two sequential calls:
+      `securetoken.googleapis.com` to refresh an ID token older than an hour,
+      then `identitytoolkit.googleapis.com/v1/accounts:lookup` to reload the
+      account. Both are cross-origin and neither is reachable from anything
+      earlier in the page, so without these hints each one pays a cold DNS
+      lookup, TCP connect and TLS handshake while the "Checking your sign-in"
+      spinner is on screen. `crossorigin` is required: these are CORS fetches,
+      and a preconnect opened without it is a separate, unused connection.
+    -->
+    <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
     <meta
       name="description"
       content="Beery — the Beer Distribution Game, played online with four roles and a host."

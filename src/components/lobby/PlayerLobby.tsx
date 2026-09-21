@@ -3,6 +3,7 @@ import { claimRole } from '../../api/games'
 import { useGameStore } from '../../store/gameStore'
 import { ROLE_ORDER, type Role } from '../../types/game'
 import ManualLink from '../manual/ManualLink'
+import LeaveControl from './LeaveControl'
 import ParticipantList from './ParticipantList'
 import RoleCard from './RoleCard'
 import WaitingNotice from './WaitingNotice'
@@ -117,6 +118,8 @@ export function PlayerLobby({ roomCode }: PlayerLobbyProps): ReactElement {
           <h2 className="text-xl font-semibold">Who is here</h2>
           <ParticipantList participants={participants} myAlias={myAlias} />
         </section>
+
+        <LeaveControl roomCode={roomCode} />
       </div>
 
       <ManualLink to="/player-manual" label="Player manual" />

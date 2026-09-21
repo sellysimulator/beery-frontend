@@ -14,6 +14,9 @@ import { socket } from './socket'
 import { join, joinWaiting } from './games'
 import { useGameStore } from '../store/gameStore'
 import {
+  clearHostRoom,
+  clearHostSecret,
+  clearSessionToken,
   getDisplayName,
   getHostSecret,
   getSessionToken,
@@ -36,6 +39,7 @@ import type {
   JoinEmit,
   JoinErrorPayload,
   JoinedPayload,
+  LeaveAckPayload,
   LobbyUpdatePayload,
   OrderSubmittedPayload,
   ParticipantEventPayload,
@@ -184,6 +188,26 @@ socket.on('join_error', (payload: JoinErrorPayload) => {
   // the same shape as `connect_error` above.
   store().applyJoinError({ message })
   store().addAlert({ kind: 'error', message })
+})
+
+/**
+ * The seat is gone server-side, so this browser's claim on it has to go with
+ * it. The `session_token` is what `rejoinAfterConnect` would otherwise present
+ * on the next connect, putting the player straight back into the room they
+ * just left; the host keys go too, so a host who leaves does not keep a stale
+ * secret for a room they are no longer in.
+ *
+ * The room code comes from the payload, and only falls back to the store —
+ * `applyLeaveAck` clears `roomCode`, so it has to be read before that runs.
+ */
+socket.on('leave_ack', (payload: LeaveAckPayload) => {
+  const roomCode = payload?.room_id ?? store().roomCode ?? currentRouteRoom().roomCode
+  if (roomCode) {
+    clearSessionToken(roomCode)
+    clearHostSecret(roomCode)
+    if (isHostForRoom(roomCode)) clearHostRoom()
+  }
+  store().applyLeaveAck()
 })
 
 socket.on('lobby_update', (payload: LobbyUpdatePayload) => {
