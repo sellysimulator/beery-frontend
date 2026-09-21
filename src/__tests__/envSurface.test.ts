@@ -282,3 +282,35 @@ describe('AC 12: DEPLOY.md states the ship-together rule', () => {
     expect(deploy).toMatch(/beersim\.web\.app/) // named as the thing NOT to point at
   })
 })
+
+// ---------------------------------------------------------------------------
+// Failure mode 7, enforced: the deploy build refuses an unconfigured backend
+// ---------------------------------------------------------------------------
+
+describe('failure mode 7: a deploy build cannot ship without the backend URLs', () => {
+  it('both workflows pass the repository variables AND arm the guard', () => {
+    for (const text of [MERGE_WORKFLOW(), PR_WORKFLOW()]) {
+      expect(text).toContain('vars.VITE_API_BASE_URL')
+      expect(text).toContain('vars.VITE_SOCKET_URL')
+      // Without this the variables being unset is silent: Vite substitutes
+      // empty strings, the build is green, and the deployed bundle points at
+      // the Hosting origin, which does not proxy WebSocket upgrades.
+      expect(text).toMatch(/REQUIRE_BACKEND_ENV:\s*'1'/)
+    }
+  })
+
+  it('vite.config.ts fails the build on an empty or Hosting-origin value', () => {
+    const config = readRoot('vite.config.ts')
+    expect(config).toContain('REQUIRE_BACKEND_ENV')
+    expect(config).toMatch(/VITE_API_BASE_URL/)
+    expect(config).toMatch(/VITE_SOCKET_URL/)
+    expect(config).toMatch(/web\\\.app/)
+  })
+
+  it('the guard is opt-in, so a plain `npm run build` still works on the dev proxy', () => {
+    // routes.test.tsx's toolchain gate runs `npm run build` with no
+    // environment at all; that must stay green.
+    const config = readRoot('vite.config.ts')
+    expect(config).toMatch(/process\.env\.REQUIRE_BACKEND_ENV !== '1'/)
+  })
+})

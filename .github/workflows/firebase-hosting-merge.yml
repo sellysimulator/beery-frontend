@@ -22,6 +22,11 @@ jobs:
         env:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
           VITE_SOCKET_URL: ${{ vars.VITE_SOCKET_URL }}
+          # Fail the build if either is unset or points at the Hosting origin.
+          # Unset, the bundle talks to beersim.web.app, whose SPA rewrite
+          # answers REST with index.html while WebSocket upgrades are not
+          # proxied at all — a green deploy with no working real-time feature.
+          REQUIRE_BACKEND_ENV: '1'
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

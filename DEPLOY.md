@@ -44,6 +44,27 @@ redeploy, not a restart. In CI they are supplied as repository variables
 (`vars.VITE_API_BASE_URL`, `vars.VITE_SOCKET_URL`) on the `npm run build`
 step of both workflows.
 
+Set them under **Settings -> Secrets and variables -> Actions -> Variables**
+(repository *variables*, not secrets -- they ship in the bundle anyway), or:
+
+```
+gh variable set VITE_API_BASE_URL --body https://beery-backend.onrender.com
+gh variable set VITE_SOCKET_URL   --body https://beery-backend.onrender.com
+```
+
+`.env` is gitignored, so **CI never sees local values**: if the variables are
+unset the build is still green and the bundle points at the Hosting origin.
+Both workflows therefore set `REQUIRE_BACKEND_ENV: '1'` on the build step,
+which makes `vite.config.ts` refuse to build when either variable is empty or
+names a `web.app` / `firebaseapp.com` origin. A plain local `npm run build`
+does not set the flag and keeps working against the dev proxy.
+
+To confirm a deploy actually carries them, grep the live bundle:
+
+```
+curl -s https://beersim.web.app/assets/index-*.js | grep -c onrender.com
+```
+
 **There are no `VITE_FIREBASE_*` variables and there must not be.** The
 Firebase web config is literals in `firebase.ts`, at the repository root
 (not under `src/`), imported as `'../../firebase'` by `AuthContext.tsx`,
