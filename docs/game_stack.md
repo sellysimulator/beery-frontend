@@ -1,8 +1,9 @@
 # Game Stack — Base Template
 
 > **This file at `Novus/game_stack.md` is the single source of truth.** The copies inside
-> `Beery/`, `Lemony/`, `Pulky/` and `Selly/` are generated from it. Edit this one, then
-> re-copy. Do not edit a per-game copy in place — it will be overwritten.
+> `Beery/`, `Lemony/`, `Pulky/`, `Selly/` and `Beery/Beery_Frontend/docs/` are generated from
+> it. Edit this one, then re-copy. Do not edit a per-game copy in place — it will be
+> overwritten.
 >
 > Derived from **Tequila Game** (`Selly/Selly_Frontend` + `Selly/Selly_Backend`) after its
 > security and performance audit. Sections marked **[HARD-WON]** encode a bug that actually
@@ -42,6 +43,14 @@ mechanism; this is the contract.
    React re-mounts, users double-click.
 6. **Fail closed, and fail loudly.** A missing auth config must not silently become
    "everyone is trusted"; it must refuse and log at CRITICAL.
+7. **The client renders derived state; it never derives it.** Capacity, start eligibility,
+   whether the config is still editable, whose turn it is — each has exactly one definition,
+   it is server-side, and it travels in the broadcast as a value. This is not invariant 4
+   restated: 4 is about refusing what the client sends, and 7 is about refusing to make the
+   client compute what the server already knows. The failure is quieter — two
+   implementations of one rule that agree on the day they are written and drift afterwards —
+   and it is a rule this family has broken three times in one game's planning documents
+   alone.
 
 ---
 
@@ -156,6 +165,9 @@ never compared.
 - **Socket handlers registered once**, as a side effect in `main.tsx` *before* React renders,
   to avoid StrictMode double-mount bugs.
 - **Zustand store is the single source of truth**, written only by socket event handlers.
+- **The host is not in the participant list.** They render the room; they do not appear in
+  it, hold no alias and take no seat. A host counted as a player is an off-by-one that
+  survives every test with four players in it.
 
 ### Socket handshake — `autoConnect: false` **[HARD-WON]**
 
@@ -434,6 +446,51 @@ app = FastAPI(title=settings.APP_NAME, version=settings.VERSION, lifespan=lifesp
 
 ### Real-time layer — the reusable "host + room" pattern
 
+> **The transport is Socket.IO, and it is not a per-game choice.** If a game's own
+> specification asks for Server-Sent Events, long polling, or raw WebSockets, that document is
+> superseded on this point — see §4.
+>
+> SSE is a reasonable fit for one-way server-to-client streaming, and on paper a host + room
+> game looks like that: clients POST an action, the server streams state back. The reason this
+> stack does not use it is that **the transport is not the part you are choosing.** What you
+> are choosing is the identity, authority, reconnection and fan-out layer built on top of it,
+> and that layer is what §0 through §2 of this file actually describe. On Socket.IO it already
+> exists, has been through a security audit, and carries every fix marked **[HARD-WON]** below.
+>
+> Choosing SSE means rebuilding all of it, and specifically:
+>
+> - **There is no handshake.** Socket.IO establishes identity once, in `connect`, from a
+>   verified Firebase ID token or a regex-checked guest id, and every later handler reads it
+>   from `sid_to_identity`. An `EventSource` cannot send headers, so the token has to travel
+>   in a query string — where it lands in access logs and proxy logs — and has to be
+>   re-verified per request on the action channel, which is a second identity path to keep
+>   correct. §0 invariant 1 gets materially harder to hold.
+> - **Client actions need a separate channel.** SSE is one-way, so every action is an ordinary
+>   POST. That splits one ordered, authenticated stream into two independently-failing halves,
+>   and the ordering between "the action arrived" and "the state that reflects it went out" is
+>   yours to guarantee.
+> - **Per-recipient redaction gets no help.** `emit_to_sid` versus `emit_to_room` is the
+>   mechanism that keeps a player's private state out of a room broadcast. With SSE you hold
+>   the response objects yourself and write the fan-out, the per-connection filtering and the
+>   backpressure handling by hand — on the path where a leak is a data-disclosure bug, not a
+>   glitch.
+> - **Reconnection changes shape.** `Last-Event-ID` replay needs a durable, ordered,
+>   per-room event log, which is a table and a retention policy. Socket.IO reconnects with a
+>   fresh `sid`, re-asserts identity, and takes a full state resync — no event log, and the
+>   resync path is one you need anyway for a first join.
+> - **Multi-instance fan-out is on you.** `AsyncRedisManager` makes a second uvicorn process
+>   a configuration line. With SSE, a client is pinned to whichever instance holds its
+>   response object, and cross-instance delivery is yours to build.
+>
+> None of that is impossible. It is simply a large amount of security-sensitive work to
+> re-earn something this stack already has, and the games in this family have no requirement
+> that Socket.IO fails to meet. Corporate proxies that break WebSockets are the usual argument
+> for SSE, and the `transports: ['websocket', 'polling']` fallback already covers that case.
+>
+> The one thing worth taking from the SSE design is the **event sequence number**. Giving every
+> broadcast a monotonic per-room `seq` lets a client discard an event it already applied after
+> a resync, and costs one integer.
+
 ```python
 socket_app = socketio.ASGIApp(socketio_server=sio, other_asgi_app=app, socketio_path="socket.io")
 application = socket_app   # uvicorn app.main:application
@@ -482,15 +539,49 @@ async def connect(sid, environ, auth=None):
 | `join` | handshake identity | capacity-checked; reconnect via `session_token` |
 | `leave` | server sid mapping | pre-start only |
 | `config_update` | `host_secret` | **rejected once `started`** |
-| `start_game` | `host_secret` | requires exact player count |
+| `start_game` | `host_secret` | gated by `can_start()` and nothing else — see below |
 | per-round submit | server sid mapping | **deduplicated per round** |
 | `disconnect` | — | cleanup |
+
+Every event in that table has a defined server response — an acknowledgement to the sid, a
+broadcast, or an error. An event whose only outcome is a mutation leaves the client with
+nothing to wait on, and the client then either hangs or invents a timeout. Declare the
+response alongside the event, in the same table, or it will be added later by whoever
+notices the hang.
+
+**The host holds no seat.** In this pattern the host runs the room; they are not a player in
+it. They hold no `alias`, are absent from the participant list, occupy no role and are never
+written into any sid-to-alias map. Two consequences that are easy to get wrong:
+
+- `join_waiting` puts the host's socket in the Socket.IO room with `await
+  sio.enter_room(sid, room_id)`, **not** with the manager's `join_room(sid, room_id, alias)`
+  helper — that helper exists to record a player's alias, and the host has none to record.
+- Capacity is **seats occupied by people**, not slots filled in the game. Count
+  `len(participants)`, never the non-null entries of a role/slot map. A player can be seated
+  before they have picked anything, so a slot-derived count lets an extra person in, and the
+  overflow only becomes visible at the moment the game starts. Same family of bug as the
+  alias-allocation note below, and it reaches the same place: two people holding one seat.
 
 ```python
 def _check_host_secret(game, data) -> bool:
     expected = str(game.get("host_secret") or "")
+    # `bool(expected)` is load-bearing, not defensive noise: hmac.compare_digest("", "")
+    # returns True, so without it a payload carrying no host_secret at all authorises
+    # against any room whose stored secret is empty or missing. Whatever mints the secret
+    # today may never produce an empty one -- which is exactly why nothing else catches
+    # this, and why the guard keeps getting deleted as redundant.
     return bool(expected) and hmac.compare_digest(expected, str((data or {}).get("host_secret") or ""))
 ```
+
+**Eligibility is one function, and it returns its reason.** Do not let `start_game` decide
+for itself whether the room may start. Write one server-side
+`can_start(room) -> tuple[bool, str | None]`, send both values on every room broadcast so the
+host's Start button can *say why* it is disabled, and have the handler call the same function
+and emit its sentence verbatim on refusal. The two call sites are usually a few paragraphs
+apart in the same file, which is precisely how they end up as two rules: the button greys out
+for one reason and the refusal names another, and the host is told something that is no
+longer true. The reason string is UI copy, so pin its exact wording — a client test will
+assert on it.
 
 **`join` resolution order** — session_token first, then identity:
 
@@ -518,7 +609,25 @@ if alias is None:
 content (feedback, private results) must also use `emit_to_sid`: broadcasting it to the room and
 filtering client-side is both a leak and an O(N²) amplification.
 
+**A redacted subset keeps the shape of the thing it is a subset of.** When a broadcast carries
+the public part of the host's config, keep every surviving field at the same path it occupies
+in the full object — nested where the original nests. The client stores the subset in the slot
+the full object came from, so a field flattened on the way out lands where nothing reads it,
+and the symptom is a control silently taking its default rather than an error. Build the
+subset by *removing* keys from the real object, never by hand-assembling a new flat dict.
+
 Every state read-modify-write inside a handler is wrapped in `state_svc.lock(room_id)`.
+
+**Two maps will exist, and only one is authoritative.** A `SocketManager` holding
+`sid_to_alias` in process memory is convenient, and the room document in Redis holds the same
+mapping. The moment `AsyncRedisManager` is configured, a second uvicorn process exists, and
+the in-process map is a **cache of one worker's connections** — a handler that reads it
+instead of the room document answers correctly on the worker that took the join and wrongly
+on every other one. Say in one place which map is the source of truth (it is the room
+document), write both on join, clear both on leave and on a reconnect's stale sid, and read
+only the authoritative one inside the lock. The same applies to `sid_to_identity`, with one
+difference that makes it safe: it is written at the handshake by the worker that owns the
+socket, and only that worker ever handles that socket's events.
 
 ### Server-authoritative game state **[HARD-WON]**
 
@@ -728,6 +837,20 @@ FIREBASE_SERVICE_ACCOUNT_JSON=
 - The per-round submit/results slice of `sockets/handlers.py`, and the matching frontend
   `pages/`, `components/game/`, and socket payload types.
 - Firebase project (`firebase.ts` config, `.firebaserc` project id), DB name, Redis namespace.
+
+### What does NOT change per game
+
+The plumbing is the point of this file, and a per-game specification does not get to
+re-decide it. Specifically: the **real-time transport** (Socket.IO — see §2), the identity
+model (verified Firebase ID token or guest id, established at the handshake), the
+authority model (`host_secret` compared with `hmac.compare_digest`), the three identifiers
+(`alias` / `session_token` / `identity`), Redis as the live room store and lock, and the
+deploy shape.
+
+A game's own spec document is authoritative on **game semantics** — rules, costs, scoring,
+round structure, what a player sees. This file is authoritative on **plumbing**. Where the
+two conflict, the game document is superseded on the plumbing point, and the conflict should
+be written down in that game's plan rather than silently resolved in code.
 
 ---
 
