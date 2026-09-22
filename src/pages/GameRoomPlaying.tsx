@@ -14,6 +14,7 @@ import Board2D, { type BoardViewProps } from '../components/game/views/Board2D'
 import BoardViewToggle from '../components/game/views/BoardViewToggle'
 import { useBoardViewChoice } from '../components/game/views/boardViewChoice'
 import SceneLoading from '../components/game/views/board3d/SceneLoading'
+import ErrorBoundary from '../components/shared/ErrorBoundary'
 
 /**
  * The copy for the server's `TOO_MANY_SUBMISSIONS` refusal (§2.4). The server
@@ -167,6 +168,29 @@ export function GameRoomPlaying(): ReactElement {
     setReopenedWeek(null)
   }
 
+  const boardProps: BoardViewProps = {
+    view: myState,
+    week,
+    durationWeeks,
+    paused,
+    pausedReason,
+    locked,
+    isChangingOrder,
+    gameOver,
+    awaitingRoles,
+    initialOrder: isChangingOrder
+      ? (lastSubmission?.week === week ? lastSubmission.order : myState.last_order) ?? null
+      : null,
+    notice,
+    // "Your last order stands": once the server has capped the
+    // resubmissions, there is nothing left to change this week (§2.4).
+    canChangeOrder: !paused && !gameOver && !refusedResubmission,
+    weekChanged,
+    onSubmitOrder: handleSubmitOrder,
+    onChangeOrder: handleChangeOrder,
+    onKeepOrder: handleKeepOrder,
+  }
+
   return (
     <>
       {/*
@@ -182,34 +206,20 @@ export function GameRoomPlaying(): ReactElement {
 
         `SceneLoading` imports nothing but React, so naming it here does not
         pull three.js into the entry graph — AC 4 still holds.
+
+        The boundary is keyed on the choice so that toggling back resets it.
+        It catches what `Board3D`'s own boundary cannot: the lazy import
+        itself failing. A tab left open across a redeploy asks for a chunk
+        hash that no longer exists, the SPA rewrite answers with index.html,
+        and without this the throw reaches the app-wide boundary and the
+        player loses the whole game screen mid-week. The 2D board takes the
+        same props, so it is the fallback.
       */}
-      <Suspense fallback={<SceneLoading />}>
-        <Board
-          view={myState}
-          week={week}
-          durationWeeks={durationWeeks}
-          paused={paused}
-          pausedReason={pausedReason}
-          locked={locked}
-          isChangingOrder={isChangingOrder}
-          gameOver={gameOver}
-          awaitingRoles={awaitingRoles}
-          initialOrder={
-            isChangingOrder
-              ? (lastSubmission?.week === week ? lastSubmission.order : myState.last_order) ??
-                null
-              : null
-          }
-          notice={notice}
-          // "Your last order stands": once the server has capped the
-          // resubmissions, there is nothing left to change this week (§2.4).
-          canChangeOrder={!paused && !gameOver && !refusedResubmission}
-          weekChanged={weekChanged}
-          onSubmitOrder={handleSubmitOrder}
-          onChangeOrder={handleChangeOrder}
-          onKeepOrder={handleKeepOrder}
-        />
-      </Suspense>
+      <ErrorBoundary key={boardChoice} fallback={<Board2D {...boardProps} />}>
+        <Suspense fallback={<SceneLoading />}>
+          <Board {...boardProps} />
+        </Suspense>
+      </ErrorBoundary>
 
       {/*
         A SIBLING of the board, never a prop of it (24 §2.1). That is what keeps

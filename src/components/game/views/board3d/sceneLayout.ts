@@ -426,7 +426,7 @@ export const PILE_SCALE = {
 export const PILE_GRID = {
   inventory: { width: 8, depth: 3 },
   backlog: { width: 8, depth: 3 },
-  supplyLane: { width: 2, depth: 2 },
+  supplyLane: { width: 2, depth: 3 },
   orderMarker: { width: 2, depth: 2 },
   productionQueue: { width: 5, depth: 2 },
   money: { width: 4, depth: 2 },

@@ -23,7 +23,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -1079,6 +1079,57 @@ describe('24 AC 1 / AC 2 / AC 3: the board seam has a second entry and the defau
     expect(requireOrderInput()).toBeInTheDocument();
     expect(bodyText()).not.toMatch(/opening the warehouse/i);
     expect(document.querySelector('[aria-label="What you have"]')).not.toBeNull();
+  });
+
+  it('a 3D chunk that fails to load falls back to the 2D board, not the app-wide error screen', async () => {
+    // What a tab left open across a redeploy sees: the old chunk hash is gone,
+    // the SPA rewrite answers with index.html, and the dynamic import rejects.
+    // `lazy()` rethrows that rejection where the lazy element renders, so a
+    // stub that throws on render reaches the same boundary. (A throwing mock
+    // *factory* is not the same test: vitest then falls back to the real
+    // module, whose own WebGL fallback renders the 2D board and passes this
+    // whether or not anything catches a failed import.)
+    //
+    // `lazy()` caches its first resolution for the life of the module, so this
+    // test must run before the one below stubs the chunk differently.
+    let chunkRendered = false;
+    vi.doMock('../components/game/views/Board3D', () => ({
+      default: (): never => {
+        chunkRendered = true;
+        throw new Error('Failed to fetch dynamically imported module');
+      },
+    }));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const user = userEvent.setup();
+      renderPlaying('RETAILER');
+
+      await user.click(controlMatching(/switch to the 3d warehouse/i, 'the 2D/3D toggle'));
+      // The stubbed chunk takes a while to resolve, and React retries a
+      // throwing render before it gives up. Until the error has been reported
+      // the screen is still the pre-click board, and the assertions below
+      // would pass whether or not anything caught the throw.
+      await waitFor(() => expect(chunkRendered).toBe(true));
+      await waitFor(
+        () =>
+          expect(
+            consoleError.mock.calls.some((args) =>
+              args.some((arg) => String(arg).includes('Failed to fetch dynamically imported module')),
+            ),
+          ).toBe(true),
+        { timeout: 3000 },
+      );
+      expect(window.localStorage.getItem('board_view')).toBe('3D');
+
+      // The player keeps their week: the 2D board, with its order input, and
+      // not the outermost boundary's "Something went wrong".
+      await waitFor(() => expect(requireOrderInput()).toBeInTheDocument());
+      expect(bodyText()).not.toMatch(/something went wrong/i);
+    } finally {
+      consoleError.mockRestore();
+      vi.doUnmock('../components/game/views/Board3D');
+    }
   });
 
   it('AC 2 / AC 3: the toggle is a real button, and pressing it stores "3D"', async () => {
