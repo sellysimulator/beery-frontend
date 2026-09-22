@@ -269,6 +269,13 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     uuid: '^13.0.0',
     'chart.js': '^4.5.1',
     'react-chartjs-2': '^5.3.1',
+    // The 3D board (24 §6.4), matching Tequila version for version — the
+    // combination `game_stack.md` has actually been exercised against. It is a
+    // lazy chunk that is never in the entry graph, so it costs the 2D player
+    // nothing at runtime.
+    three: '^0.184.0',
+    '@react-three/fiber': '^9.6.1',
+    '@react-three/drei': '^10.7.7',
   };
 
   const DEV_DEPENDENCIES: Record<string, string> = {
@@ -285,6 +292,12 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     '@types/react': '~19.2.7',
     '@types/react-dom': '~19.2.3',
     '@types/node': '^24.10.1',
+    // Tequila keeps `@types/three` in `dependencies`. Types are never shipped,
+    // `npm ci` installs devDependencies in CI anyway, and `tsc` resolves them
+    // through node resolution regardless of `tsconfig.app.json`'s
+    // `types: ["vite/client"]` — so this is its correct home. A deliberate
+    // divergence (24 §6.4); do not "fix" it back.
+    '@types/three': '^0.184.0',
     eslint: '^9.39.1',
     '@eslint/js': '^9.39.1',
     'typescript-eslint': '^8.48.0',
@@ -336,6 +349,26 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
   it('CRITERION 1: a build script exists', () => {
     expect(typeof pkg.scripts?.build).toBe('string');
     expect(pkg.scripts?.build).toMatch(/vite build/);
+  });
+
+  it('24 CRITERION 4: vite.config.ts keeps the whole 3D tree in one lazy `three` chunk', () => {
+    // Read as DATA, like `package.json` above: this is an assertion *about* the
+    // build configuration, not a behaviour of the app.
+    //
+    // The bucket is asserted by the two names that do NOT announce themselves.
+    // `three` and `@react-three/*` are obvious and any rewrite would keep them;
+    // `troika-three-text` (drei `<Text>`'s SDF pipeline) and `react-reconciler`
+    // (@react-three/fiber's renderer) are not, and whichever of them falls
+    // through to `vendor` drags a slice of the 3D tree into the entry graph —
+    // silently, because the build stays green and only the network tab shows
+    // it. 24 §6.4 and AC 4 say `three` may appear in no chunk the entry HTML
+    // loads, so these two are the canaries for that.  [HARD-WON]
+    const config = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8');
+    const bucket = /return 'three'/.test(config);
+    expect(`three-bucket:${bucket}`).toBe('three-bucket:true');
+    for (const name of ['troika-three-text', 'react-reconciler', '@react-three']) {
+      expect(`${name}:${config.includes(name)}`).toBe(`${name}:true`);
+    }
   });
 
   it('CRITERION 3: Tailwind is CSS-first — there is no tailwind.config.*', () => {

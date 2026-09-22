@@ -1,0 +1,28 @@
+3D model credits — Beery_Frontend
+
+All four models are licensed CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/).
+Each .glb carries the same record in its own glTF `asset.extras`; do not strip it.
+
+box.glb
+  title: Box, Low Poly
+  author: FLAREMEDIA (https://sketchfab.com/flaremedia)
+  license: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+  source: https://sketchfab.com/3d-models/box-low-poly-c7a1ecb2355145bc91337e64f57bd0ec
+
+truck.glb
+  title: Low Poly Truck
+  author: Arifido._ (https://sketchfab.com/Arifido._)
+  license: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+  source: https://sketchfab.com/3d-models/low-poly-truck-98826ebd44e2492298ac925461509216
+
+person.glb
+  title: FREE Mecha Chameleon Character Model!
+  author: xtiborz095 (https://sketchfab.com/xtiborz095)
+  license: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+  source: https://sketchfab.com/3d-models/free-mecha-chameleon-character-model-4ebee377a562402980aafea2c1d99e0f
+
+money.glb
+  title: Low Poly Stack of Money
+  author: Courvois (https://sketchfab.com/CourvoisZ)
+  license: CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+  source: https://sketchfab.com/3d-models/low-poly-stack-of-money-632cf7dbc59a496283d1a6092dc6f9b0

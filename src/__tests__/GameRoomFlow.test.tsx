@@ -1045,3 +1045,71 @@ describe('FAILURE MODE 11: unmounting and remounting changes nothing', () => {
     expect(historyRows()).toEqual(before);
   });
 });
+
+// ---------------------------------------------------------------------------
+// `24-frontend-3d-board.md` §8.3 — two additions, and no existing test changed
+// ---------------------------------------------------------------------------
+
+/**
+ * Section 24 put a second board behind the seam `19 §2.8` was holding open.
+ * Everything above this line is the 2D board, and every one of those tests is
+ * unchanged on purpose: **the regression that matters most is that section 24
+ * changed nothing for a player who never asks for the warehouse** (24 AC 1).
+ *
+ * The toggle test deliberately never lets `Board3D` mount. `24 §8.2`'s whole
+ * discipline is that jsdom has no WebGL and the 3D board is therefore asserted
+ * as a `SceneModel` object in `Board3D.test.tsx`, never as pixels; this
+ * recorder harness has no WebGL either, so the lazy chunk is replaced for the
+ * one test that flips the switch. What is being asserted here is the *wiring*
+ * — a real button, and `'3D'` in localStorage afterwards — which is exactly
+ * the half that cannot be seen from a pure module.
+ */
+describe('24 AC 1 / AC 2 / AC 3: the board seam has a second entry and the default is unmoved', () => {
+  it('AC 1: with no stored preference and no env var, the screen is still the 2D board', () => {
+    // setup.ts clears both storage areas before every test, and no test in
+    // this file sets VITE_BOARD_VIEW, so this is the untouched default path.
+    expect(window.localStorage.getItem('board_view')).toBeNull();
+
+    renderPlaying('RETAILER');
+
+    // The 2D board's own content, rendered synchronously: the settlement
+    // recap, the "what you have" panel and the order input. If the seam had
+    // resolved to `Board3D` instead, React would have suspended on the lazy
+    // chunk and this would be the loading card.
+    expect(requireOrderInput()).toBeInTheDocument();
+    expect(bodyText()).not.toMatch(/opening the warehouse/i);
+    expect(document.querySelector('[aria-label="What you have"]')).not.toBeNull();
+  });
+
+  it('AC 2 / AC 3: the toggle is a real button, and pressing it stores "3D"', async () => {
+    // The lazy chunk, stubbed. `vi.doMock` is not hoisted, so it applies to
+    // the dynamic `import()` inside `GameRoomPlaying`'s `lazy()` call — which
+    // has not run yet, because nothing in this file has ever asked for 3D.
+    // Without it, flipping the switch would load `@react-three/fiber` and
+    // mount a `<Canvas>` into a jsdom with no WebGL context.
+    vi.doMock('../components/game/views/Board3D', () => ({
+      default: (): null => null,
+    }));
+
+    try {
+      const user = userEvent.setup();
+      renderPlaying('RETAILER');
+
+      const toggle = controlMatching(/switch to the 3d warehouse/i, 'the 2D/3D toggle');
+      // A real `<button>`, keyboard-operable — not a div with a click handler
+      // (24 §2.4, AC 2).
+      expect(toggle.tagName).toBe('BUTTON');
+      expect(isDisabled(toggle)).toBe(false);
+
+      await user.click(toggle);
+
+      // localStorage, deliberately, and nothing in sessionStorage: section 7
+      // of `CLAUDE.md` reserves that area for authority, and a rendering
+      // preference grants nothing (24 §2.3, AC 3).
+      expect(window.localStorage.getItem('board_view')).toBe('3D');
+      expect(window.sessionStorage.getItem('board_view')).toBeNull();
+    } finally {
+      vi.doUnmock('../components/game/views/Board3D');
+    }
+  });
+});

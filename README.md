@@ -21,9 +21,10 @@ The toolchain is pinned to the combination the shared Novus stack verifies — R
 (tilde, not caret), Vite 7, TypeScript 5.9, Tailwind 4, Vitest 4. React is pinned with a tilde
 by the shared stack's rule for games that add a 3D dependency: `@react-three/fiber` declares a
 narrow React peer range and lags React releases by months, so a caret lets npm pull a React it
-refuses and the install fails with `ERESOLVE` naming a package nobody touched. Beery has no
-3D dependency today — the board is 2D canvas — but the pin stays so that adding one is not a
-version fight.
+refuses and the install fails with `ERESOLVE` naming a package nobody touched. Beery now ships
+that dependency — the 3D board is `three` + `@react-three/fiber` + `@react-three/drei` — so the
+tilde is no longer insurance, it is load-bearing. Do not widen it, and do not reach for
+`--legacy-peer-deps`.
 
 ## Setup
 
@@ -52,6 +53,12 @@ npx tsc -b              # typecheck only, which is what CI runs first
 
 `npm run build` type-checks all three TypeScript projects before building, so a type error fails
 the build rather than shipping.
+
+It also emits a separate **`three`** chunk — three.js, `@react-three/fiber`, `@react-three/drei`
+and the transitive tiers they own (drei's `troika-*` text pipeline, fiber's `react-reconciler`).
+That chunk is around 1.1 MB raw and that is expected: it is lazy, it is never in the entry graph,
+and it is fetched only when a player switches to the 3D board. `vite.config.ts` raises
+`build.chunkSizeWarningLimit` to 1200 so the size warning still means something when it fires.
 
 A few test files shell out to the real toolchain — `routes.test.tsx` runs `tsc -b`, `eslint .`
 and `npm run build`, and `envSurface.test.ts` reads `firebase.json`, the workflow YAMLs,
@@ -87,7 +94,7 @@ and they are exactly the ones the code reads.
 |---|---|---|
 | `VITE_API_BASE_URL` | `api/http.ts`, `api/health.ts` | Empty falls back to the Vite dev proxy on `/api`. |
 | `VITE_SOCKET_URL` | `api/socket.ts` | Must point **directly** at the backend host in production: Firebase Hosting does not proxy WebSocket upgrades. |
-| `VITE_BOARD_VIEW` | `pages/GameRoomPlaying.tsx` | Optional. `2D` is the only board registered today, and is the default. |
+| `VITE_BOARD_VIEW` | `pages/GameRoomPlaying.tsx` | Optional, `2D` (the default) or `3D`. Both boards are registered. This is only the default for a browser that has *never chosen*: the in-game toggle writes `board_view` to `localStorage` and overrides it per browser. An unrecognised value falls through to `2D`. |
 
 **There are no `VITE_FIREBASE_*` variables, and there must not be.** The Firebase web config is
 six literals in `firebase.ts` at the repository root. Those values are public identifiers that
@@ -120,7 +127,8 @@ src/
 ├── store/gameStore.ts          the Zustand store — written only by socket handlers
 ├── types/game.ts               TypeScript mirrors of every wire payload
 ├── schemas/configSchema.ts     Zod mirror of GameConfig — a form hint, not a gate
-├── utils/storage.ts            alias, guest id, session_token, host_secret, display name
+├── utils/storage.ts            alias, guest id, session_token, host_secret, display name,
+│                               board_view
 ├── pages/                      one module per route, each exporting a `route` descriptor
 │   ├── WelcomeScreen  HomePage  GameRoom  HostRoom
 │   ├── GameRoomPlaying  HostConsole  ResultsPage  ProfilePage
@@ -134,12 +142,15 @@ src/
 │   │                           and a self-contained QR encoder
 │   ├── config/                 the host configuration panel and its react-hook-form pieces
 │   ├── game/                   the player's week: decision panel, supply line, recap
-│   │   └── views/Board2D.tsx   the registered board view
+│   │   └── views/              Board2D and Board3D (lazy) — the two registered board
+│   │                           views — plus the 2D/3D toggle and the pure resolver
+│   │       └── board3d/        the scene: buildSceneModel plus the three.js components
+│   │                           that render its output and nothing else
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export
 │   ├── profile/                match history, stats, role breakdown, guest-claim prompt
 │   ├── charts/chartSetup.ts    piecemeal Chart.js registration + the pure config builders
-│   └── manual/
+│   └── manual/                 ManualBook — the react-pageflip book both manuals are read in
 └── __tests__/                  vitest, flat, one file per feature + setup.ts
 ```
 
@@ -175,8 +186,29 @@ up.
 | `session_token` | `localStorage`, per room | Secret; the reconnect credential. |
 | `host_secret` | **`sessionStorage`**, per room | Secret and **tab-scoped**. In `localStorage` it would leak host authority into every tab, including one opened from an invite link. |
 | display name | `localStorage` | Display data, sanitised on write. |
+| `board_view` | `localStorage` | Display preference, **not a credential**; browser-wide on purpose, so a second tab keeps the choice. An unrecognised value is treated as unset. |
 
 A host who closes the tab loses the secret, and recovers by verified identity instead — the server
 re-authorises the claim and replies with a fresh secret. That is why the host lobby emits
 `join_waiting` *with or without* a stored secret, and why it must not show the recovery screen
 before the server has answered.
+
+## Third-party 3D assets
+
+The 3D board loads four models from `public/3dmodels/`. All four are **CC-BY-4.0**
+(<https://creativecommons.org/licenses/by/4.0/>), which is an *attribution* licence: shipping
+the meshes without visible credit is a licence breach, not a polish item. The credits are
+reachable in the running app behind the 3D board's "3D model credits" disclosure, and the same
+records live in `public/3dmodels/ATTRIBUTION.txt` and in each file's own glTF `asset.extras`.
+**Do not run these files through any tool that strips `asset.extras`**, and if one is ever
+re-exported, re-copy the record from the extras rather than retyping it here.
+
+| File | Title | Author | Licence | Source |
+|---|---|---|---|---|
+| `box.glb` | Box, Low Poly | [FLAREMEDIA](https://sketchfab.com/flaremedia) | CC-BY-4.0 | [Sketchfab](https://sketchfab.com/3d-models/box-low-poly-c7a1ecb2355145bc91337e64f57bd0ec) |
+| `truck.glb` | Low Poly Truck | [Arifido._](https://sketchfab.com/Arifido._) | CC-BY-4.0 | [Sketchfab](https://sketchfab.com/3d-models/low-poly-truck-98826ebd44e2492298ac925461509216) |
+| `person.glb` | FREE Mecha Chameleon Character Model! | [xtiborz095](https://sketchfab.com/xtiborz095) | CC-BY-4.0 | [Sketchfab](https://sketchfab.com/3d-models/free-mecha-chameleon-character-model-4ebee377a562402980aafea2c1d99e0f) |
+| `money.glb` | Low Poly Stack of Money | [Courvois](https://sketchfab.com/CourvoisZ) | CC-BY-4.0 | [Sketchfab](https://sketchfab.com/3d-models/low-poly-stack-of-money-632cf7dbc59a496283d1a6092dc6f9b0) |
+
+`road.glb` from the same upstream set is deliberately **not** shipped: 8.1 MB for thirty
+triangles, almost all of it textures for surfaces this scene draws procedurally.

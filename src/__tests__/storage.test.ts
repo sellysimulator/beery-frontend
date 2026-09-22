@@ -27,6 +27,8 @@ import {
   clearHostRoom,
   getDisplayName,
   setDisplayName,
+  getBoardView,
+  setBoardView,
 } from '../utils/storage';
 
 const ROOM = 'ABCD12';
@@ -47,6 +49,15 @@ function values(area: Storage): string[] {
 /** True when the value appears anywhere in the area — as a value or inside one. */
 function holds(area: Storage, value: string): boolean {
   return values(area).some((v) => v === value || v.includes(value));
+}
+
+/** The key currently holding exactly this value, or null. Never a literal. */
+function keyHolding(area: Storage, value: string): string | null {
+  for (let i = 0; i < area.length; i += 1) {
+    const key = area.key(i);
+    if (key !== null && area.getItem(key) === value) return key;
+  }
+  return null;
 }
 
 /** Simulates opening a brand-new browser tab: sessionStorage is per-tab. */
@@ -343,5 +354,58 @@ describe('display name — display data, sanitised on write, localStorage', () =
     expect(getDisplayName()).toBe('Ana');
     openFreshTab();
     expect(getDisplayName()).toBe('Ana');
+  });
+});
+
+describe('board view — a display preference, not a credential (24 §2.3)', () => {
+  it('starts null, so an unchosen browser falls through to VITE_BOARD_VIEW', () => {
+    expect(getBoardView()).toBeNull();
+  });
+
+  it("round-trips '2D'", () => {
+    setBoardView('2D');
+    expect(getBoardView()).toBe('2D');
+  });
+
+  it("round-trips '3D'", () => {
+    setBoardView('3D');
+    expect(getBoardView()).toBe('3D');
+  });
+
+  it('an unrecognised stored value reads as null — unset, not an error', () => {
+    // Somebody's stale key, or a hand-edited one. 24 §2.2 treats it as UNSET so
+    // it falls through to the env default: the resolution order already has an
+    // answer for "no preference", and a throw here would turn a junk string
+    // into a broken game screen.
+    //
+    // The corrupt value is written through whichever key the accessor itself
+    // just used, so this test does not name a key either — the key name is not
+    // part of the frozen surface, and a renamed key must fail this test rather
+    // than pass it vacuously.
+    setBoardView('3D');
+    const key = keyHolding(window.localStorage, '3D');
+    expect(key).not.toBeNull();
+
+    window.localStorage.setItem(key as string, 'VR');
+    expect(getBoardView()).toBeNull();
+
+    window.localStorage.setItem(key as string, '');
+    expect(getBoardView()).toBeNull();
+  });
+
+  it('lands in localStorage and leaves sessionStorage untouched', () => {
+    setBoardView('3D');
+
+    // Which AREA holds it is the frozen part, not the key name, so this scans
+    // for the value the way every other test in this file does.
+    expect(holds(window.localStorage, '3D')).toBe(true);
+    expect(values(window.sessionStorage)).toEqual([]);
+  });
+
+  it('survives a fresh tab — the preference is not tab-scoped', () => {
+    // The one preference a player should not have to re-make in a second tab.
+    setBoardView('3D');
+    openFreshTab();
+    expect(getBoardView()).toBe('3D');
   });
 });

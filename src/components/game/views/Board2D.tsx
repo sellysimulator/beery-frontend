@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import type { PlayerView, Role } from '../../../types/game'
 import DecisionForm from '../DecisionForm'
 import DecisionPanel from '../DecisionPanel'
+import GameOverPanel from '../GameOverPanel'
 import OwnHistoryChart from '../OwnHistoryChart'
 import PausedOverlay from '../PausedOverlay'
 import RoleBanner from '../RoleBanner'
@@ -84,14 +85,9 @@ export function Board2D({
             <DecisionPanel view={view} />
 
             {gameOver ? (
-              <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised px-5 py-4">
-                <h2 className="text-xl font-semibold">The game is over</h2>
-                <p className="text-ink-muted">
-                  No more orders. Your host will take everyone through the results — and
-                  the gap between what customers wanted and what the chain ordered is
-                  the whole point of the debrief.
-                </p>
-              </section>
+              // Lifted to a shared component by 24 §6.3 so the 3D board's order-desk
+              // panel renders these exact words rather than a second copy of them.
+              <GameOverPanel />
             ) : locked ? (
               <WaitingForOthers
                 myRole={view.role}

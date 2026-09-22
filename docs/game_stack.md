@@ -236,13 +236,41 @@ Google profile images (`lh3.googleusercontent.com`) answer **429** to requests c
 `Referer` they dislike, which happens routinely on localhost. Render them with
 `referrerPolicy="no-referrer"` and an `onError` fallback to the user's initial.
 
-### Firebase Auth wiring
+### Firebase Auth wiring — `initializeAuth`, never `getAuth` **[HARD-WON]**
 
 `firebase.ts` holds the web config (public identifiers — safe to ship in the bundle):
 ```ts
-export const auth = getAuth(app)
+export const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+})
 export const googleProvider = new GoogleAuthProvider()
 ```
+
+`getAuth(app)` is shorthand for `initializeAuth` with
+`popupRedirectResolver: browserPopupRedirectResolver` already set, and Auth then **awaits** that
+resolver while starting up: `initializeCurrentUser` runs `tryRedirectSignIn`, which loads a
+cross-origin gapi iframe from `authDomain` (`<project>.firebaseapp.com/__/auth/iframe.js`,
+~288 KB, plus `apis.google.com/js/api.js`) purely to check for a pending redirect result. The
+app is served from `<site>.web.app`, so it is always cross-origin and always pays this.
+
+That await sits directly in front of the auth-state resolution, so it delays
+`onAuthStateChanged` — and with it the first paint of every screen gated on `loading` AND the
+socket handshake, which by design does not connect until auth resolves. Measured at 10–15 s on
+a real deploy, with nothing in the network tab that looks like the app's own traffic.
+
+Pass the resolver at the one call site that needs it, so the iframe loads on click instead:
+```ts
+await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver)
+```
+A call site that forgets it throws `auth/operation-not-supported-in-this-environment` — loud,
+not silent.
+
+**Keep analytics off the critical path.** `getAnalytics(app)` at module load, in the same module
+that exports `auth`, puts Firebase Installations and `googletagmanager.com` in front of sign-in;
+content blockers routinely stall those rather than failing them fast. Import it dynamically
+after `load` and guard it with `isSupported()` — unguarded it throws in jsdom and in private
+mode, and an unhandled throw in that module takes `auth` down with it, leaving the app spinning
+forever.
 
 **Do not gitignore `firebase.ts` while importing it from `src/`** — see §5, it breaks CI.
 Prefer `VITE_FIREBASE_*` env vars so the file is reproducible from config.
@@ -256,11 +284,84 @@ http.interceptors.request.use(async (config) => {
 })
 ```
 
+### Identity already chosen — skip the welcome screen **[HARD-WON]**
+
+The welcome screen must read `mode`, not only `loading`. A screen that knows whether auth has
+*resolved* but not *what it resolved to* shows the sign-in page to a visitor whose session was
+restored a moment ago, and asks them to sign in again on every single visit.
+
+```tsx
+if (mode === 'authenticated') return <Navigate to={destination} replace />
+```
+
+- Redirect to `destination` (`state.from` ?? `/home`), never a hardcoded `/home`, or an invite
+  link is lost on reload — the guard parked the attempted location there for exactly this.
+- `replace`, or Back out of `/home` lands on `/` and is bounced forward again, trapping the user.
+- Place it **after** the `loading` guard. Redirecting on an unresolved `mode` sends a signed-in
+  user to the sign-in page for a moment on every load.
+- A screen that deliberately renders before auth resolves (to spare first-time visitors a
+  spinner) will show a brief flash before the redirect. That is the right trade: do not block
+  the public front door to fix a returning-visitor problem.
+- Guests are a judgement call. A guest id is only a localStorage key, a weaker signal than a
+  Firebase session, and the welcome screen is usually the one route to a real account — so
+  leaving guests on it is defensible.
+
+### Backend wake-up probe **[HARD-WON]**
+
+A free-tier host sleeps and cold-starts in 30–60 s. Poll `GET /api/v1/health` and show a
+wake-up screen over the routes that need the backend; keep that endpoint dependency-free
+server-side, so a slow database cannot make the whole app look dead.
+
+**`res.ok` is not enough.** With the SPA rewrite (`**` → `/index.html`) the Hosting origin
+answers `/api/v1/health` with **200 `text/html`**. A probe that trusts the status code reports a
+backend it never reached as awake, lets the app through, and leaves the real failure to surface
+later as an unexplained socket error — which is a much harder bug to find than the
+misconfiguration that caused it. Assert the payload:
+
+```ts
+if (!res.ok) return false
+const body: unknown = await res.json()   // SyntaxError on HTML → caught below → false
+return typeof body === 'object' && body !== null &&
+       (body as { status?: unknown }).status === 'ok'
+```
+
 ### Env vars
 
 ```
 VITE_API_BASE_URL=
 VITE_SOCKET_URL=
+```
+
+**Fail the build when these are empty. [HARD-WON]** `.env*` is gitignored, so CI has them only
+if the repository variables are actually set. Unset, Vite substitutes empty strings, the build
+goes green, and the bundle asks the Hosting origin for everything: REST survives by accident
+(the `**` rewrite answers 200 with `index.html`) while WebSocket upgrades are not proxied at
+all. Every real-time feature then fails on a deploy whose own CI run passed.
+
+A Vite plugin, armed by a flag the deploy workflow sets, turns that into a red build:
+
+```ts
+function requireBackendEnv(env: Record<string, string>): Plugin {
+  return {
+    name: 'require-backend-env',
+    apply: 'build',
+    buildStart() {
+      // Opt-in, so a bare `npm run build` and the dev proxy stay green.
+      if (process.env.REQUIRE_BACKEND_ENV !== '1') return
+      for (const key of ['VITE_API_BASE_URL', 'VITE_SOCKET_URL']) {
+        const value = (env[key] ?? '').trim()
+        if (!value) this.error(`${key} is empty — set the repository variable vars.${key}.`)
+        if (/web\.app|firebaseapp\.com/.test(value))
+          this.error(`${key} is ${value}, a Hosting origin. It must be the backend host.`)
+      }
+    },
+  }
+}
+```
+Read the values with `loadEnv(mode, process.cwd(), 'VITE_')`, which sees both the `.env` files
+and the prefixed variables the workflow passes in. Then verify a deploy actually carried them:
+```bash
+curl -s https://<site>.web.app/assets/index-*.js | grep -c <backend-host>
 ```
 
 ### Deploy (Firebase Hosting)

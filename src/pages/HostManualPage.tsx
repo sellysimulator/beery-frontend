@@ -1,7 +1,8 @@
 import type { ReactElement } from 'react'
+import ManualBook, { type ManualPageSpec } from '../components/manual/ManualBook'
+import { contentsPage } from '../components/manual/manualContents'
 import ManualCallout from '../components/manual/ManualCallout'
 import ManualLayout from '../components/manual/ManualLayout'
-import ManualSection from '../components/manual/ManualSection'
 import type { RouteDescriptor } from '../routes/registry'
 
 /**
@@ -12,15 +13,18 @@ import type { RouteDescriptor } from '../routes/registry'
  *     and the control that extended the countdown are all gone.
  *   - **D3**: hosting needs no account, so Step 1 no longer asks for one.
  *   - **D14**: `clone_room` is phase 2, so Step 5 says to create a new room.
+ *
+ * Presented as a page-turning book (`ManualBook`, the same `react-pageflip`
+ * treatment Selly's two manuals use), so the steps below are leaves. Step 3
+ * and the debrief run long and are split across consecutive leaves; a
+ * continuation is marked so the contents page lists the step once.
  */
-export function HostManualPage(): ReactElement {
-  return (
-    <ManualLayout
-      title="Host manual"
-      audience="For the person who sets up and runs the session. You do not play."
-      otherManual={{ to: '/player-manual', label: 'Player manual' }}
-    >
-      <ManualSection heading="What the host does">
+const BODY: ManualPageSpec[] = [
+  {
+    id: 'what-the-host-does',
+    heading: 'What the host does',
+    content: (
+      <>
         <p>
           You create the game, choose the rules, hand out the roles, and run the session.{' '}
           <strong>You do not play.</strong> You hold no inventory and pay no costs. Your job is
@@ -30,27 +34,39 @@ export function HostManualPage(): ReactElement {
           You see everything: all four players' inventory, backlog, orders and costs, and the
           true customer demand — including the things the players can't see.
         </p>
-      </ManualSection>
-
-      <ManualSection heading="Before you start">
+      </>
+    ),
+  },
+  {
+    id: 'before-you-start',
+    heading: 'Before you start',
+    content: (
+      <p>
+        You need four players (or fewer, with bots filling the gaps), a way to send them a link,
+        and a rough idea of what you want them to learn. Thirty-six weeks of play runs a little
+        over half an hour, plus debrief.
+      </p>
+    ),
+  },
+  {
+    id: 'step-1',
+    heading: 'Step 1 — Create the room',
+    content: (
+      <>
         <p>
-          You need four players (or fewer, with bots filling the gaps), a way to send them a
-          link, and a rough idea of what you want them to learn. Thirty-six weeks of play runs a
-          little over half an hour, plus debrief.
-        </p>
-      </ManualSection>
-
-      <ManualSection heading="Step 1 — Create the room">
-        <p>
-          Create a game — you can sign in first to keep your results, or just start one.
-          You'll get a <strong>room code</strong> and an{' '}
-          <strong>invite link</strong>. Send the link to your players however you like — chat,
-          email, or on screen for them to type in.
+          Create a game — you can sign in first to keep your results, or just start one. You'll
+          get a <strong>room code</strong> and an <strong>invite link</strong>. Send the link to
+          your players however you like — chat, email, or on screen for them to type in.
         </p>
         <p>Only you can see the room until you start.</p>
-      </ManualSection>
-
-      <ManualSection heading="Step 2 — Let players in">
+      </>
+    ),
+  },
+  {
+    id: 'step-2',
+    heading: 'Step 2 — Let players in',
+    content: (
+      <>
         <p>
           Players open the link, enter a name, and land in the lobby. You'll see them appear in
           your participant list.
@@ -59,9 +75,14 @@ export function HostManualPage(): ReactElement {
           They can't see your settings while they wait. They just see who else has joined and a
           message telling them you're still setting up. Take the time you need.
         </p>
-      </ManualSection>
-
-      <ManualSection heading="Step 3 — Configure the game">
+      </>
+    ),
+  },
+  {
+    id: 'step-3',
+    heading: 'Step 3 — Configure the game',
+    content: (
+      <>
         <p>This is the part that matters. Presets get you running fast:</p>
         <ul className="flex list-disc flex-col gap-2 pl-6">
           <li>
@@ -77,7 +98,14 @@ export function HostManualPage(): ReactElement {
             which is the point.
           </li>
         </ul>
-
+      </>
+    ),
+  },
+  {
+    id: 'step-3-settings',
+    heading: 'Step 3 — Configure the game, continued',
+    content: (
+      <>
         <p>Or set everything yourself:</p>
         <p>
           <strong>Length.</strong> Number of weeks. There is no time limit — the week closes when
@@ -89,6 +117,14 @@ export function HostManualPage(): ReactElement {
           to reach the supplier. How much is already in the pipeline at week one. For the
           Factory, the production delay and any capacity limit.
         </p>
+      </>
+    ),
+  },
+  {
+    id: 'step-3-costs',
+    heading: 'Step 3 — Configure the game, continued',
+    content: (
+      <>
         <p>
           <strong>Costs.</strong> Holding cost per unit per week. Backlog cost per unit per week.
           Backlog should cost more than holding — that asymmetry is what makes the game a real
@@ -100,6 +136,14 @@ export function HostManualPage(): ReactElement {
           random, or a custom sequence you paste in. The step is the classic and the clearest
           teaching tool. Only the Retailer sees it — unless you decide otherwise below.
         </p>
+      </>
+    ),
+  },
+  {
+    id: 'step-3-visibility',
+    heading: 'Step 3 — Configure the game, continued',
+    content: (
+      <>
         <p>
           <strong>Visibility.</strong> These are your teaching levers:
         </p>
@@ -120,14 +164,18 @@ export function HostManualPage(): ReactElement {
             <em>Show a live leaderboard</em> — competitive, but it can distort behaviour.
           </li>
         </ul>
-
         <ManualCallout title="Tip">
           Run the classic settings first, debrief, then re-run with demand shared. The contrast
           does more teaching than any explanation.
         </ManualCallout>
-      </ManualSection>
-
-      <ManualSection heading="Step 4 — Assign roles">
+      </>
+    ),
+  },
+  {
+    id: 'step-4',
+    heading: 'Step 4 — Assign roles',
+    content: (
+      <>
         <p>Three options:</p>
         <ul className="flex list-disc flex-col gap-2 pl-6">
           <li>
@@ -148,17 +196,25 @@ export function HostManualPage(): ReactElement {
           played by an automated agent and are clearly marked so everyone knows which links in
           the chain are human.
         </p>
-      </ManualSection>
-
-      <ManualSection heading="Step 5 — Start">
-        <p>
-          Once all four roles are filled and your settings are valid, start the game. Settings
-          lock at this point — they can't be changed mid-game. If you need different parameters,
-          end the game and create a new room.
-        </p>
-      </ManualSection>
-
-      <ManualSection heading="Step 6 — Run the session">
+      </>
+    ),
+  },
+  {
+    id: 'step-5',
+    heading: 'Step 5 — Start',
+    content: (
+      <p>
+        Once all four roles are filled and your settings are valid, start the game. Settings lock
+        at this point — they can't be changed mid-game. If you need different parameters, end the
+        game and create a new room.
+      </p>
+    ),
+  },
+  {
+    id: 'step-6',
+    heading: 'Step 6 — Run the session',
+    content: (
+      <>
         <p>
           Your console shows all four players side by side, live, with their submission status
           each week.
@@ -181,15 +237,28 @@ export function HostManualPage(): ReactElement {
             results for the weeks played.
           </li>
         </ul>
+      </>
+    ),
+  },
+  {
+    id: 'step-6-rules',
+    heading: 'Step 6 — Run the session, continued',
+    content: (
+      <>
         <p>Use presentation mode if you're projecting for a room.</p>
         <ManualCallout title="Two rules worth enforcing out loud">
           Players must not talk to each other about quantities, and nobody may show anyone else
           their screen. The silence is not an arbitrary restriction — it's the thing being
           simulated.
         </ManualCallout>
-      </ManualSection>
-
-      <ManualSection heading="Step 7 — Debrief">
+      </>
+    ),
+  },
+  {
+    id: 'step-7',
+    heading: 'Step 7 — Debrief',
+    content: (
+      <>
         <p>
           The results screen is the lesson. Show it on the shared screen and walk through it:
         </p>
@@ -204,23 +273,82 @@ export function HostManualPage(): ReactElement {
             swing more. The Factory's are wild. That's the bullwhip effect, and they produced it
             themselves.
           </li>
-          <li>
-            <strong>The bullwhip ratio</strong> per role — how much each stage amplified the
-            variation.
-          </li>
-          <li>
-            Ask each player what they were thinking when they placed their largest order. Almost
-            always, the answer is some version of{' '}
-            <em>"I'd ordered more but nothing was arriving, so I ordered again."</em> That's
-            supply-line underweighting, and it's the real finding.
-          </li>
-          <li>
-            Point out that no one was incompetent and no one was acting in bad faith. The
-            structure produced the outcome.
-          </li>
         </ol>
-        <p>You can export the full week-by-week data as CSV or JSON for further analysis.</p>
-      </ManualSection>
+      </>
+    ),
+  },
+  {
+    id: 'step-7-findings',
+    heading: 'Step 7 — Debrief, continued',
+    content: (
+      <ol start={3} className="flex list-decimal flex-col gap-2 pl-6">
+        <li>
+          <strong>The bullwhip ratio</strong> per role — how much each stage amplified the
+          variation.
+        </li>
+        <li>
+          Ask each player what they were thinking when they placed their largest order. Almost
+          always, the answer is some version of{' '}
+          <em>"I'd ordered more but nothing was arriving, so I ordered again."</em> That's
+          supply-line underweighting, and it's the real finding.
+        </li>
+        <li>
+          Point out that no one was incompetent and no one was acting in bad faith. The structure
+          produced the outcome.
+        </li>
+      </ol>
+    ),
+  },
+  {
+    id: 'step-7-export',
+    heading: 'Step 7 — Debrief, continued',
+    content: <p>You can export the full week-by-week data as CSV or JSON for further analysis.</p>,
+  },
+]
+
+const PAGES: ManualPageSpec[] = [
+  {
+    id: 'cover',
+    variant: 'cover',
+    content: (
+      <>
+        <p className="text-5xl" aria-hidden="true">
+          🎛️
+        </p>
+        <p className="text-3xl font-bold">Host manual</p>
+        <p className="text-ink-muted">
+          Set the scenario, keep the room moving, and run the debrief that does the teaching.
+        </p>
+      </>
+    ),
+  },
+  contentsPage(BODY),
+  ...BODY,
+  {
+    id: 'back-cover',
+    variant: 'back',
+    content: (
+      <>
+        <p className="text-4xl" aria-hidden="true">
+          📈
+        </p>
+        <p className="text-2xl font-bold">The chart is the lesson.</p>
+        <p className="text-ink-muted">
+          Nobody was incompetent. The structure produced the outcome — that is the debrief.
+        </p>
+      </>
+    ),
+  },
+]
+
+export function HostManualPage(): ReactElement {
+  return (
+    <ManualLayout
+      title="Host manual"
+      audience="For the person who sets up and runs the session. You do not play."
+      otherManual={{ to: '/player-manual', label: 'Player manual' }}
+    >
+      <ManualBook title="Host manual" pages={PAGES} />
     </ManualLayout>
   )
 }

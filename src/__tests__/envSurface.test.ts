@@ -23,8 +23,14 @@
  */
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+// The only three.js this suite loads. `24 §8.1` keeps `Board3D.test.tsx` off
+// the renderer because jsdom has no WebGL; a GLB container needs neither a
+// canvas nor a GL context to parse, and the asset contracts below are exactly
+// the ones no `SceneModel` assertion can reach.
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 /** The `Beery_Frontend` directory, found without assuming the runner's cwd. */
 function projectRoot(): string {
@@ -312,5 +318,258 @@ describe('failure mode 7: a deploy build cannot ship without the backend URLs', 
     // environment at all; that must stay green.
     const config = readRoot('vite.config.ts')
     expect(config).toMatch(/process\.env\.REQUIRE_BACKEND_ENV !== '1'/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// `24-frontend-3d-board.md` §6.1, §8.3, AC 20: the shipped GLB payload
+// ---------------------------------------------------------------------------
+
+/**
+ * Section 24's four meshes are configuration in exactly this file's sense:
+ * they are committed files that nothing imports, so no application test can
+ * notice them going missing. A `.glb` that is gitignored, or excluded by
+ * Firebase Hosting's `ignore` list, is a file that builds green locally and
+ * 404s in the classroom -- the same shape as failure mode 1 above, where
+ * `firebase.ts` was gitignored while `src/` imported it.
+ *
+ * The filesystem, not `git ls-files`: these five arrive as new files in the
+ * same change as this test, so tracking is asserted the way it actually
+ * matters -- by proving `.gitignore` does not match them -- rather than by
+ * asking the index about files the index has not been told about yet.
+ */
+describe('24 §6.1 / AC 20: public/3dmodels ships four meshes, their credits, and no road', () => {
+  /** §6.1's table, exactly. `road.glb` is deliberately not among them. */
+  const SHIPPED = ['ATTRIBUTION.txt', 'box.glb', 'money.glb', 'person.glb', 'truck.glb']
+
+  it('contains exactly the four .glb files and ATTRIBUTION.txt', () => {
+    const dir = join(ROOT, 'public', '3dmodels')
+    expect(existsSync(dir), 'public/3dmodels/ is missing entirely').toBe(true)
+    expect(readdirSync(dir).sort()).toEqual(SHIPPED)
+  })
+
+  it('road.glb is not shipped: 8.1 MB for 30 triangles, 97.5% of it textures', () => {
+    // §6.1 states the decision and the replacement: the floor is a procedural
+    // plane and the roads are painted quads -- smaller, sharper and
+    // role-tintable. A `road.glb` appearing here means somebody copied the
+    // whole of Samby's asset folder.
+    expect(existsSync(join(ROOT, 'public', '3dmodels', 'road.glb'))).toBe(false)
+  })
+
+  it('AC 20: ATTRIBUTION.txt carries the four CC-BY-4.0 credits, verbatim', () => {
+    // CC-BY is an attribution licence; shipping the meshes without visible
+    // credit is a licence breach, not a polish item. `ModelAttribution.tsx`
+    // re-renders these same strings in the app, and `Board3D.test.tsx`
+    // asserts that it does.
+    const text = readRoot('public', '3dmodels', 'ATTRIBUTION.txt')
+    for (const author of ['FLAREMEDIA', 'Arifido._', 'xtiborz095', 'Courvois']) {
+      expect(text).toContain(author)
+    }
+    expect(text).toMatch(/CC-BY-4\.0|creativecommons\.org\/licenses\/by\/4\.0/)
+    for (const file of ['box.glb', 'truck.glb', 'person.glb', 'money.glb']) {
+      expect(text).toContain(file)
+    }
+  })
+
+  it('.gitignore does not match public/3dmodels/, so a clean checkout has the meshes', () => {
+    const gitignore = existsSync(join(ROOT, '.gitignore'))
+      ? readFileSync(join(ROOT, '.gitignore'), 'utf8')
+      : ''
+    const patterns = gitignore
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#'))
+
+    for (const pattern of patterns) {
+      expect(pattern, `.gitignore rule "${pattern}" would drop the 3D assets`).not.toMatch(
+        /3dmodels|^public\b|\*\.glb/,
+      )
+    }
+  })
+
+  it('firebase.json ignores nothing under 3dmodels, so /3dmodels/*.glb resolves to the file', () => {
+    // Hosting serves static files before applying rewrites, so a `.glb` that
+    // survives the ignore list resolves to the mesh and not to index.html.
+    // `matchesRewriteSource` above speaks the same glob dialect the ignore
+    // list does, so it is reused rather than copied.
+    const ignore = readFirebaseJson().hosting.ignore ?? []
+    for (const asset of ['3dmodels/box.glb', '3dmodels/ATTRIBUTION.txt', '3dmodels/truck.glb']) {
+      for (const pattern of ignore) {
+        expect(
+          matchesRewriteSource(pattern, asset),
+          `firebase.json ignore rule "${pattern}" excludes ${asset}`,
+        ).toBe(false)
+      }
+    }
+
+    // Not vacuous: the list really does still exclude what it is there for.
+    expect(ignore.some((pattern) => matchesRewriteSource(pattern, 'firebase.json'))).toBe(true)
+  })
+})
+
+/**
+ * `24 §7.3` -- the claims `gltfModels.ts` is written against, asserted against
+ * the shipped files.
+ *
+ * That module's header says its three decisions -- no decoder, no
+ * `useAnimations`, plain `clone()` -- are *"verified against the files in
+ * `public/3dmodels/`, not assumed"*, and its truck bake says the same of the
+ * thirteen flat materials it folds into two meshes. Nothing was re-verifying
+ * either: `24 §8.1` keeps `Board3D.test.tsx` on the `SceneModel` because jsdom
+ * has no WebGL, so no test anywhere opened a `.glb`. A re-export that added a
+ * texture, a Draco extension or a third emissive material would have been a
+ * black truck, a blank scene or a silent decoder failure in a classroom.
+ *
+ * These read the container directly -- a GLB is a 12-byte header and a JSON
+ * chunk -- so they need no loader and no WebGL. The one test that does need a
+ * loader is the crate mesh's name, and it needs it precisely because the
+ * loader is what changes the name.
+ */
+describe('24 §7.3: the shipped meshes still match what gltfModels.ts assumes', () => {
+  /** The JSON chunk of a binary glTF 2.0 file. */
+  function readGlb(name: string): {
+    meshes: { name?: string; primitives: { attributes: Record<string, number>; material?: number; indices?: number }[] }[]
+    materials?: {
+      name?: string
+      emissiveFactor?: number[]
+      pbrMetallicRoughness?: { baseColorTexture?: unknown; metallicFactor?: number }
+    }[]
+    animations?: unknown[]
+    skins?: unknown[]
+    extensionsUsed?: string[]
+    extensionsRequired?: string[]
+    asset?: { extras?: Record<string, string> }
+  } {
+    const buffer = readFileSync(join(ROOT, 'public', '3dmodels', name))
+    const jsonLength = buffer.readUInt32LE(12)
+    return JSON.parse(buffer.subarray(20, 20 + jsonLength).toString('utf8'))
+  }
+
+  const ASSETS = ['box.glb', 'truck.glb', 'person.glb', 'money.glb']
+
+  it.each(ASSETS)(
+    '%s uses no extension, carries no animation and no skin (§7.3: no decoder is wired up)',
+    (name) => {
+      const gltf = readGlb(name)
+      // `useGLTF(url)` is called with no second argument and `public/draco/` is
+      // deliberately not shipped -- ~2 MB of decoder for compression that is
+      // not there. A required extension here is that decision going stale.
+      expect(gltf.extensionsRequired ?? [], `${name} requires an extension`).toEqual([])
+      expect(gltf.extensionsUsed ?? [], `${name} uses an extension`).toEqual([])
+      // Zero clips is why there is no `useAnimations`; zero skins is why
+      // `Object3D.clone()` is enough and `SkeletonUtils.clone` is not needed.
+      expect(gltf.animations ?? [], `${name} carries animation clips`).toEqual([])
+      expect(gltf.skins ?? [], `${name} carries skins`).toEqual([])
+    },
+  )
+
+  it.each(ASSETS)('%s keeps its asset.extras credit intact (AC 20)', (name) => {
+    // CC-BY is an attribution licence, and `24 §6.1` forbids running these
+    // files through any tool that strips `asset.extras`. `ATTRIBUTION.txt`
+    // and `ModelAttribution.tsx` are the visible half of the same obligation;
+    // this is the half inside the file, which is where a re-export loses it.
+    const extras = readGlb(name).asset?.extras ?? {}
+    expect(Object.values(extras).join(' ')).toMatch(/creativecommons\.org\/licenses\/by\/4\.0|CC-BY-4\.0/)
+    expect(extras.author, `${name} lost its author credit`).toBeTruthy()
+    expect(extras.source, `${name} lost its source URL`).toBeTruthy()
+  })
+
+  it('truck.glb is still 33 flat-coloured primitives that merge into two meshes (§7.3)', () => {
+    const gltf = readGlb('truck.glb')
+    const primitives = gltf.meshes.flatMap((mesh) => mesh.primitives)
+    const materials = gltf.materials ?? []
+
+    // The numbers the bake's arithmetic is quoted in, and the numbers
+    // `MODEL_DRAW_COST.truck` is 2 + 1 because of.
+    expect(primitives).toHaveLength(33)
+    expect(materials).toHaveLength(13)
+
+    // `mergeGeometries` refuses parts whose attribute sets or indexed-ness
+    // differ, and `addMerged` falls back to one mesh per part when it does --
+    // silently turning two draw calls per truck into thirty-three, which is
+    // the whole budget of AC 19 spent on two vehicles.
+    const shapes = new Set(
+      primitives.map(
+        (primitive) =>
+          `${Object.keys(primitive.attributes).sort().join('+')}|${primitive.indices === undefined ? 'noidx' : 'idx'}`,
+      ),
+    )
+    expect(shapes.size, 'truck primitives no longer share one attribute set').toBe(1)
+
+    // Exactly two lamps. A third emissive material would quietly join the
+    // unlit `MeshBasicMaterial` mesh and stop being lit by the hall; a lamp
+    // that lost its `emissiveFactor` would have its light put out by the bake.
+    const lamps = materials.filter((material) =>
+      (material.emissiveFactor ?? [0, 0, 0]).some((channel) => channel > 0),
+    )
+    expect(lamps.map((material) => material.name).sort()).toEqual(['Material.003', 'Material.006'])
+
+    // Every other material is a flat colour. A `baseColorTexture` cannot be
+    // folded into a per-vertex `color` attribute, so one appearing here means
+    // the bake is painting a textured surface a single colour.
+    for (const material of materials) {
+      expect(
+        material.pbrMetallicRoughness?.baseColorTexture,
+        `${material.name} gained a baseColorTexture; the vertex-colour bake cannot carry it`,
+      ).toBeUndefined()
+    }
+  })
+
+  it('`[HARD-WON]` box.glb\'s crate mesh is found under the name the LOADER gives it', async () => {
+    // The trap this test exists for: `GLTFLoader` runs every node name through
+    // `PropertyBinding.sanitizeNodeName`, which strips `. [ ] : /`, so the mesh
+    // declared `Cube_10_Mat.3_0` reaches the scene graph as `Cube_10_Mat3_0`.
+    // `extractCrateGeometry` matched the file's spelling and threw on every
+    // pile in every seat -- straight into `Board3D`'s boundary and back to 2D.
+    // Both halves are asserted, because the bug lives in the gap between them.
+    const declared = 'Cube_10_Mat.3_0'
+    const sanitized = THREE.PropertyBinding.sanitizeNodeName(declared)
+    expect(sanitized).not.toBe(declared)
+
+    expect(readGlb('box.glb').meshes.map((mesh) => mesh.name)).toContain(declared)
+
+    const buffer = readFileSync(join(ROOT, 'public', '3dmodels', 'box.glb'))
+    // Copied into an `ArrayBuffer` of *this* realm: the loader tests
+    // `instanceof ArrayBuffer`, and a Node `Buffer`'s own backing store comes
+    // from the runner's realm rather than jsdom's, which fails that test and
+    // is then read as JSON text.
+    const bytes = new ArrayBuffer(buffer.byteLength)
+    new Uint8Array(bytes).set(buffer)
+    const loaded = await new Promise<{ scene: THREE.Object3D }>((resolve, reject) => {
+      new GLTFLoader().parse(
+        bytes,
+        '',
+        (gltf) => resolve(gltf as unknown as { scene: THREE.Object3D }),
+        reject,
+      )
+    })
+
+    const names: string[] = []
+    let crate: THREE.Mesh | undefined
+    loaded.scene.traverse((node) => {
+      if ((node as THREE.Mesh).isMesh) {
+        names.push(node.name)
+        if (node.name === sanitized) crate = node as THREE.Mesh
+      }
+    })
+
+    expect(names, 'the loader no longer sanitises the name; re-check gltfModels.ts').not.toContain(
+      declared,
+    )
+    expect(crate, `box.glb has no mesh named ${sanitized}; found ${names.join(', ')}`).toBeDefined()
+    // 24 §7.2: the 96-triangle box, not the 12-triangle one beside it.
+    expect((crate?.geometry.index?.count ?? 0) / 3).toBe(96)
+
+    // And the module looks the mesh up through the sanitiser rather than
+    // through a second hardcoded spelling. Read, not imported: `gltfModels.ts`
+    // starts all four fetches at module scope (§7.3), which is right in a
+    // browser behind the lazy chunk and wrong in a test runner. This is the
+    // wiring-read `Board3D.test.tsx` already uses for claims about a module
+    // §8.1 forbids it to load.
+    const source = readRoot('src', 'components', 'game', 'views', 'board3d', 'gltfModels.ts')
+    expect(source, 'gltfModels.ts no longer sanitises the crate mesh name').toMatch(
+      /sanitizeNodeName/,
+    )
+    expect(source).toMatch(/CRATE_MESH_NAME_AS_LOADED/)
   })
 })

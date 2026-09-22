@@ -172,3 +172,40 @@ export function isHostForRoom(roomCode: string): boolean {
 export function clearHostRoom(): void {
   sessionStorage.removeItem(HOST_ROOM_KEY)
 }
+
+/* ─── board view — a DISPLAY PREFERENCE, not a credential; browser-scoped ─── */
+//
+// The per-browser choice between the 2D board and the 3D warehouse (24 §2.3).
+// It follows the `display_name` precedent exactly: display data, not a
+// credential, so it lives here with every other storage accessor rather than
+// beside the toggle that writes it.
+//
+// localStorage, deliberately. It is the one preference a player should not have
+// to re-make in a second tab, and it grants nothing — so it is NOT
+// sessionStorage, which section 7 of `CLAUDE.md` reserves for authority
+// (`host_secret`, `host_room`). 24 §2.5 (**D20**) is why the choice lives in a
+// browser at all instead of in `GameConfig`: this changes how the game is
+// drawn, not how it plays, and the player whose laptop cannot hold 60 fps is
+// not the host.
+
+const BOARD_VIEW_KEY = 'board_view'
+
+export type BoardViewChoice = '2D' | '3D'
+
+/**
+ * The stored board choice, or null when this browser has never chosen.
+ *
+ * Null when unset OR unrecognised — both fall through to `VITE_BOARD_VIEW`
+ * (24 §2.2). An unrecognised value is somebody's stale key or a hand-edited
+ * one, and the resolution order already has an answer for "no preference", so
+ * there is nothing an error would buy. The narrowing happens here, once, so
+ * that `resolveBoardView()` receives a value it can trust.
+ */
+export function getBoardView(): BoardViewChoice | null {
+  const stored = localStorage.getItem(BOARD_VIEW_KEY)
+  return stored === '2D' || stored === '3D' ? stored : null
+}
+
+export function setBoardView(choice: BoardViewChoice): void {
+  localStorage.setItem(BOARD_VIEW_KEY, choice)
+}

@@ -52,7 +52,10 @@ them as non-negotiable.
 ```
 firebase.ts              Firebase web config, AT THE REPO ROOT, not in src/. Committed.
 index.html               preconnects to Google's auth hosts; title/description live here
-public/                  favicon.svg, icons.svg (sprite) — nothing else
+public/                  favicon.svg, icons.svg (sprite), and 3dmodels/
+public/3dmodels/         box/truck/person/money .glb + ATTRIBUTION.txt. CC-BY-4.0, credited
+                         in README and in-app; each .glb carries its record in asset.extras
+                         — never strip it. Served by Hosting before rewrites; no road.glb
 docs/                    product docs (above)
 src/
   main.tsx               imports ./api/socketHandlers for side effect, THEN mounts:
@@ -71,8 +74,13 @@ src/
   utils/storage.ts       the only module that touches localStorage/sessionStorage
   pages/                 one module per route; each exports `route`
   components/
-    shared/  lobby/  config/  game/ (+ game/views/)  host/  results/  profile/
+    shared/  lobby/  config/  game/  host/  results/  profile/
     manual/  charts/chartSetup.ts
+    game/views/          Board2D.tsx, Board3D.tsx (lazy), BoardViewToggle.tsx,
+                         boardViewChoice.ts — the two registered boards and the seam
+    game/views/board3d/  the 3D scene. sceneModel.ts is the pure heart (see §6.14);
+                         everything else either renders its output or is frozen data
+                         (sceneLayout.ts, scenePalette.ts, roleSets.ts)
   __tests__/             all tests, flat, one file per feature + setup.ts
 ```
 
@@ -124,7 +132,7 @@ and on PRs: `setup-node` from `.nvmrc` → `npm ci` → `npx tsc -b` → `npx es
 |---|---|---|
 | `VITE_API_BASE_URL` | `api/http.ts`, `api/health.ts` | Empty → relative `/api/v1`, i.e. the dev proxy |
 | `VITE_SOCKET_URL` | `api/socket.ts` | Must be the **backend host** in prod. Firebase Hosting does not proxy WebSocket upgrades |
-| `VITE_BOARD_VIEW` | `pages/GameRoomPlaying.tsx` | Optional; `'2D'` is the only registered board today |
+| `VITE_BOARD_VIEW` | `pages/GameRoomPlaying.tsx` | Optional; `'2D'` (default) or `'3D'` — both are registered. Only the default for a browser with no stored `board_view`; the in-game toggle overrides it per browser. Unrecognised → `'2D'` (`24 §2.2`, **D20**) |
 
 There are **no `VITE_FIREBASE_*` variables and there must not be.** The web config is six
 literals in `/firebase.ts` at the repo root, imported as `'../../firebase'` by
@@ -140,8 +148,11 @@ frontend from ever deploying. `.env` *is* gitignored. `envSurface.test.ts` asser
   `VITE_SOCKET_URL` is empty or matches `web.app|firebaseapp.com` — but **only** when
   `REQUIRE_BACKEND_ENV=1`, which only the two CI workflows set. Local builds stay unaffected.
 - `build.rollupOptions.output.manualChunks` splits vendors into `firebase`, `charts`,
-  `socket`, `forms`, `react`, `vendor`. Keep `engine.io-*` with `socket.io-client` and
-  `@firebase/*` with `firebase` — splitting them from their entry point breaks the chunking.
+  `socket`, `forms`, `react`, `three`, `vendor`. Keep `engine.io-*` with `socket.io-client`,
+  `@firebase/*` with `firebase`, and drei's `troika-*` / `bidi-js` / `webgl-sdf-generator`
+  and fiber's `react-reconciler` / `its-fine` / `suspend-react` with `three` — splitting any
+  of them from their entry point breaks the chunking. `chunkSizeWarningLimit` is `1200`
+  because the `three` chunk is ~1.1 MB, lazy, and never in the entry graph (`24 §6.4`).
 - `server.proxy`: `/api → http://localhost:8080`, `/socket.io → :8080 with ws: true`.
 
 **There are no path aliases.** No `resolve.alias`, no `compilerOptions.paths`. Every import
@@ -217,6 +228,21 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     `components/charts/chartSetup.ts`, which also owns the `ResultsView` view model and the
     pure `buildBullwhipConfig` builder — a canvas is opaque to jsdom, so the *config object*
     is what tests assert.
+14. **The 3D board computes nothing and emits nothing.** `board3d/sceneModel.ts`'s
+    `buildSceneModel(props)` returns a plain object — every pile count, sign string, fixture
+    id, model placement, light, accent and prompt — and `WarehouseScene` walks it and emits
+    meshes, *adding nothing the model does not carry*. A geometry decision taken inside a
+    component instead of inside the model is untestable and is therefore a defect: jsdom has
+    no WebGL, so the object is what `Board3D.test.tsx` asserts, exactly as rule 13's config
+    object stands in for a Chart.js canvas. The interaction layer is the same rule from the
+    other side — pressing E at a station mounts the **existing** 2D components
+    (`DecisionForm`, `WaitingForOthers`, `SettlementRecap`, `DecisionPanel`) with the same
+    props and the same callbacks, so the only emit the 3D view can produce is `submit_order`
+    through `api/games.ts` (rule 7), and there is no new event, endpoint or `GameConfig`
+    field behind any of it. **A figure on screen that cannot be traced to a `PlayerView`
+    field is a bug**, including a plausible one: a settlement whose
+    `holding_cost ≠ closing_inventory × rate` renders the server's figure, never the product
+    (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat.
 
 ## 7. Storage scopes — not interchangeable
 
@@ -230,6 +256,7 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 | `host_secret_<room>` | **sessionStorage** | Secret **and tab-scoped** — in localStorage it leaks host authority into a tab opened from an invite link |
 | `host_room` | sessionStorage | UI hint only; never trusted by the server |
 | `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it) |
+| `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (`24 §2.3`) |
 
 **D18 host recovery**: closing the tab loses `host_secret`. The host lobby therefore emits
 `join_waiting` **with or without** a stored secret, and the server re-authorises against the

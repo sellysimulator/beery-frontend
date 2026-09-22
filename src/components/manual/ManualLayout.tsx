@@ -25,8 +25,8 @@ export function ManualLayout({
 }: ManualLayoutProps): ReactElement {
   return (
     <div className="min-h-screen px-6 py-10">
-      <article className="mx-auto flex max-w-3xl flex-col gap-6">
-        <header className="flex flex-col gap-3 border-b border-border pb-6">
+      <article className="mx-auto flex max-w-5xl flex-col gap-6">
+        <header className="flex max-w-3xl flex-col gap-3 border-b border-border pb-6">
           <nav className="flex flex-wrap gap-4 text-sm">
             <Link to="/" className="text-ink-muted hover:text-brand">
               Back to the start

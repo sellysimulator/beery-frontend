@@ -1,8 +1,19 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactElement,
+} from 'react'
 import { submitOrder } from '../api/games'
 import { useGameStore } from '../store/gameStore'
 import WaitingNotice from '../components/lobby/WaitingNotice'
 import Board2D, { type BoardViewProps } from '../components/game/views/Board2D'
+import BoardViewToggle from '../components/game/views/BoardViewToggle'
+import { useBoardViewChoice } from '../components/game/views/boardViewChoice'
+import SceneLoading from '../components/game/views/board3d/SceneLoading'
 
 /**
  * The copy for the server's `TOO_MANY_SUBMISSIONS` refusal (§2.4). The server
@@ -17,17 +28,29 @@ const TOO_MANY_SUBMISSIONS_CODE = 'TOO_MANY_SUBMISSIONS'
 /** How long the post-transition highlight lasts. A class of four is waiting. */
 const WEEK_HIGHLIGHT_MS = 400
 
-type BoardView = (props: BoardViewProps) => ReactElement
+/**
+ * The 3D board, loaded only when somebody asks for it (24 §2.1).
+ *
+ * `lazy()`, never a static import. A static one would put three.js in the entry
+ * graph for every player who never opens it — Tequila's defect, and the same
+ * reason `shellScreens.ts` exists for the other three heavy screens.
+ */
+const Board3D = lazy(() => import('../components/game/views/Board3D'))
 
 /**
- * The view seam (**D15**). State flows through the store and into whichever
- * board is registered here; a phase-2 `Board3D` is a new entry in this record
- * and nothing below the view layer changes.
+ * The view seam (**D15**), now used. State flows through the store and into
+ * whichever board is registered here, and nothing below the view layer changed
+ * when the second entry arrived: section 24's `Board3D` implements the same
+ * `BoardViewProps` and drops in at the same place.
+ *
+ * The record is typed `ComponentType<BoardViewProps>` rather than a plain
+ * function, because `lazy()` returns a `LazyExoticComponent` and the narrower
+ * type will not hold it. `BoardViewProps` itself is untouched (24 §1.2).
  */
-const BOARD_VIEWS: Record<string, BoardView> = { '2D': Board2D }
-
-const Board: BoardView =
-  BOARD_VIEWS[String(import.meta.env.VITE_BOARD_VIEW ?? '2D')] ?? Board2D
+const BOARD_VIEWS: Record<string, ComponentType<BoardViewProps>> = {
+  '2D': Board2D,
+  '3D': Board3D,
+}
 
 /**
  * The screen a player spends the whole game on.
@@ -51,6 +74,13 @@ const Board: BoardView =
  * §2.4).
  */
 export function GameRoomPlaying(): ReactElement {
+  // Runtime-mutable now, so a hook rather than the module constant this used to
+  // be: the player chooses their board mid-game and the choice persists per
+  // browser (24 §2.2). An unknown key still falls through to `Board2D`, exactly
+  // as `19 §2.8` required of the seam before it had a second entry.
+  const [boardChoice, setBoardChoice] = useBoardViewChoice()
+  const Board = BOARD_VIEWS[boardChoice] ?? Board2D
+
   const roomCode = useGameStore((state) => state.roomCode)
   const myState = useGameStore((state) => state.myState)
   const week = useGameStore((state) => state.week)
@@ -138,31 +168,56 @@ export function GameRoomPlaying(): ReactElement {
   }
 
   return (
-    <Board
-      view={myState}
-      week={week}
-      durationWeeks={durationWeeks}
-      paused={paused}
-      pausedReason={pausedReason}
-      locked={locked}
-      isChangingOrder={isChangingOrder}
-      gameOver={gameOver}
-      awaitingRoles={awaitingRoles}
-      initialOrder={
-        isChangingOrder
-          ? (lastSubmission?.week === week ? lastSubmission.order : myState.last_order) ??
-            null
-          : null
-      }
-      notice={notice}
-      // "Your last order stands": once the server has capped the
-      // resubmissions, there is nothing left to change this week (§2.4).
-      canChangeOrder={!paused && !gameOver && !refusedResubmission}
-      weekChanged={weekChanged}
-      onSubmitOrder={handleSubmitOrder}
-      onChangeOrder={handleChangeOrder}
-      onKeepOrder={handleKeepOrder}
-    />
+    <>
+      {/*
+        `<Suspense>` because `Board3D` is a lazy chunk: on the toggle it is
+        fetched mid-game, on classroom wi-fi, with three people waiting
+        (24 risk 2). The fallback is a card, not a spinner on black.
+
+        This is the **outer** of the two boundaries 24 §7.4 asks for — the one
+        around the lazy import. `SceneLoading` is the fallback the spec names
+        for it (§6.2), and it is the only one of the two that can hold DOM: the
+        second boundary is inside the `<Canvas>`, where every element is
+        resolved against the THREE namespace and a `<div>` would throw.
+
+        `SceneLoading` imports nothing but React, so naming it here does not
+        pull three.js into the entry graph — AC 4 still holds.
+      */}
+      <Suspense fallback={<SceneLoading />}>
+        <Board
+          view={myState}
+          week={week}
+          durationWeeks={durationWeeks}
+          paused={paused}
+          pausedReason={pausedReason}
+          locked={locked}
+          isChangingOrder={isChangingOrder}
+          gameOver={gameOver}
+          awaitingRoles={awaitingRoles}
+          initialOrder={
+            isChangingOrder
+              ? (lastSubmission?.week === week ? lastSubmission.order : myState.last_order) ??
+                null
+              : null
+          }
+          notice={notice}
+          // "Your last order stands": once the server has capped the
+          // resubmissions, there is nothing left to change this week (§2.4).
+          canChangeOrder={!paused && !gameOver && !refusedResubmission}
+          weekChanged={weekChanged}
+          onSubmitOrder={handleSubmitOrder}
+          onChangeOrder={handleChangeOrder}
+          onKeepOrder={handleKeepOrder}
+        />
+      </Suspense>
+
+      {/*
+        A SIBLING of the board, never a prop of it (24 §2.1). That is what keeps
+        `Board2D.tsx` unedited and `BoardViewProps` un-widened while both boards
+        get the toggle for free.
+      */}
+      <BoardViewToggle choice={boardChoice} onChange={setBoardChoice} />
+    </>
   )
 }
 
