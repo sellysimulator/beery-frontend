@@ -328,6 +328,25 @@ describe('socketHandlers registers the wire contract', () => {
   });
 });
 
+describe('the error event: failures versus expected refusals', () => {
+  it('raises a real failure as an error alert', () => {
+    dispatch('error', { message: 'Not your turn.', code: 'NOT_IN_ROOM' });
+
+    const alerts = useGameStore.getState().alerts;
+    expect(alerts[alerts.length - 1]).toMatchObject({ kind: 'error', message: 'Not your turn.' });
+    expect(useGameStore.getState().lastError?.code).toBe('NOT_IN_ROOM');
+  });
+
+  it('raises no alert for GAME_FINISHED — an order that raced the end is not a failure', () => {
+    const before = useGameStore.getState().alerts.length;
+
+    dispatch('error', { message: 'The game has finished.', code: 'GAME_FINISHED' });
+
+    expect(useGameStore.getState().alerts).toHaveLength(before);
+    expect(useGameStore.getState().lastError?.code).toBe('GAME_FINISHED');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // seq guard (criteria 11, 12)
 // ---------------------------------------------------------------------------

@@ -302,11 +302,20 @@ socket.on('game_persisted', (payload: GamePersistedPayload) => {
   store().applyGamePersisted(payload)
 })
 
+/**
+ * Codes the server sends on `error` that get no alert. `GAME_FINISHED`
+ * answers an order that raced the end of the game (the host ended it, or the
+ * last week closed): nothing went wrong, and the game-over panel already says
+ * the game is over.
+ */
+const SILENT_ERROR_CODES: ReadonlySet<string> = new Set(['GAME_FINISHED'])
+
 socket.on('error', (payload: ErrorPayload) => {
   const message = payload?.message || 'A server error occurred.'
+  const code = payload?.code ?? ''
   // Two pieces of store state from one handler, exactly as `join_error` does:
   // the field is the durable signal a screen maps to its own copy by `code`,
   // the alert is the transient one every other screen gets for free.
-  store().applyError({ message, code: payload?.code ?? '' })
-  store().addAlert({ kind: 'error', message })
+  store().applyError({ message, code })
+  if (!SILENT_ERROR_CODES.has(code)) store().addAlert({ kind: 'error', message })
 })
