@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { ROLE_ORDER, type HostRoleView, type Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
+import { FlowLane, FlowLegend } from '../game/ChainFlow'
 
 export interface ChainDiagramProps {
   /** `host_state.roles` — every figure here is one of its fields (§3.1). */
@@ -55,25 +56,16 @@ function barWidth(value: number, peak: number): string {
   return `${Math.max(4, Math.round((value / peak) * 100))}%`
 }
 
-function Arrow({ large }: { large: boolean }): ReactElement {
-  return (
-    <span
-      aria-hidden="true"
-      className={`${large ? 'text-[2rem]' : 'text-lg'} text-ink-subtle`}
-    >
-      &rarr;
-    </span>
-  )
-}
-
 /**
  * The chain, end to end: Customer → Retailer → Wholesaler → Distributor →
  * Factory, with live inventory and backlog on each link (§2.1).
  *
- * The arrows run the way orders travel — from the customer, upstream, towards
- * the factory — and the bars fill and drain as weeks close, which is the whole
- * point of putting this on a projector: the bullwhip becomes visible *while it
- * is happening* rather than in the debrief afterwards.
+ * Between the cards run the same animated links as the player's banner
+ * (`game/ChainFlow.tsx`): sticky-note orders travel upstream towards the
+ * factory while beer travels back down. The bars fill and drain as weeks
+ * close, which is the whole point of putting this on a projector: the
+ * bullwhip becomes visible *while it is happening* rather than in the debrief
+ * afterwards.
  *
  * It shows no cost and no order quantity, in either mode, so that the same
  * component can face a room full of players (§2.4, FM 1 and 2).
@@ -97,16 +89,18 @@ export function ChainDiagram({ roles, presenting = false }: ChainDiagramProps): 
         <h2 className={presenting ? 'text-[2rem] font-bold' : 'text-xl font-semibold'}>
           The chain
         </h2>
-        {presenting ? null : (
-          <p className="text-sm text-ink-muted">
-            Orders travel upstream, from the customer towards the factory. Beer travels
-            back the other way, a few weeks later.
-          </p>
-        )}
+        <div className="flex flex-col gap-1">
+          <FlowLegend large={presenting} />
+          {presenting ? null : (
+            <p className="text-sm text-ink-subtle">
+              Beer arrives a few weeks after the order that asked for it.
+            </p>
+          )}
+        </div>
       </div>
 
-      <ol className="flex flex-wrap items-stretch gap-2">
-        <li className="flex items-center gap-2">
+      <ol className="flex flex-wrap items-stretch gap-y-2">
+        <li className="flex items-center">
           <div
             className={`flex min-w-28 flex-col justify-center rounded-lg border border-dashed border-border-strong bg-surface-sunken px-3 ${
               presenting ? 'py-4' : 'py-3'
@@ -123,14 +117,14 @@ export function ChainDiagram({ roles, presenting = false }: ChainDiagramProps): 
               Real demand
             </p>
           </div>
-          <Arrow large={presenting} />
+          <FlowLane index={0} large={presenting} />
         </li>
 
         {ROLE_ORDER.map((role, index) => {
           const view = roles[role]
           const last = index === ROLE_ORDER.length - 1
           return (
-            <li key={role} className="flex flex-1 items-center gap-2" data-role={role}>
+            <li key={role} className="flex flex-1 items-center" data-role={role}>
               <div
                 className={`flex min-w-40 flex-1 flex-col gap-2 rounded-lg border bg-surface px-3 ${
                   presenting ? 'py-4' : 'py-3'
@@ -198,7 +192,7 @@ export function ChainDiagram({ roles, presenting = false }: ChainDiagramProps): 
                   />
                 </span>
               </div>
-              {last ? null : <Arrow large={presenting} />}
+              {last ? null : <FlowLane index={index + 1} large={presenting} />}
             </li>
           )
         })}

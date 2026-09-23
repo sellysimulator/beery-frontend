@@ -3,8 +3,9 @@
    gives section 19 no shared module of its own, and a second copy of "who the
    Distributor buys from" in three files is a copy that drifts. */
 import type { ReactElement } from 'react'
-import { ROLE_ORDER, type Role } from '../../types/game'
+import type { Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
+import ChainFlow from './ChainFlow'
 
 /**
  * Who each role buys from, as the sentence "you buy from …" wants it.
@@ -47,17 +48,6 @@ export const RECEIPT_LABEL: Record<Role, string> = {
   FACTORY: 'Finished production',
 }
 
-/**
- * Role colours from `index.css`. The pastel is the fill and the matching -ink
- * hue is the text, because a pastel on bone is around 1.5:1.
- */
-const ROLE_CHIP_CLASS: Record<Role, string> = {
-  RETAILER: 'border-role-retailer bg-role-retailer-soft text-role-retailer',
-  WHOLESALER: 'border-role-wholesaler bg-role-wholesaler-soft text-role-wholesaler',
-  DISTRIBUTOR: 'border-role-distributor bg-role-distributor-soft text-role-distributor',
-  FACTORY: 'border-role-factory bg-role-factory-soft text-role-factory',
-}
-
 export interface RoleBannerProps {
   role: Role
   week: number
@@ -95,35 +85,7 @@ export function RoleBanner({ role, week, durationWeeks }: RoleBannerProps): Reac
         </p>
       </div>
 
-      <ol
-        className="flex flex-wrap items-center gap-2"
-        aria-label="The supply chain, from the customer upstream to the factory"
-      >
-        <li className="rounded-md border border-border-strong bg-surface-sunken px-3 py-1 text-sm text-ink-muted">
-          Customer
-        </li>
-        {ROLE_ORDER.map((chainRole) => (
-          <li key={chainRole} className="flex items-center gap-2">
-            <span aria-hidden="true" className="text-ink-subtle">
-              &#8594;
-            </span>
-            <span
-              aria-current={chainRole === role ? 'true' : undefined}
-              className={`rounded-md border px-3 py-1 text-sm ${ROLE_CHIP_CLASS[chainRole]} ${
-                chainRole === role ? 'font-semibold ring-2 ring-brand-strong' : 'opacity-80'
-              }`}
-            >
-              {chainRole === role
-                ? `${ROLE_LABEL[chainRole]} (you)`
-                : ROLE_LABEL[chainRole]}
-            </span>
-          </li>
-        ))}
-      </ol>
-      <p className="text-sm text-ink-subtle">
-        Orders travel up the chain. Beer travels back down. You only deal with your
-        immediate neighbours.
-      </p>
+      <ChainFlow role={role} />
     </header>
   )
 }

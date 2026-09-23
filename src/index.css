@@ -103,4 +103,59 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
+
+  /* ChainFlow's travelling icons. Orders move left to right (upstream), beer
+     right to left (downstream); each fades at the ends so the loop has no
+     visible jump. The end stop is 100% minus the icon width: 1rem, or 2rem
+     on the projector (.chain-flow-large). */
+  .chain-flow-upstream {
+    animation: chain-flow-upstream 2.4s linear infinite both;
+  }
+  .chain-flow-downstream {
+    animation: chain-flow-downstream 2.4s linear infinite both;
+  }
+
+  .chain-flow-large {
+    --chain-flow-icon: 2rem;
+  }
+
+  /* Reduced motion: park the icons mid-lane. The legend still says which way
+     each one goes, so nothing is lost but the movement. */
+  @media (prefers-reduced-motion: reduce) {
+    .chain-flow-upstream,
+    .chain-flow-downstream {
+      animation: none;
+      left: calc(50% - var(--chain-flow-icon, 1rem) / 2);
+    }
+  }
+}
+
+@keyframes chain-flow-upstream {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - var(--chain-flow-icon, 1rem));
+    opacity: 0;
+  }
+}
+
+@keyframes chain-flow-downstream {
+  0% {
+    left: calc(100% - var(--chain-flow-icon, 1rem));
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 0;
+    opacity: 0;
+  }
 }
