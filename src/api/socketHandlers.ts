@@ -76,6 +76,21 @@ export function classifyConnectError(message: string): 'auth' | 'network' {
  */
 let connectErrorAlerted = false
 
+/**
+ * The id of the alert the current failure cycle raised, so a successful
+ * connect can take it down again. On a cold start the socket connects while
+ * the backend is still asleep behind `BackendWakeUp`, fails, and raises
+ * "Could not reach the game server"; without this the toast outlives the
+ * wake-up and sits over a working app.
+ */
+let connectErrorAlertId: string | null = null
+
+function dismissConnectErrorAlert(): void {
+  if (connectErrorAlertId === null) return
+  store().dismissAlert(connectErrorAlertId)
+  connectErrorAlertId = null
+}
+
 /* ─── route helpers ─── */
 
 const ROOM_ROUTE_PATTERN = /^\/(host|game|join)\/([^/?#]+)/
@@ -137,6 +152,7 @@ export function rejoinAfterConnect(): void {
 
 socket.on('connect', () => {
   connectErrorAlerted = false
+  dismissConnectErrorAlert()
   store().setConnectionError(null)
   rejoinAfterConnect()
 })
@@ -157,7 +173,7 @@ socket.on('connect_error', (error: Error) => {
   // One alert per failed retry cycle, not one per attempt.
   if (connectErrorAlerted) return
   connectErrorAlerted = true
-  store().addAlert({ kind: kind === 'auth' ? 'error' : 'info', message })
+  connectErrorAlertId = store().addAlert({ kind: kind === 'auth' ? 'error' : 'info', message })
 })
 
 /* ─── lobby (section 11) ─── */

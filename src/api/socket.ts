@@ -54,6 +54,23 @@ export const socket: Socket = io(SOCKET_URL, {
   auth: socketAuth,
 })
 
+/**
+ * Called by `BackendStatusProvider` when the health probe first answers ok.
+ *
+ * `reconnectionAttempts: 10` can run out inside a 30-60 s free-tier cold
+ * start, after which Socket.IO stops trying for good and every realtime
+ * feature is dead behind a wake-up screen that says the server is up.
+ * `connect()` restarts that; while a retry loop is still running it is a
+ * no-op, because the manager does not re-open mid-reconnect.
+ *
+ * `active` is false until something has called `connect()` (or after a
+ * deliberate `disconnect()`), so this never makes the first connection: that
+ * belongs to `AuthContext`, once the identity is known.
+ */
+export function reconnectIfGaveUp(): void {
+  if (socket.active && !socket.connected) socket.connect()
+}
+
 export function getSocket(): Socket {
   return socket
 }

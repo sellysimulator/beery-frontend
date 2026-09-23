@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { checkHealth } from '../api/health'
+import { reconnectIfGaveUp } from '../api/socket'
 
 export interface BackendStatusValue {
   status: 'checking' | 'ok' | 'down'
@@ -68,6 +69,12 @@ export function BackendStatusProvider(props: { children: ReactNode }): ReactElem
       if (timer !== undefined) clearInterval(timer)
     }
   }, [cycle])
+
+  // A socket that exhausted its retries while the backend slept would stay
+  // dead after the wake-up; the moment the backend answers, restart it.
+  useEffect(() => {
+    if (status === 'ok') reconnectIfGaveUp()
+  }, [status])
 
   // The ticker is separate from the probe so that it stops the moment the
   // backend answers: once the app is through, nothing re-renders every second.

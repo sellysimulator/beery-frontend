@@ -630,6 +630,71 @@ describe('FAILURE MODE 5: a refused handshake is surfaced, once', () => {
   });
 });
 
+describe('cold start: the backend wakes up after the socket first failed', () => {
+  async function mockSocket(): Promise<Record<string, unknown>> {
+    return (await import('../api/socket')).socket as unknown as Record<string, unknown>;
+  }
+
+  it('a successful connect takes down the "could not reach" alert it raised', () => {
+    // The socket connects while the backend is still asleep behind the wake-up
+    // screen. Once it does get through, the toast must not outlive the outage.
+    dispatch('connect');
+    useGameStore.getState().reset();
+    dispatch('connect_error', { message: 'xhr poll error' });
+    dispatch('connect_error', { message: 'xhr poll error' });
+    expect(useGameStore.getState().alerts).toHaveLength(1);
+
+    dispatch('connect');
+    expect(useGameStore.getState().alerts).toHaveLength(0);
+    expect(useGameStore.getState().connectionError).toBeNull();
+  });
+
+  it('a connect leaves unrelated alerts alone', () => {
+    dispatch('connect');
+    useGameStore.getState().reset();
+    useGameStore.getState().addAlert({ kind: 'error', message: 'Room is full.' });
+    dispatch('connect_error', { message: 'xhr poll error' });
+
+    dispatch('connect');
+    expect(useGameStore.getState().alerts.map((a) => a.message)).toEqual(['Room is full.']);
+  });
+
+  it('reconnectIfGaveUp restarts a socket whose retries ran out', async () => {
+    const { reconnectIfGaveUp } = await import('../api/socket');
+    const socket = await mockSocket();
+    socket.active = true; // subscribed, i.e. AuthContext has asked to connect
+    socket.connected = false;
+
+    reconnectIfGaveUp();
+    expect(rec.connectCalls).toBe(1);
+    delete socket.active;
+  });
+
+  it('reconnectIfGaveUp never makes the first connect: that belongs to AuthContext', async () => {
+    // Connecting before auth resolves would hand a signed-in user a guest identity.
+    const { reconnectIfGaveUp } = await import('../api/socket');
+    const socket = await mockSocket();
+    socket.active = false;
+    socket.connected = false;
+
+    reconnectIfGaveUp();
+    expect(rec.connectCalls).toBe(0);
+    delete socket.active;
+  });
+
+  it('reconnectIfGaveUp leaves a connected socket alone', async () => {
+    const { reconnectIfGaveUp } = await import('../api/socket');
+    const socket = await mockSocket();
+    socket.active = true;
+    socket.connected = true;
+
+    reconnectIfGaveUp();
+    expect(rec.connectCalls).toBe(0);
+    delete socket.active;
+    socket.connected = false;
+  });
+});
+
 // ---------------------------------------------------------------------------
 // what the client is allowed to send (failure modes 8, 9)
 // ---------------------------------------------------------------------------
