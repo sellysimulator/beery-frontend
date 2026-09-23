@@ -5,6 +5,7 @@ import type {
   GameConfig,
   GameFinishedPayload,
   GamePausedPayload,
+  GamePersistedPayload,
   GameResumedPayload,
   GameStartedPayload,
   HostEventPayload,
@@ -80,6 +81,8 @@ export interface GameState {
 
   // end
   finished: GameFinishedPayload | null
+  /** The finished game's permanent id, once `game_persisted` arrives. */
+  gamePublicId: string | null
 
   // ui
   alerts: Alert[]
@@ -146,6 +149,7 @@ export interface GameActions {
   applyHostReconnected(p: HostEventPayload): void
   applyBotSubstituted(p: BotSubstitutedPayload): void
   applyGameFinished(p: GameFinishedPayload): void
+  applyGamePersisted(p: GamePersistedPayload): void
 
   // config, written by the REST fallback in section 18 when the socket is not
   // connected. `PUT /rooms/{code}/config` returns the same stored, post-clamp
@@ -199,6 +203,7 @@ const initialState: GameState = {
   pausedReason: null,
 
   finished: null,
+  gamePublicId: null,
 
   alerts: [],
   connectionError: null,
@@ -341,6 +346,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         paused: false,
         pausedReason: null,
         finished: null,
+        gamePublicId: null,
         myRole: roleForAlias(p.role_to_alias, state.myAlias) ?? state.myRole,
       })),
 
@@ -376,7 +382,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
 
     applyWeekClosed: (p) =>
       applySequenced(p.seq, () => ({
-        week: p.next_week,
+        // The last week closes with `next_week: null`. Keeping the closed week
+        // is what lets the play screen render its game-over state; a null
+        // `week` puts it back on "waiting for your position" for good.
+        week: p.next_week ?? p.week,
         awaitingRoles: p.awaiting_roles,
         hasSubmitted: false,
       })),
@@ -436,6 +445,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         pausedReason: null,
         awaitingRoles: [],
       })),
+
+    applyGamePersisted: (p) =>
+      applySequenced(p.seq, () => ({ gamePublicId: p.game_id })),
 
     setConfig: (config) => set({ config }),
 

@@ -169,6 +169,8 @@ vi.mock('../auth/AuthContext', () => ({
 
 /** `10 §2`'s alphabet excludes 0, O, 1, I and L; these carry no digits at all. */
 const ROOM = 'BEERYX';
+/** The permanent id behind `/results/g/:gameId`. */
+const GAME_ID = 'a'.repeat(32);
 const OTHER = 'MASHUP';
 const HOST_SECRET = 'host-secret-for-tests';
 
@@ -301,6 +303,7 @@ function roleResult(role: Role, over: Partial<RoleResultFixture> = {}): RoleResu
 /** `15 §2`'s `ResultsResponse`. */
 function resultsResponse(over: Record<string, unknown> = {}) {
   return {
+    public_id: GAME_ID,
     room_code: ROOM,
     weeks_played: WEEKS,
     duration_weeks: WEEKS,
@@ -1401,5 +1404,80 @@ describe('FAILURE MODE 10: Play again promises no clone', () => {
     await waitFor(() => {
       expect(currentPath()).toBe('/home');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The permanent results URL — /results/g/:gameId
+// ---------------------------------------------------------------------------
+
+function byIdDescriptor(): RouteDescriptor {
+  const exported = (ResultsPageModule as { route?: RouteDescriptor | RouteDescriptor[] }).route;
+  const all = Array.isArray(exported) ? exported : exported ? [exported] : [];
+  const found = all.find((d) => d.path === '/results/g/:gameId');
+  if (!found) throw new Error('ResultsPage.tsx declares no `/results/g/:gameId` route.');
+  return found;
+}
+
+async function renderReadyById(gameId: string = GAME_ID) {
+  const route = byIdDescriptor();
+  const result = render(
+    <MemoryRouter initialEntries={[`/results/g/${gameId}`]}>
+      <Routes>
+        <Route path={route.path} element={route.element} />
+        <Route path="*" element={<div data-testid="elsewhere" />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await waitFor(() => {
+    expect(ratioRows().length).toBe(4);
+  });
+  return result;
+}
+
+describe('/results/g/:gameId: the permanent results URL', () => {
+  it('declares a public route descriptor', () => {
+    expect(byIdDescriptor().guard).toBe('public');
+  });
+
+  it('fetches by game id, never by room code', async () => {
+    await renderReadyById();
+
+    expect(resultsCalls()).toHaveLength(1);
+    expect(String(resultsCalls()[0][0])).toBe(`/games/id/${GAME_ID}/results`);
+  });
+
+  it('shows the room code the persisted record carries', async () => {
+    await renderReadyById();
+
+    expect(bodyText()).toContain(ROOM);
+  });
+
+  it('renders the live payload with no fetch when the store holds that game', async () => {
+    httpRec.get.mockImplementation(async (url: string) => {
+      throw axiosError(404, `Not persisted yet: ${url}`);
+    });
+    seedLiveStore(ROOM);
+    act(() => {
+      useGameStore.getState().applyGamePersisted({ seq: FINISHED.seq + 1, game_id: GAME_ID });
+    });
+
+    await renderReadyById();
+
+    expect(resultsCalls()).toHaveLength(0);
+  });
+
+  it('fetches when the store holds a different game', async () => {
+    seedLiveStore(ROOM);
+    act(() => {
+      useGameStore
+        .getState()
+        .applyGamePersisted({ seq: FINISHED.seq + 1, game_id: 'b'.repeat(32) });
+    });
+
+    await renderReadyById();
+
+    expect(resultsCalls()).toHaveLength(1);
+    expect(String(resultsCalls()[0][0])).toBe(`/games/id/${GAME_ID}/results`);
   });
 });

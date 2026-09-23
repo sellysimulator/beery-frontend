@@ -42,19 +42,24 @@ export function ChainFlow({ role }: ChainFlowProps): ReactElement {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <ol
-          className="flex min-w-[36rem] items-center"
-          aria-label="The supply chain, from the customer upstream to the factory"
-        >
-          <li className="shrink-0 rounded-md border border-border-strong bg-surface-sunken px-3 py-1 text-sm text-ink-muted">
+      {/* Wraps rather than scrolls, like the host's ChainDiagram: each lane
+          rides after its stop, so a row break leaves the arrow of motion
+          pointing off the end of the row towards the next stop. */}
+      <ol
+        className="flex flex-wrap items-center gap-y-2"
+        aria-label="The supply chain, from the customer upstream to the factory"
+      >
+        <li className="flex flex-1 items-center">
+          <span className="shrink-0 rounded-md border border-border-strong bg-surface-sunken px-3 py-1 text-sm text-ink-muted">
             Customer
-          </li>
-          {ROLE_ORDER.map((chainRole, index) => (
-            <li key={chainRole} className="flex flex-1 items-center">
-              {/* The link into this role from downstream: lane `index` sits
-                  between stop `index` (Customer = 0) and this role. */}
-              <FlowLane index={index} dimmed={index !== myIndex && index !== myIndex + 1} />
+          </span>
+          {/* Lane 0 links the customer and the Retailer. */}
+          <FlowLane index={0} dimmed={myIndex !== 0} />
+        </li>
+        {ROLE_ORDER.map((chainRole, index) => {
+          const last = index === ROLE_ORDER.length - 1
+          return (
+            <li key={chainRole} className={`flex items-center ${last ? '' : 'flex-1'}`}>
               <span
                 aria-current={chainRole === role ? 'true' : undefined}
                 className={`shrink-0 rounded-md border px-3 py-1 text-sm ${ROLE_CHIP_CLASS[chainRole]} ${
@@ -63,10 +68,18 @@ export function ChainFlow({ role }: ChainFlowProps): ReactElement {
               >
                 {chainRole === role ? `${ROLE_LABEL[chainRole]} (you)` : ROLE_LABEL[chainRole]}
               </span>
+              {/* Lane `index + 1` links this role to the one upstream of it;
+                  the player touches the lanes either side of their own stop. */}
+              {last ? null : (
+                <FlowLane
+                  index={index + 1}
+                  dimmed={index + 1 !== myIndex && index + 1 !== myIndex + 1}
+                />
+              )}
             </li>
-          ))}
-        </ol>
-      </div>
+          )
+        })}
+      </ol>
 
       <FlowLegend />
       <p className="text-sm text-ink-subtle">You only deal with your immediate neighbours.</p>

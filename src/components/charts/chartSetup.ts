@@ -116,6 +116,8 @@ export interface RoleResult {
 }
 
 export interface ResultsResponse {
+  /** Permanent id for `/results/g/:gameId`; a room code is recycled. */
+  public_id: string
   room_code: string
   weeks_played: number
   duration_weeks: number

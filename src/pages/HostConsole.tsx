@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactElement } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { resumeGame } from '../api/games'
 import { useGameStore } from '../store/gameStore'
+import { resultsPath } from '../utils/resultsPath'
 import { getHostSecret } from '../utils/storage'
 import ChainDiagram from '../components/host/ChainDiagram'
 import DemandCurve from '../components/host/DemandCurve'
@@ -63,6 +64,7 @@ export function HostConsole(): ReactElement {
   const paused = useGameStore((state) => state.paused)
   const pausedReason = useGameStore((state) => state.pausedReason)
   const finished = useGameStore((state) => state.finished)
+  const gamePublicId = useGameStore((state) => state.gamePublicId)
 
   // Presentation mode is local state, and full screen is a side effect of
   // entering it (§3.4a). The console keeps running underneath, so exiting is
@@ -148,7 +150,7 @@ export function HostConsole(): ReactElement {
               game now" invites the host to wonder whether it worked (§2.4a). */}
           {isFinished ? (
             <Link
-              to={`/results/${roomCode}`}
+              to={resultsPath(roomCode, gamePublicId)}
               className="rounded-md border border-brand bg-brand-soft px-5 py-2.5 text-base font-semibold text-brand-strong hover:border-ink"
             >
               See the results

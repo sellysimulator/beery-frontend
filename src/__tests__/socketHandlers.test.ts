@@ -312,6 +312,7 @@ describe('socketHandlers registers the wire contract', () => {
       'host_reconnected',
       'bot_substituted',
       'game_finished',
+      'game_persisted',
       'error',
     ]) {
       expect(`${event}:${registered(event)}`).toBe(`${event}:true`);
@@ -387,6 +388,14 @@ describe('seq guard (16 §4.4)', () => {
 // ---------------------------------------------------------------------------
 // host presence: an alert, never a pause
 // ---------------------------------------------------------------------------
+
+describe('the final week_closed', () => {
+  it('keeps the closed week when next_week is null, so the play screen can end', () => {
+    dispatch('week_closed', { seq: 7, week: 36, next_week: null, awaiting_roles: [] });
+
+    expect(useGameStore.getState().week).toBe(36);
+  });
+});
 
 describe('host_disconnected / host_reconnected', () => {
   it('a host drop alerts every player and does not pause', () => {

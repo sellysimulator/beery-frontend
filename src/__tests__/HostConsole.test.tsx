@@ -1220,6 +1220,16 @@ describe('CRITERION 22: at FINISHED the console shows the final chain, the weeks
     expect(links.map((a) => a.getAttribute('href'))).toContain(`/results/${ROOM}`);
   });
 
+  it('links to the permanent game-id URL once game_persisted arrives', () => {
+    renderFinished();
+    act(() => {
+      dispatch('game_persisted', { seq: nextSeq(), game_id: 'a'.repeat(32) });
+    });
+
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
+    expect(links.map((a) => a.getAttribute('href'))).toContain(`/results/g/${'a'.repeat(32)}`);
+  });
+
   it('removes every §2.2 control rather than disabling it', () => {
     renderFinished();
 

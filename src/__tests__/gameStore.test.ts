@@ -100,6 +100,7 @@ describe('gameStore — the declared GameState surface', () => {
     expect(state.hostState).toBeNull();
     expect(state.pausedReason).toBeNull();
     expect(state.finished).toBeNull();
+    expect(state.gamePublicId).toBeNull();
     expect(state.connectionError).toBeNull();
 
     // collections are empty
@@ -398,6 +399,14 @@ describe('play appliers', () => {
       role: 'WHOLESALER',
     });
     expect(useGameStore.getState().lastSeq).toBe(12);
+  });
+
+  it('applyGamePersisted records the permanent game id, behind the seq gate', () => {
+    useGameStore.getState().applyGamePersisted({ seq: 20, game_id: 'a'.repeat(32) });
+    expect(useGameStore.getState().gamePublicId).toBe('a'.repeat(32));
+
+    useGameStore.getState().applyGamePersisted({ seq: 19, game_id: 'b'.repeat(32) });
+    expect(useGameStore.getState().gamePublicId).toBe('a'.repeat(32));
   });
 
   it('applyBotSubstituted applies', () => {

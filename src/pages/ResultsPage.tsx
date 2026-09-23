@@ -85,7 +85,7 @@ function delay(ms: number): Promise<void> {
   })
 }
 
-/** A fetch result, tagged with the room code it answers for. */
+/** A fetch result, tagged with the URL it answers for. */
 interface FetchOutcome {
   code: string
   /** `null` when every attempt failed. */
@@ -245,10 +245,17 @@ function WeekByWeek({ view }: { view: ResultsView }): ReactElement | null {
  * field, printed as it arrived (section 3.2).
  */
 export function ResultsPage(): ReactElement {
-  const { roomCode = '' } = useParams<{ roomCode: string }>()
+  // Two routes, one screen: `/results/:roomCode`, or the permanent
+  // `/results/g/:gameId`, which keeps naming the same game after the room code
+  // is recycled.
+  const { roomCode: roomCodeParam = '', gameId = '' } = useParams<{
+    roomCode: string
+    gameId: string
+  }>()
 
   const finished = useGameStore((state) => state.finished)
   const storeRoomCode = useGameStore((state) => state.roomCode)
+  const gamePublicId = useGameStore((state) => state.gamePublicId)
   const participants = useGameStore((state) => state.participants)
   const myState = useGameStore((state) => state.myState)
   const hostState = useGameStore((state) => state.hostState)
@@ -259,11 +266,28 @@ export function ResultsPage(): ReactElement {
    * different room code.
    */
   const liveView = useMemo<ResultsView | null>(() => {
-    if (!finished || storeRoomCode !== roomCode || roomCode === '') return null
+    if (!finished || !storeRoomCode) return null
+    const matches = gameId
+      ? gamePublicId === gameId
+      : storeRoomCode === roomCodeParam
+    if (!matches) return null
     const currency =
       myState?.currency_symbol ?? hostState?.currency_symbol ?? '$'
-    return viewFromFinished(roomCode, finished, participants, currency)
-  }, [finished, storeRoomCode, roomCode, participants, myState, hostState])
+    return viewFromFinished(storeRoomCode, finished, participants, currency)
+  }, [
+    finished,
+    storeRoomCode,
+    gamePublicId,
+    gameId,
+    roomCodeParam,
+    participants,
+    myState,
+    hostState,
+  ])
+
+  /** What this URL asks for, and where the server answers it. */
+  const fetchKey = gameId ? `g/${gameId}` : roomCodeParam
+  const fetchUrl = gameId ? `/games/id/${gameId}/results` : `/games/${roomCodeParam}/results`
 
   /**
    * The fetch result, tagged with the room it answers for. Tagging is what
@@ -274,7 +298,7 @@ export function ResultsPage(): ReactElement {
 
   useEffect(() => {
     // The store already holds this room's finished payload: no fetch (§3.1).
-    if (liveView || roomCode === '') return
+    if (liveView || fetchKey === '') return
 
     let cancelled = false
 
@@ -283,8 +307,8 @@ export function ResultsPage(): ReactElement {
         if (attempt > 0) await delay(RETRY_DELAY_MS * attempt)
         if (cancelled) return
         try {
-          const response = await http.get<ResultsResponse>(`/games/${roomCode}/results`)
-          if (!cancelled) setOutcome({ code: roomCode, view: resultsViewFromResponse(response.data) })
+          const response = await http.get<ResultsResponse>(fetchUrl)
+          if (!cancelled) setOutcome({ code: fetchKey, view: resultsViewFromResponse(response.data) })
           return
         } catch (err) {
           // Persistence is non-blocking (`12 §3.8`), so a 404 right after the
@@ -292,18 +316,23 @@ export function ResultsPage(): ReactElement {
           if (!isNotFound(err)) break
         }
       }
-      if (!cancelled) setOutcome({ code: roomCode, view: null })
+      if (!cancelled) setOutcome({ code: fetchKey, view: null })
     })()
 
     return () => {
       cancelled = true
     }
-  }, [liveView, roomCode])
+  }, [liveView, fetchKey, fetchUrl])
 
-  const current = outcome && outcome.code === roomCode ? outcome : null
+  const current = outcome && outcome.code === fetchKey ? outcome : null
   const failed = current !== null && current.view === null
   const view = liveView ?? current?.view ?? null
-  const [revealed, setRevealed] = useState(() => !isHostForRoom(roomCode))
+  // By game id, the room code is only known once the view is: the live store's
+  // room, or the persisted record's.
+  const roomCode = view?.room_code ?? roomCodeParam
+  const [revealed, setRevealed] = useState(
+    () => !isHostForRoom(roomCodeParam || (liveView?.room_code ?? '')),
+  )
 
   if (!view) {
     return (
@@ -415,10 +444,17 @@ export function ResultsPage(): ReactElement {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const route: RouteDescriptor = {
-  path: '/results/:roomCode',
-  guard: 'public',
-  element: <ResultsPage />,
-}
+export const route: RouteDescriptor[] = [
+  {
+    path: '/results/:roomCode',
+    guard: 'public',
+    element: <ResultsPage />,
+  },
+  {
+    path: '/results/g/:gameId',
+    guard: 'public',
+    element: <ResultsPage />,
+  },
+]
 
 export default ResultsPage

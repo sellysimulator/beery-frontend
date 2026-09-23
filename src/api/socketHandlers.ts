@@ -32,6 +32,7 @@ import type {
   ErrorPayload,
   GameFinishedPayload,
   GamePausedPayload,
+  GamePersistedPayload,
   GameResumedPayload,
   GameStartedPayload,
   HostClaimedPayload,
@@ -295,6 +296,10 @@ socket.on('bot_substituted', (payload: BotSubstitutedPayload) => {
 
 socket.on('game_finished', (payload: GameFinishedPayload) => {
   store().applyGameFinished(payload)
+})
+
+socket.on('game_persisted', (payload: GamePersistedPayload) => {
+  store().applyGamePersisted(payload)
 })
 
 socket.on('error', (payload: ErrorPayload) => {

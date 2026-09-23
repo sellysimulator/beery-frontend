@@ -1164,3 +1164,37 @@ describe('24 AC 1 / AC 2 / AC 3: the board seam has a second entry and the defau
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// The player's way to the results screen the host sees
+// ---------------------------------------------------------------------------
+
+describe('game over: the player can open the results', () => {
+  function resultsLink(): HTMLAnchorElement | undefined {
+    return Array.from(document.querySelectorAll('a')).find((a) =>
+      /see the results/i.test(a.textContent ?? ''),
+    );
+  }
+
+  it('offers no results link while the game is running', () => {
+    renderPlaying('RETAILER');
+
+    expect(resultsLink()).toBeUndefined();
+  });
+
+  it('links to the room-code results once the game is over', () => {
+    renderPlaying('RETAILER', { phase: 'FINISHED' });
+
+    expect(resultsLink()?.getAttribute('href')).toBe(`/results/${ROOM}`);
+  });
+
+  it('switches to the permanent game-id URL once the game is persisted', () => {
+    renderPlaying('RETAILER', { phase: 'FINISHED' });
+
+    act(() => {
+      useGameStore.getState().applyGamePersisted({ seq: nextSeq(), game_id: 'a'.repeat(32) });
+    });
+
+    expect(resultsLink()?.getAttribute('href')).toBe(`/results/g/${'a'.repeat(32)}`);
+  });
+});

@@ -649,6 +649,16 @@ export interface GameFinishedPayload {
   orders_by_role: Record<Role, number[]>
 }
 
+/**
+ * Sent after `game_finished`, once the game is written to the database:
+ * `game_id` is the permanent id behind `/results/g/:gameId`. Never sent when
+ * persistence fails.
+ */
+export interface GamePersistedPayload {
+  seq: number
+  game_id: string
+}
+
 export interface ErrorPayload {
   message: string
   code: string
