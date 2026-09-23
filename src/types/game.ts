@@ -619,6 +619,14 @@ export interface GameResumedPayload {
   seq: number
 }
 
+/**
+ * `host_disconnected` and `host_reconnected` share this shape. A host leaving
+ * never pauses the game; players are only told, by a transient alert.
+ */
+export interface HostEventPayload {
+  seq: number
+}
+
 /** `participant_disconnected` and `participant_reconnected` share this shape. */
 export interface ParticipantEventPayload {
   seq: number

@@ -7,6 +7,7 @@ import type {
   GamePausedPayload,
   GameResumedPayload,
   GameStartedPayload,
+  HostEventPayload,
   HostStatePayload,
   HostView,
   JoinErrorPayload,
@@ -104,6 +105,8 @@ export interface Alert {
   id: string
   kind: 'info' | 'success' | 'error'
   message: string
+  /** When set, the alert dismisses itself after this many milliseconds. */
+  timeoutMs?: number
 }
 
 export interface GameActions {
@@ -139,6 +142,8 @@ export interface GameActions {
   applyGameResumed(p: GameResumedPayload): void
   applyParticipantDisconnected(p: ParticipantEventPayload): void
   applyParticipantReconnected(p: ParticipantEventPayload): void
+  applyHostDisconnected(p: HostEventPayload): void
+  applyHostReconnected(p: HostEventPayload): void
   applyBotSubstituted(p: BotSubstitutedPayload): void
   applyGameFinished(p: GameFinishedPayload): void
 
@@ -209,6 +214,13 @@ function withoutSeq<T extends { seq: number }>(payload: T): Omit<T, 'seq'> {
 
 let alertCounter = 0
 
+/** How long a host-presence alert stays up unless dismissed first. */
+export const HOST_ALERT_TIMEOUT_MS = 10_000
+
+export const HOST_DISCONNECTED_MESSAGE =
+  'The host disconnected. The game continues; they can rejoin at any time.'
+export const HOST_RECONNECTED_MESSAGE = 'The host is back.'
+
 function mintAlertId(): string {
   alertCounter += 1
   return `alert-${alertCounter}`
@@ -238,6 +250,25 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
     const state = get()
     if (typeof seq !== 'number' || !(seq > state.lastSeq)) return
     set({ ...update(state), lastSeq: seq })
+  }
+
+  /**
+   * The alert currently announcing the host's absence, so their return can
+   * replace it rather than stack beside it. Deliberately not in `GameState`:
+   * it is bookkeeping for the alert queue, not something a screen reads.
+   */
+  let hostAwayAlertId: string | null = null
+
+  /**
+   * Host presence is announced to players only: the host's own tab never sees
+   * its own drop, and hearing "the host is back" about itself is noise.
+   */
+  function announceHost(seq: number, message: string): void {
+    if (typeof seq !== 'number' || !(seq > get().lastSeq)) return
+    set({ lastSeq: seq })
+    if (get().isHost) return
+    if (hostAwayAlertId !== null) get().dismissAlert(hostAwayAlertId)
+    hostAwayAlertId = get().addAlert({ kind: 'info', message, timeoutMs: HOST_ALERT_TIMEOUT_MS })
   }
 
   return {
@@ -384,6 +415,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         ),
       })),
 
+    applyHostDisconnected: (p) => announceHost(p.seq, HOST_DISCONNECTED_MESSAGE),
+
+    applyHostReconnected: (p) => announceHost(p.seq, HOST_RECONNECTED_MESSAGE),
+
     applyBotSubstituted: (p) =>
       applySequenced(p.seq, (state) => ({
         participants: state.participants.map((participant) =>
@@ -414,10 +449,15 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
     addAlert: (alert) => {
       const id = mintAlertId()
       set((state) => ({ alerts: [...state.alerts, { ...alert, id }] }))
+      if (alert.timeoutMs !== undefined) {
+        setTimeout(() => get().dismissAlert(id), alert.timeoutMs)
+      }
       return id
     },
 
-    dismissAlert: (id) =>
-      set((state) => ({ alerts: state.alerts.filter((a) => a.id !== id) })),
+    dismissAlert: (id) => {
+      if (id === hostAwayAlertId) hostAwayAlertId = null
+      set((state) => ({ alerts: state.alerts.filter((a) => a.id !== id) }))
+    },
   }
 })

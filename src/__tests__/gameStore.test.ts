@@ -13,7 +13,7 @@
  * parameter type is frozen, so `tsc -b` checks the fixture against the payload
  * type the implementation declares, field for field.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useGameStore } from '../store/gameStore';
 
 const ROLES = ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as const;
@@ -525,6 +525,24 @@ describe('identity and lifecycle actions', () => {
 });
 
 describe('alerts (the frozen Alert shape)', () => {
+  it('an alert with timeoutMs dismisses itself; one without stays', () => {
+    vi.useFakeTimers();
+    try {
+      useGameStore.getState().addAlert({ kind: 'info', message: 'brief', timeoutMs: 10_000 });
+      const sticky = useGameStore.getState().addAlert({ kind: 'error', message: 'sticky' });
+
+      vi.advanceTimersByTime(9_999);
+      expect(useGameStore.getState().alerts).toHaveLength(2);
+
+      vi.advanceTimersByTime(1);
+      const alerts = useGameStore.getState().alerts;
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0].id).toBe(sticky);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('addAlert returns the minted id and stores {id, kind, message}', () => {
     const id = useGameStore.getState().addAlert({ kind: 'error', message: 'Something failed.' });
 

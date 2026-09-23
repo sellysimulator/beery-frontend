@@ -308,6 +308,8 @@ describe('socketHandlers registers the wire contract', () => {
       'game_resumed',
       'participant_disconnected',
       'participant_reconnected',
+      'host_disconnected',
+      'host_reconnected',
       'bot_substituted',
       'game_finished',
       'error',
@@ -379,6 +381,49 @@ describe('seq guard (16 §4.4)', () => {
 
     expect(useGameStore.getState().paused).toBe(false);
     expect(useGameStore.getState().lastSeq).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// host presence: an alert, never a pause
+// ---------------------------------------------------------------------------
+
+describe('host_disconnected / host_reconnected', () => {
+  it('a host drop alerts every player and does not pause', () => {
+    dispatch('host_disconnected', { seq: 3 });
+
+    const state = useGameStore.getState();
+    expect(state.paused).toBe(false);
+    expect(state.lastSeq).toBe(3);
+    expect(state.alerts).toHaveLength(1);
+    expect(state.alerts[0].kind).toBe('info');
+    expect(state.alerts[0].message).toMatch(/host disconnected/i);
+    expect(state.alerts[0].timeoutMs).toBe(10_000);
+  });
+
+  it('the return replaces the drop alert rather than stacking beside it', () => {
+    dispatch('host_disconnected', { seq: 3 });
+    dispatch('host_reconnected', { seq: 4 });
+
+    const alerts = useGameStore.getState().alerts;
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].message).toMatch(/host is back/i);
+  });
+
+  it('a duplicate seq does not alert twice', () => {
+    dispatch('host_disconnected', { seq: 3 });
+    dispatch('host_disconnected', { seq: 3 });
+
+    expect(useGameStore.getState().alerts).toHaveLength(1);
+  });
+
+  it("the host's own tab is not told about itself", () => {
+    useGameStore.getState().setIsHost(true);
+
+    dispatch('host_reconnected', { seq: 5 });
+
+    expect(useGameStore.getState().alerts).toEqual([]);
+    expect(useGameStore.getState().lastSeq).toBe(5);
   });
 });
 

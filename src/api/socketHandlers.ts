@@ -35,6 +35,7 @@ import type {
   GameResumedPayload,
   GameStartedPayload,
   HostClaimedPayload,
+  HostEventPayload,
   HostStatePayload,
   JoinEmit,
   JoinErrorPayload,
@@ -278,6 +279,14 @@ socket.on('participant_disconnected', (payload: ParticipantEventPayload) => {
 
 socket.on('participant_reconnected', (payload: ParticipantEventPayload) => {
   store().applyParticipantReconnected(payload)
+})
+
+socket.on('host_disconnected', (payload: HostEventPayload) => {
+  store().applyHostDisconnected(payload)
+})
+
+socket.on('host_reconnected', (payload: HostEventPayload) => {
+  store().applyHostReconnected(payload)
 })
 
 socket.on('bot_substituted', (payload: BotSubstitutedPayload) => {
