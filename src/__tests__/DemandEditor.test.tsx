@@ -476,6 +476,15 @@ describe('demand preview (§2.6)', () => {
     expect(previewSeries()).toBe('5,5,6,6,7,7');
   });
 
+  it('rounds an exact half up even when float noise lands it just below [FM 10]', async () => {
+    await mountPanel(
+      config(50, { kind: 'RAMP', initial_value: 0, slope_per_week: 0.29, start_week: 1, cap: null }),
+    );
+    // 0.29 * 50 is 14.5 on paper and 14.499999999999998 in binary. The server
+    // rounds week 50 to 15, so the preview has to as well.
+    expect(previewSeries().split(',').at(-1)).toBe('15');
+  });
+
   it('plots SEASONAL base=8 amplitude=4 period=4 over 8 weeks [AC 10]', async () => {
     await mountPanel(
       config(8, { kind: 'SEASONAL', base: 8, amplitude: 4, period_weeks: 4, phase: 0 }),

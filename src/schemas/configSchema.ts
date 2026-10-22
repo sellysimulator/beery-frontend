@@ -26,6 +26,8 @@ export const FORM_LIMITS: Limits = {
   min_delay_weeks: 1,
   max_initial_quantity: 9_999,
   max_unit_value: 1_000_000.0,
+  max_random_seed: Number.MAX_SAFE_INTEGER,
+  max_period_weeks: 2 ** 31 - 1,
 }
 
 const quantity = z
@@ -165,7 +167,12 @@ export const configFormSchema = z.object({
   pause_on_disconnect: z.boolean(),
   bot_fill_empty_roles: z.boolean(),
   /** null means "the server generates one at start and persists it" (D11). */
-  random_seed: z.number().int('Whole numbers only.').nullable(),
+  random_seed: z
+    .number()
+    .int('Whole numbers only.')
+    .min(-FORM_LIMITS.max_random_seed, `Minimum is ${-FORM_LIMITS.max_random_seed}.`)
+    .max(FORM_LIMITS.max_random_seed, `Maximum is ${FORM_LIMITS.max_random_seed}.`)
+    .nullable(),
   currency_symbol: z.string().min(1, 'Pick a symbol.').max(4, 'Four characters at most.'),
   role_assignment_mode: z.enum(['HOST_ASSIGNS', 'PLAYER_CHOOSES', 'RANDOM']),
   preset_name: z.string().nullable(),

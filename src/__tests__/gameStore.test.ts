@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useGameStore } from '../store/gameStore';
+import type { GameConfig, Role, RoleConfig, WeekRecord, YourStatePayload } from '../types/game';
 
 const ROLES = ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as const;
 
@@ -414,6 +415,195 @@ describe('play appliers', () => {
     expect(useGameStore.getState().lastSeq).toBe(13);
   });
 });
+
+function weekRecord(role: Role, week: number): WeekRecord {
+  return {
+    role,
+    week,
+    opening_inventory: 12,
+    opening_backlog: 0,
+    arrived: 4,
+    incoming_order: 4,
+    obligation: 4,
+    shipped: 4,
+    unfulfilled: 0,
+    closing_inventory: 12,
+    closing_backlog: 0,
+    supply_line_after: 8,
+    orders_in_flight_after: 8,
+    order: 4,
+    was_bot: false,
+    was_forced: false,
+    holding_cost: 6,
+    backlog_cost: 0,
+    fixed_order_cost: 0,
+    purchase_cost: 0,
+    week_cost: 6,
+    cumulative_cost: 6 * week,
+    production_started: null,
+    production_queued: null,
+  };
+}
+
+/** A `your_state` as the server sends it, `own_history` and all. */
+function yourState(role: Role, week: number, history: WeekRecord[]): YourStatePayload {
+  return {
+    seq: 0,
+    role,
+    week,
+    duration_weeks: 36,
+    phase: 'DECISION',
+    currency_symbol: '$',
+    inventory: 10 + week,
+    backlog: 0,
+    supply_line: 8,
+    supply_line_slots: [4, 4],
+    orders_in_flight: 8,
+    orders_in_flight_slots: [4, 4],
+    incoming_order: 4,
+    last_order: week > 1 ? 4 : null,
+    settlement: {
+      role,
+      week,
+      opening_inventory: 12,
+      opening_backlog: 0,
+      arrived: 4,
+      incoming_order: 4,
+      obligation: 4,
+      shipped: 4,
+      unfulfilled: 0,
+      closing_inventory: 12,
+      closing_backlog: 0,
+      holding_cost: 6,
+      backlog_cost: 0,
+      carrying_cost: 6,
+    },
+    has_submitted: false,
+    awaiting_roles: ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR', 'FACTORY'],
+    own_history: history,
+    max_order_quantity: 9999,
+    allow_negative_orders: false,
+    show_supply_line_prominently: true,
+    order_arrival_lead_weeks: 4,
+    production_queue: null,
+    holding_cost_per_unit_week: 0.5,
+    backlog_cost_per_unit_week: 1,
+  };
+}
+
+/** The per-round `your_state`: the server leaves `own_history` out. */
+function perRoundState(role: Role, week: number): YourStatePayload {
+  const state = yourState(role, week, []);
+  delete state.own_history;
+  return state;
+}
+
+describe('own_history arrives a record at a time (12 section 3.3)', () => {
+  it('a per-round your_state without own_history keeps the history the store holds', () => {
+    const store = useGameStore.getState();
+    store.applyYourState({ ...yourState('RETAILER', 2, [weekRecord('RETAILER', 1)]), seq: 1 });
+    store.applyYourWeekClosed({ seq: 2, week: 2, record: weekRecord('RETAILER', 2) });
+    store.applyYourState({ ...perRoundState('RETAILER', 3), seq: 3 });
+
+    const view = useGameStore.getState().myState;
+    expect(view?.week).toBe(3);
+    expect(view?.inventory).toBe(13);
+    expect(view?.own_history.map((record) => record.week)).toEqual([1, 2]);
+  });
+
+  it('a resync that carries own_history replaces what the store holds', () => {
+    const store = useGameStore.getState();
+    store.applyYourState({ ...yourState('RETAILER', 2, [weekRecord('RETAILER', 1)]), seq: 1 });
+    store.applyYourState({
+      ...yourState('RETAILER', 4, [1, 2, 3].map((week) => weekRecord('RETAILER', week))),
+      seq: 2,
+    });
+
+    expect(useGameStore.getState().myState?.own_history.map((record) => record.week)).toEqual([1, 2, 3]);
+  });
+
+  it('a per-round state never inherits a different role’s history', () => {
+    const store = useGameStore.getState();
+    store.applyYourState({ ...yourState('RETAILER', 2, [weekRecord('RETAILER', 1)]), seq: 1 });
+    store.applyYourState({ ...perRoundState('FACTORY', 2), seq: 2 });
+
+    expect(useGameStore.getState().myState?.own_history).toEqual([]);
+  });
+
+  it('a per-round state with nothing held yet starts an empty history, never undefined', () => {
+    useGameStore.getState().applyYourState({ ...perRoundState('WHOLESALER', 1), seq: 1 });
+
+    expect(useGameStore.getState().myState?.own_history).toEqual([]);
+  });
+});
+
+describe('game_started reaches the host too (11 section 3.6)', () => {
+  it('does not replace the host’s full config with the public subset', () => {
+    const full: GameConfig = {
+      duration_weeks: 20,
+      stage_count: 4,
+      pause_on_disconnect: true,
+      bot_fill_empty_roles: false,
+      random_seed: 7,
+      currency_symbol: '$',
+      role_assignment_mode: 'HOST_ASSIGNS',
+      preset_name: null,
+      roles: {
+        RETAILER: roleConfig(),
+        WHOLESALER: roleConfig(),
+        DISTRIBUTOR: roleConfig(),
+        FACTORY: { ...roleConfig(), production_delay_weeks: 2, production_capacity_per_week: null },
+      },
+      demand: { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 },
+      visibility: {
+        show_true_customer_demand_to_all: false,
+        show_neighbour_inventory: false,
+        show_all_inventories: false,
+        show_supply_line_prominently: true,
+        show_running_cost_to_players: true,
+        show_leaderboard_during_game: false,
+        max_order_quantity: null,
+        allow_negative_orders: false,
+      },
+      bot: { theta: 0.25, alpha: 0.3, beta: 0.25, target_stock_multiplier: 3 },
+    };
+    const store = useGameStore.getState();
+    store.setConfig(full);
+
+    store.applyGameStarted({
+      seq: 1,
+      week: 1,
+      duration_weeks: 20,
+      role_to_alias: { RETAILER: 'P1', WHOLESALER: null, DISTRIBUTOR: null, FACTORY: null },
+      bots: [],
+      config_public: {
+        duration_weeks: 20,
+        stage_count: 4,
+        currency_symbol: '$',
+        visibility: full.visibility,
+      },
+    });
+
+    expect(useGameStore.getState().roomState).toBe('RUNNING');
+    expect(useGameStore.getState().config).toEqual(full);
+  });
+});
+
+function roleConfig(): RoleConfig {
+  return {
+    initial_inventory: 12,
+    initial_backlog: 0,
+    shipping_delay_weeks: 2,
+    information_delay_weeks: 2,
+    initial_pipeline_quantity: 4,
+    initial_order_in_pipeline: 4,
+    holding_cost_per_unit_week: 0.5,
+    backlog_cost_per_unit_week: 1,
+    fixed_order_cost: 0,
+    unit_purchase_cost: 0,
+    starting_capital: 0,
+  };
+}
 
 describe('join_error (D18 recovery depends on this, 17 §2.4)', () => {
   it('applyJoinError records the message', () => {

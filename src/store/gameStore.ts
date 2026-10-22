@@ -335,13 +335,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         myRole: roleForAlias(p.role_to_alias, state.myAlias) ?? state.myRole,
       })),
 
+    // `config_public` is deliberately not written to `config`. `game_started`
+    // goes to the whole room, the host's socket included, and the public
+    // subset has no roles, demand or bot block: storing it would overwrite the
+    // host's full config with one that only looks like a `GameConfig`.
     applyGameStarted: (p) =>
       applySequenced(p.seq, (state) => ({
         roomState: 'RUNNING',
         week: p.week,
         durationWeeks: p.duration_weeks,
         roleToAlias: p.role_to_alias,
-        config: p.config_public,
         hasSubmitted: false,
         paused: false,
         pausedReason: null,
@@ -351,8 +354,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
       })),
 
     applyYourState: (p) =>
-      applySequenced(p.seq, () => {
-        const view = withoutSeq(p)
+      applySequenced(p.seq, (state) => {
+        const { own_history: history, ...fields } = withoutSeq(p)
+        // The per-round state leaves `own_history` out: every closed week's
+        // record has already arrived in `your_week_closed`, which appends it.
+        // Only a state for the same role may keep the history held so far.
+        const held = state.myState?.role === fields.role ? state.myState.own_history : []
+        const view: PlayerView = { ...fields, own_history: history ?? held }
         return {
           myState: view,
           myRole: view.role,

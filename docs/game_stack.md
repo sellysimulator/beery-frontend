@@ -1,9 +1,12 @@
 # Game Stack — Base Template
 
 > **This file at `Novus/game_stack.md` is the single source of truth.** The copies inside
-> `Beery/`, `Lemony/`, `Pulky/`, `Selly/` and `Beery/Beery_Frontend/docs/` are generated from
+> `Beery/`, `Lemony/`, `Selly/` and `Beery/Beery_Frontend/docs/` are generated from
 > it. Edit this one, then re-copy. Do not edit a per-game copy in place — it will be
 > overwritten.
+>
+> Pulky has no copy: `Pulky/pulky-game-spec.md` carries these rules in place, so a change
+> here reaches Pulky only when it is written into that spec by hand.
 >
 > Derived from **Tequila Game** (`Selly/Selly_Frontend` + `Selly/Selly_Backend`) after its
 > security and performance audit. Sections marked **[HARD-WON]** encode a bug that actually

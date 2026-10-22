@@ -1094,3 +1094,24 @@ describe('keyboard operation (§3.4)', () => {
     await waitFor(() => expect(saveCount()).toBeGreaterThan(0), { timeout: 700 });
   });
 });
+
+describe('mouse wheel over a focused number field', () => {
+  // Chrome and Edge step a focused `type="number"` input when the wheel turns
+  // over it, so a host who scrolls the panel with the pointer still on a field
+  // changes its value without noticing. jsdom does not step the value on wheel,
+  // so the guard itself is what is asserted: the wheel takes the focus away.
+  it('blurs every NumberField the panel renders, so the wheel scrolls the page instead', async () => {
+    await mountPanel();
+
+    const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="number"]'));
+    expect(inputs.length).toBeGreaterThan(0);
+    expect(inputs).toContain(field('duration_weeks'));
+
+    for (const input of inputs) {
+      act(() => input.focus());
+      expect(document.activeElement).toBe(input);
+      fireEvent.wheel(input, { deltaY: 100 });
+      expect(document.activeElement, `the wheel left ${input.id} focused`).not.toBe(input);
+    }
+  });
+});

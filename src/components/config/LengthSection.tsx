@@ -30,8 +30,8 @@ export function LengthSection(): ReactElement {
           hint="Leave blank and the server picks one. The same seed replays the same game."
           placeholder="Chosen at start"
           nullable
-          min={0}
-          max={Number.MAX_SAFE_INTEGER}
+          min={-FORM_LIMITS.max_random_seed}
+          max={FORM_LIMITS.max_random_seed}
         />
       </div>
 

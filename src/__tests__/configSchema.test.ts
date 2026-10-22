@@ -329,4 +329,19 @@ describe('random_seed (D11)', () => {
   it('accepts an integer seed', () => {
     expect(accepts(validConfig({ random_seed: 20_251_118 }))).toBe(true);
   });
+
+  it('accepts a negative seed, which the server keeps as it is', () => {
+    expect(accepts(validConfig({ random_seed: -17 }))).toBe(true);
+  });
+
+  it('flags a seed past the server ceiling, which the server clamps', () => {
+    // The largest integer a browser holds exactly, and the ceiling the server
+    // clamps `random_seed` to (`app/core/limits.py`).
+    const max = Number.MAX_SAFE_INTEGER;
+    expect(configSchemaModule.FORM_LIMITS.max_random_seed).toBe(max);
+    expect(accepts(validConfig({ random_seed: max }))).toBe(true);
+    expect(accepts(validConfig({ random_seed: -max }))).toBe(true);
+    expect(accepts(validConfig({ random_seed: 1e19 }))).toBe(false);
+    expect(accepts(validConfig({ random_seed: -1e19 }))).toBe(false);
+  });
 });

@@ -20,7 +20,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -642,5 +642,25 @@ describe('CRITERION 25: the input, quick-fills and confirm are keyboard-operable
     await user.keyboard('{Enter}');
 
     expect(emitsOf('submit_order')).toEqual([{ room_id: ROOM, week: 6, order: 37 }]);
+  });
+});
+
+describe('the mouse wheel cannot change a focused order', () => {
+  // Chrome and Edge step a focused `type="number"` input when the wheel turns
+  // over it: a player who types 37 and scrolls with the pointer still on the
+  // field could confirm 35 without noticing. jsdom does not step the value on
+  // wheel, so the guard is what is asserted: the wheel takes the focus away.
+  it('blurs the order input on wheel and leaves the typed value alone', async () => {
+    const user = userEvent.setup();
+    renderForm(viewFor('WHOLESALER', { week: 6 }));
+
+    await user.click(orderInput());
+    await user.keyboard('37');
+    expect(document.activeElement).toBe(orderInput());
+
+    fireEvent.wheel(orderInput(), { deltaY: 100 });
+
+    expect(document.activeElement).not.toBe(orderInput());
+    expect(orderInput().value).toBe('37');
   });
 });

@@ -120,6 +120,11 @@ export function DecisionForm({
         value={value}
         disabled={disabled}
         onChange={(event) => setValue(event.target.value)}
+        // Chrome and Edge step a focused number input under the wheel, so a
+        // player scrolling past it would confirm a number they never typed.
+        // React's wheel listeners are passive and cannot `preventDefault`;
+        // giving up the focus lets the wheel scroll the page instead.
+        onWheel={(event) => event.currentTarget.blur()}
         className="numeric w-full rounded-md border border-border-strong bg-surface px-4 py-3 text-3xl disabled:cursor-not-allowed disabled:opacity-60"
       />
 

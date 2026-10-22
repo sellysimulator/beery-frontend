@@ -11,12 +11,16 @@
  * the direction the generator uses, and exact halves are not exotic here: a
  * `slope_per_week` of `0.5` produces one on every other week. This is the one
  * place the preview could silently disagree with the game that gets played.
+ *
+ * The `1e-9` mirrors the server's guard against float noise: `0.29 * 50` is
+ * 14.5 on paper and `14.499999999999998` in binary, which a bare floor would
+ * send down to 14 while the game plays 15.
  */
 import type { DemandConfig, Distribution } from '../../types/game'
 
 /** Half-up rounding. See the note above; `Math.round` is not equivalent. */
 export function roundHalfUp(value: number): number {
-  return Math.floor(value + 0.5)
+  return Math.floor(value + 0.5 + 1e-9)
 }
 
 /**

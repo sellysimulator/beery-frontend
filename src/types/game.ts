@@ -168,6 +168,10 @@ export interface Limits {
   min_delay_weeks: number
   max_initial_quantity: number
   max_unit_value: number
+  /** `random_seed` is held to plus or minus this: `Number.MAX_SAFE_INTEGER`. */
+  max_random_seed: number
+  /** The ceiling of the stored `period_weeks` column. */
+  max_period_weeks: number
 }
 
 /* ─── Engine records (07 section 2) ─── */
@@ -569,19 +573,36 @@ export interface RolesAssignedPayload {
   role_to_alias: RoleToAlias
 }
 
+/**
+ * `public_config()` (`11 section 3.6`): what every player may see once the game
+ * runs. The same paths as `GameConfig`, without a single cost, delay or demand
+ * field.
+ */
+export type PublicConfig = Pick<
+  GameConfig,
+  'duration_weeks' | 'stage_count' | 'currency_symbol' | 'visibility'
+>
+
 export interface GameStartedPayload {
   seq: number
   week: number
   duration_weeks: number
   role_to_alias: RoleToAlias
   bots: Role[]
-  config_public: GameConfig
+  config_public: PublicConfig
 }
 
 /* ─── Socket: server → client, play (12 section 2) ─── */
 
-export interface YourStatePayload extends PlayerView {
+/**
+ * `own_history` is absent from the per-round `your_state`, the one after a
+ * submission or a week close: the week's new record has already arrived in
+ * `your_week_closed`, and the store appends it. Game start, `join` and
+ * `request_state` carry the whole list.
+ */
+export interface YourStatePayload extends Omit<PlayerView, 'own_history'> {
   seq: number
+  own_history?: WeekRecord[]
 }
 
 export interface HostStatePayload extends HostView {

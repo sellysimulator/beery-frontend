@@ -197,6 +197,11 @@ export function NumberField({
         {...registration}
         onChange={handleChange}
         onBlur={handleBlur}
+        // Chrome and Edge step a focused number input under the wheel, so a
+        // host scrolling the panel would change the value unseen. React's
+        // wheel listeners are passive and cannot `preventDefault`; giving up
+        // the focus is what lets the wheel scroll the page instead.
+        onWheel={(event) => event.currentTarget.blur()}
         id={fieldId(name)}
         type="number"
         inputMode="decimal"
