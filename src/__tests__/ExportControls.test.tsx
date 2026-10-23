@@ -10,9 +10,9 @@
  *  - Host authority is put in place only through `16 §3`'s storage helpers
  *    (`setHostRoom`, `setHostSecret`), which is what `§2.4`'s
  *    `isHostForRoom(roomCode)` reads.
- *  - `src/auth/AuthContext.tsx` is stubbed with the value `16 §3` freezes;
- *    export authority is a room capability, never an account (**D3**), so no
- *    test here signs anybody in.
+ *  - `src/auth/AuthContext.tsx` is stubbed with the value `16 §3` freezes.
+ *    The host tab's authority is a room capability (**D3**); only the
+ *    account way (`15 §3.2`, the last block) signs anybody in.
  *  - `chart.js` and `react-chartjs-2` are **not** mocked (failure mode 13).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -538,11 +538,11 @@ describe('CRITERION 13: the host is told the data expires', () => {
     expect(text).toContain('expires in 24 hours');
   });
 
-  it('says a guest host cannot export afterwards', async () => {
+  it('says only a signed-in host can export afterwards', async () => {
     asHostTab();
     await renderResults();
 
-    expect(exportRegionText()).toMatch(/guest host can't export/i);
+    expect(exportRegionText()).toMatch(/only a signed-in host can export it/i);
   });
 
   it('is print-omitted, like every other control (§3.3)', async () => {
@@ -551,5 +551,61 @@ describe('CRITERION 13: the host is told the data expires', () => {
 
     const holder = control(/csv/i, 'the CSV export control (§2.4)').closest('[data-print]');
     expect(holder?.getAttribute('data-print')).toBe('omit');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The account way (`15 §3.2`): a signed-in host, in a tab that is not the host's
+// ---------------------------------------------------------------------------
+
+describe('the signed-in host exports by account from any tab', () => {
+  const PUBLIC_ID = 'f'.repeat(32);
+
+  function signedInWithHosted(hosted: boolean): void {
+    auth.value = { ...auth.value, mode: 'authenticated' };
+    httpRec.get.mockImplementation(async (url: string) => {
+      if (/\/results(\?|$)/.test(url)) {
+        return { data: { ...resultsResponse(), public_id: PUBLIC_ID }, status: 200 };
+      }
+      if (url === `/users/me/hosted-games/${PUBLIC_ID}`) {
+        if (hosted) return { data: '', status: 204 };
+        throw axiosError(404, 'Game not found.');
+      }
+      if (/\/export(\?|$)/.test(url)) {
+        return { data: CSV_BODY, status: 200, headers: { 'content-type': 'text/csv' } };
+      }
+      throw axiosError(404, `Unexpected GET ${url}`);
+    });
+  }
+
+  it('renders for the confirmed host and downloads by id, with no host secret', async () => {
+    signedInWithHosted(true);
+    await renderResults();
+
+    const user = userEvent.setup();
+    await user.click(await waitFor(() => control(/csv/i, 'the CSV download')));
+
+    await waitFor(() => expect(exportCalls().length).toBe(1));
+    const [url, config] = exportCalls()[0];
+    expect(url).toBe(`/games/id/${PUBLIC_ID}/export`);
+    expect(headerValue(config, 'X-Host-Secret')).toBeNull();
+    expect(exportRegionText()).toMatch(/you hosted this game/i);
+  });
+
+  it('stays absent when the server says this account did not host it', async () => {
+    signedInWithHosted(false);
+    await renderResults();
+
+    await waitFor(() =>
+      expect(httpRec.get.mock.calls.some((call) => /hosted-games/.test(String(call[0])))).toBe(true),
+    );
+    expect(controlsMatching(/csv|json/i)).toEqual([]);
+  });
+
+  it('never asks for a guest', async () => {
+    await renderResults();
+
+    expect(httpRec.get.mock.calls.some((call) => /hosted-games/.test(String(call[0])))).toBe(false);
+    expect(controlsMatching(/csv|json/i)).toEqual([]);
   });
 });

@@ -44,7 +44,7 @@ function saveFile(data: unknown, filename: string): void {
 /**
  * CSV and JSON of the complete week-by-week record, for the host only.
  *
- * Two ways in, both decided by the server (`15 §3.2`):
+ * Two ways in, both decided by the server (`15 §3.2`, `§9`):
  *  - the host's tab: the stored `host_secret`, presented in `X-Host-Secret` —
  *    never a client-side "I am the host" boolean (**D3**);
  *  - the host's account, in any tab: a signed-in caller the server confirms

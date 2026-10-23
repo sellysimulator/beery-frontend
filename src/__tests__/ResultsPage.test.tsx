@@ -1073,6 +1073,17 @@ describe('CRITERION 14: the claim prompt is for a guest who played this game', (
 
     expect(bodyText()).not.toMatch(OFFER);
   });
+
+  it('is offered to a guest host in the host tab, for export and not for history', async () => {
+    auth.value = { ...auth.value, mode: 'guest' };
+    getOrCreateGuestId();
+    asHostTab();
+    await renderReady();
+
+    expect(bodyText()).toMatch(/sign in to keep exporting this game/i);
+    expect(bodyText()).toMatch(/hosted games don't appear in your game history/i);
+    expect(bodyText()).not.toMatch(OFFER);
+  });
 });
 
 describe('CRITERION 15 and FAILURE MODE 6: claiming posts the guest id, and nothing else does', () => {
