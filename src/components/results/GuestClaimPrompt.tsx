@@ -2,7 +2,7 @@ import { useState, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 import http, { errorMessage } from '../../api/http'
 import { useAuth } from '../../auth/AuthContext'
-import { getGuestId, getSessionToken } from '../../utils/storage'
+import { getGuestId, getSessionToken, isHostForRoom } from '../../utils/storage'
 
 export interface GuestClaimPromptProps {
   roomCode: string
@@ -19,8 +19,11 @@ interface ClaimResponse {
  * Who played is decided by this browser, not by the payload: `identity` is
  * server-only and never on the wire (`00-conventions.md §2`), so no results
  * payload can say who was in the room. The three conditions are guest mode, a
- * minted guest id, and a `session_token` for this room — the last being this
- * browser's own evidence that it joined that room.
+ * minted guest id, and this browser's own evidence that it was in the room: a
+ * `session_token` for it (a player), or this tab hosting it (a host). A guest
+ * host who claims becomes the game's registered host, and may export it later
+ * from any tab once signed in (`15 §3.2`); a hosted game never enters the
+ * profile's game history, which counts only the roles a user played.
  *
  * The guest id travels in the `POST /games/claim` body and nowhere else: not
  * in a path, not in a query string, not in a log.
@@ -33,7 +36,8 @@ export function GuestClaimPrompt({ roomCode }: GuestClaimPromptProps): ReactElem
 
   const guestId = getGuestId()
   const playedHere = getSessionToken(roomCode) !== null
-  const eligible = mode === 'guest' && guestId !== null && playedHere
+  const hostedHere = isHostForRoom(roomCode)
+  const eligible = mode === 'guest' && guestId !== null && (playedHere || hostedHere)
 
   // Signing in flips `mode` to 'authenticated', which would otherwise pull the
   // panel out from under the result it was asked for.
@@ -64,10 +68,15 @@ export function GuestClaimPrompt({ roomCode }: GuestClaimPromptProps): ReactElem
     >
       {claimed === null ? (
         <>
-          <h2 className="text-lg font-semibold">Sign in to keep this result in your profile.</h2>
+          <h2 className="text-lg font-semibold">
+            {playedHere
+              ? 'Sign in to keep this result in your profile.'
+              : 'Sign in to keep exporting this game.'}
+          </h2>
           <p className="text-sm text-ink-muted">
-            You played this game as a guest. Signing in attaches it — and every other
-            game this browser played — to your account.
+            {playedHere
+              ? 'You played this game as a guest. Signing in attaches it — and every other game this browser played — to your account.'
+              : "You hosted this game as a guest. Signing in lets your account export it after the room expires. Hosted games don't appear in your game history; games this browser played as a guest are added to it."}
           </p>
           <div>
             <button

@@ -88,6 +88,8 @@ export interface ResultsView {
   started_at?: string
   /** URL path only. */
   finished_at?: string
+  /** URL path only: the permanent id the host's export by account uses. */
+  public_id?: string
 }
 
 /* ─── The persisted payload, and its normaliser (`15 §2`; §2.0 FROZEN) ─── */
@@ -179,6 +181,7 @@ export function resultsViewFromResponse(payload: ResultsResponse): ResultsView {
     preset_name: payload.preset_name,
     started_at: payload.started_at,
     finished_at: payload.finished_at,
+    public_id: payload.public_id,
   }
 }
 

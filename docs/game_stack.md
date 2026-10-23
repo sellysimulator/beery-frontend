@@ -821,17 +821,44 @@ columns and one that doesn't.
 **Migrations are Alembic-managed**, not `create_all()` at startup:
 ```bash
 alembic revision --autogenerate -m "describe the change"
-alembic upgrade head          # fresh/dev database
-alembic stamp head            # adopt Alembic on a DB whose tables already exist
+alembic upgrade head          # fresh/dev database, and every later revision anywhere
+alembic stamp <baseline>      # adopt Alembic on a DB whose tables already exist, then upgrade head
 ```
 `alembic/env.py` imports `Base`, sets `target_metadata = Base.metadata`, and pulls the URL from
 `app.config.settings.db_url` at runtime.
+
+Adopt an inherited database at the **baseline** revision, never `alembic stamp head`: that marks
+every later revision as applied without running it. Render runs no migrations, so back up, then
+migrate **before** the push whose code needs the new schema; otherwise the end-of-game upload
+fails on the missing table or column and every finished game is lost.
 
 > **Verify the live schema before trusting the migration. [HARD-WON]** Tequila Game's production
 > database was built by the old `create_all()`, was never stamped, and has no `alembic_version`
 > table — so the migration file and the real schema disagree (the live tables have no
 > `created_at`/`updated_at` at all). Running `alembic upgrade head` there would try to recreate
 > existing tables. On any inherited database, inspect `information_schema.COLUMNS` first.
+
+**Store facts, derive the rest. [HARD-WON]** (`pulky-findings.md` item 15) A stored game must
+read back exactly as it was played, and the schema stays normalized: nothing the database can
+compute is stored.
+
+- **Facts** are stored: the players; each round's record (the decision and what the round
+  resolved: deliveries, sales, costs, inventory); the room config the game was played with, as
+  real columns (one row per game, plus one row per vehicle or option), never a JSON blob; and
+  what each round drew that cannot be recomputed, such as a winner picked by a seeded tie-break.
+- **Derived values** (revenue, profit, budget, comparisons, flags) are not columns. One pure
+  function derives them from the facts, and both the engine during play and the stored-game
+  reader call it, so the two cannot drift. A new derived value goes in that function.
+- **A parity test** plays whole games through the real path, stores them, reads them back and
+  requires equality field for field. A second test compares the config model to the config
+  columns, so a new setting cannot ship without its column and migration.
+- **Exact types.** Money is `DECIMAL(20,2)` (prices rounded to the cent where they enter);
+  host settings that are any number in their bounds are `DOUBLE`. Read `DECIMAL` back as
+  `float` (`Numeric(..., asdecimal=False)`), the type the engine wrote.
+
+Tequila Game's implementation: `Selly_Backend/app/core/records.py` (`derive_week`),
+`db_service.load_game`, `tests/test_services/test_stored_parity.py`, and
+`Selly/database_schema.md`.
 
 ### Query shape
 

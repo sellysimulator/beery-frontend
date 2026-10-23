@@ -417,7 +417,7 @@ export function ResultsPage(): ReactElement {
         <DebriefNotes roomCode={roomCode} />
 
         <section data-print="omit" aria-label="What next" className="flex flex-col gap-4">
-          <ExportControls roomCode={roomCode} />
+          <ExportControls roomCode={roomCode} publicId={view.public_id} />
           <GuestClaimPrompt roomCode={roomCode} />
           <div
             data-print="omit"

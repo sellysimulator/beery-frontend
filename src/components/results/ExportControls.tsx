@@ -1,9 +1,12 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import http, { errorMessage } from '../../api/http'
+import { useAuth } from '../../auth/AuthContext'
 import { getHostSecret, isHostForRoom } from '../../utils/storage'
 
 export interface ExportControlsProps {
   roomCode: string
+  /** The game's permanent id; only the persisted record has it. */
+  publicId?: string
 }
 
 type Format = 'csv' | 'json'
@@ -41,33 +44,66 @@ function saveFile(data: unknown, filename: string): void {
 /**
  * CSV and JSON of the complete week-by-week record, for the host only.
  *
- * Authority is the stored `host_secret`, presented in `X-Host-Secret` — never
- * a client-side "I am the host" boolean (**D3**). A non-host renders nothing
- * at all rather than a disabled button, because a disabled button is an
- * invitation to try it from devtools.
+ * Two ways in, both decided by the server (`15 §3.2`):
+ *  - the host's tab: the stored `host_secret`, presented in `X-Host-Secret` —
+ *    never a client-side "I am the host" boolean (**D3**);
+ *  - the host's account, in any tab: a signed-in caller the server confirms
+ *    hosted this game (`GET /users/me/hosted-games/{publicId}`) downloads by
+ *    the game's permanent id with their own token. A guest host gets there by
+ *    claiming their results (`GuestClaimPrompt`).
  *
- * The 24-hour prompt is not decoration: export authority depends on the live
- * room or a registered account (`15 §3.2`), so a guest host who leaves it
- * until tomorrow has nothing left to export.
+ * Anyone else renders nothing at all rather than a disabled button, because a
+ * disabled button is an invitation to try it from devtools.
+ *
+ * The 24-hour prompt is not decoration: once the room expires only the
+ * account way is left, so a guest host who has not signed in by then has
+ * nothing left to export.
  */
-export function ExportControls({ roomCode }: ExportControlsProps): ReactElement | null {
+export function ExportControls({ roomCode, publicId }: ExportControlsProps): ReactElement | null {
+  const { mode } = useAuth()
   const [busy, setBusy] = useState<Format | null>(null)
   const [error, setError] = useState('')
+  const [hostedId, setHostedId] = useState<string | null>(null)
 
-  if (!isHostForRoom(roomCode)) return null
+  const hostTab = isHostForRoom(roomCode)
+  const askAccount = !hostTab && mode === 'authenticated' && Boolean(publicId)
 
-  const secret = getHostSecret(roomCode)
+  useEffect(() => {
+    if (!askAccount || !publicId) return
+    let cancelled = false
+    http
+      .get(`/users/me/hosted-games/${publicId}`)
+      .then(() => {
+        if (!cancelled) setHostedId(publicId)
+      })
+      // A 404 means "not the host": the controls stay absent, with nothing to say.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [askAccount, publicId])
+
+  const byAccount = askAccount && hostedId === publicId
+  if (!hostTab && !byAccount) return null
+
+  const secret = hostTab ? getHostSecret(roomCode) : null
 
   async function download(format: Format): Promise<void> {
-    if (!secret) return
+    if (!secret && !byAccount) return
     setBusy(format)
     setError('')
     try {
-      const response = await http.get(`/games/${roomCode}/export`, {
-        params: { format },
-        headers: { 'X-Host-Secret': secret },
-        responseType: 'blob',
-      })
+      // The account way needs no header: `http` attaches the signed-in token.
+      const response = secret
+        ? await http.get(`/games/${roomCode}/export`, {
+            params: { format },
+            headers: { 'X-Host-Secret': secret },
+            responseType: 'blob',
+          })
+        : await http.get(`/games/id/${publicId}/export`, {
+            params: { format },
+            responseType: 'blob',
+          })
       saveFile(response.data, `beer-game-${roomCode}.${format}`)
     } catch (err) {
       setError(
@@ -88,11 +124,12 @@ export function ExportControls({ roomCode }: ExportControlsProps): ReactElement 
     >
       <h2 className="text-lg font-semibold">Export the full record</h2>
       <p className="text-sm text-ink-muted">
-        Download now — the room&apos;s data expires in 24 hours, and a guest host
-        can&apos;t export after that.
+        {byAccount
+          ? 'You hosted this game, so your account can download its full record.'
+          : "Download now — the room's data expires in 24 hours, and after that only a signed-in host can export it."}
       </p>
 
-      {secret ? (
+      {secret || byAccount ? (
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
