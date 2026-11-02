@@ -3,6 +3,7 @@ import { Line } from 'react-chartjs-2'
 import {
   DEMAND_SERIES_LABEL,
   buildBullwhipConfig,
+  orderSeriesDash,
   orderSeriesLabel,
   type ResultsView,
 } from '../charts/chartSetup'
@@ -98,7 +99,7 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
     )
   }
 
-  function legendButton(key: SeriesKey, label: string, swatch: string): ReactElement {
+  function legendButton(key: SeriesKey, label: string, swatch: ReactElement): ReactElement {
     const shown = !hidden.includes(key)
     return (
       <button
@@ -114,7 +115,7 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
             : 'border-border bg-surface-sunken text-ink-subtle line-through'
         }`}
       >
-        <span aria-hidden="true" className={`h-1 w-6 rounded-full ${swatch}`} />
+        {swatch}
         {label}
       </button>
     )
@@ -128,9 +129,13 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
         aria-label="Show or hide a series"
         className="flex flex-wrap items-center gap-2"
       >
-        {legendButton(DEMAND, DEMAND_SERIES_LABEL, 'bg-ink')}
+        {legendButton(DEMAND, DEMAND_SERIES_LABEL, <LineSwatch tone="text-ink" width={4} />)}
         {view.per_role.map((role) =>
-          legendButton(role.role, `${ROLE_LABEL[role.role]} orders`, SWATCH[role.role]),
+          legendButton(
+            role.role,
+            `${ROLE_LABEL[role.role]} orders`,
+            <LineSwatch tone={SWATCH[role.role]} dash={orderSeriesDash(role.role)} />,
+          ),
         )}
       </div>
 
@@ -157,12 +162,46 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
   )
 }
 
+/**
+ * A legend swatch drawn as the line itself: the role's hue and the role's
+ * dash, so the legend tells the series apart without colour exactly as the
+ * chart does. The hue comes from the tokens via `currentColor`.
+ */
+function LineSwatch({
+  tone,
+  dash,
+  width = 2.5,
+}: {
+  tone: string
+  dash?: number[]
+  width?: number
+}): ReactElement {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 28 8"
+      className={`h-2 w-7 shrink-0 ${tone}`}
+    >
+      <line
+        x1="0"
+        y1="4"
+        x2="28"
+        y2="4"
+        stroke="currentColor"
+        strokeWidth={width}
+        strokeDasharray={dash && dash.length > 0 ? dash.join(' ') : undefined}
+      />
+    </svg>
+  )
+}
+
 /** The legend swatches, in the role hues from `src/index.css`. */
 const SWATCH: Record<Role, string> = {
-  RETAILER: 'bg-role-retailer',
-  WHOLESALER: 'bg-role-wholesaler',
-  DISTRIBUTOR: 'bg-role-distributor',
-  FACTORY: 'bg-role-factory',
+  RETAILER: 'text-role-retailer',
+  WHOLESALER: 'text-role-wholesaler',
+  DISTRIBUTOR: 'text-role-distributor',
+  FACTORY: 'text-role-factory',
 }
 
 export default BullwhipChart

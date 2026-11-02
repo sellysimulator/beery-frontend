@@ -104,7 +104,7 @@ bearing documentation — match that style.
 ## 4. Commands
 
 ```bash
-npm ci                 # install (Node >= 20.19; .nvmrc pins 20.19.0)
+npm ci                 # install (engines ^22.23.4 || ^24.22.1 || >=26.12.1; .nvmrc pins 24.22.1)
 npm run dev            # vite, http://localhost:5173, proxies /api + /socket.io to :8080
 npm run build          # tsc -b (all three TS projects) && vite build -> dist/
 npm run preview        # serve the built bundle
@@ -115,7 +115,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-09-21: **760 tests / 26 files passed**, `eslint .` clean, `tsc -b`
+Verified green on 2026-11-02: **958 tests / 28 files passed**, `eslint .` clean, `tsc -b`
 clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 

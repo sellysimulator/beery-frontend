@@ -787,3 +787,54 @@ describe('CRITERION 7: the DOM legend toggles one series at a time', () => {
     expect(plots(RETAILER_ONLY)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// One legend, carrying both channels
+// ---------------------------------------------------------------------------
+
+/**
+ * The DOM switches are the legend (§2.2a). Chart.js's canvas legend used to be
+ * left on as well, so the screen showed two legends, and the one people click
+ * drew solid swatches: the dash that separates the roles without colour (§2.2)
+ * was only in the copy nobody could reach.
+ */
+describe('the legend is the DOM switches alone, and it shows each role’s dash', () => {
+  function switches(): HTMLElement[] {
+    return Array.from(document.querySelectorAll<HTMLElement>('[role="switch"]'));
+  }
+
+  function swatchDash(el: HTMLElement): string {
+    return el.querySelector('svg line')?.getAttribute('stroke-dasharray') ?? '';
+  }
+
+  it('turns the canvas legend off', async () => {
+    await renderChart();
+
+    const plugins = (latestConfig() as { options?: { plugins?: { legend?: { display?: unknown } } } })
+      .options?.plugins;
+    expect(plugins?.legend?.display).toBe(false);
+  });
+
+  it('draws every role swatch with that role’s own dash, and demand solid', async () => {
+    await renderChart();
+
+    const bySeries = new Map(switches().map((el) => [el.dataset.series, el]));
+    const demand = bySeries.get('DEMAND');
+    expect(demand).toBeDefined();
+    expect(swatchDash(demand as HTMLElement)).toBe('');
+
+    const plotted = new Map(datasets().map((d) => [labelOf(d), d]));
+    const dashes = ROLE_ORDER.map((role) => {
+      const el = bySeries.get(role);
+      expect(el).toBeDefined();
+      const dash = swatchDash(el as HTMLElement);
+      const line = [...plotted.entries()].find(([label]) => new RegExp(role, 'i').test(label))?.[1] as
+        | { borderDash?: number[] }
+        | undefined;
+      expect(dash).toBe((line?.borderDash ?? []).join(' '));
+      return dash;
+    });
+    expect(new Set(dashes).size).toBe(4);
+    for (const dash of dashes) expect(dash).not.toBe('');
+  });
+});

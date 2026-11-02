@@ -55,6 +55,18 @@ mechanism; this is the contract.
    and it is a rule this family has broken three times in one game's planning documents
    alone.
 
+**What invariant 7 does not forbid: display arithmetic in charts.** A chart may sum, average,
+take a running total of, or divide figures the server sent, purely to draw them: a cumulative
+profit line, a cost per unit, a market average, a share. The value never leaves the screen,
+never feeds a decision or the engine, and the chart's table view shows the server figures it
+came from. Anything with a game rule in it is still the server's: eligibility, capacity, a cost
+formula, a forecast for a live decision. That is why a "what if I charge $X today?" curve is a
+server preview, never the client re-running the demand model. (Explaining the model with
+example numbers in help and config screens, as Lemony's `configMath.ts` does, is not a
+forecast for a live decision.) A game may be stricter than this: Beery plots only
+server fields, and shows a combination with geometry (stacking, drawing below the axis)
+instead of a computed number. Decided 2026-11-02; see `chart-proposals-plan.md` §1.
+
 ---
 
 ## 1. Frontend
@@ -70,8 +82,12 @@ it current with `npm update`. Tequila Game is verified green on React 19.2 / Vit
 TypeScript 5.9 / Tailwind 4.3; a fresh scaffold today lands on Vite 8 / TypeScript 6, which has
 not been exercised against this stack.
 
-Node ≥ 20.19 (or 22.12+) — Vite 7's realistic floor, and higher for Vite 8. Pin it with
-`.nvmrc` / `engines.node`.
+Node ≥ 20.19 (or 22.12+) is Vite 7's realistic floor, and higher for Vite 8 — but Node 20
+reached end of life on 30 April 2026 and gets no security fixes, so neither `engines.node` nor
+`.nvmrc` should name it. Set `engines.node` to the patched release of each supported line
+(`^22.23.4 || ^24.22.1 || >=26.12.1` as of the 21 October 2026 security release) and pin
+`.nvmrc` to one of them. CI's `setup-node` reads `.nvmrc`, so a stale pin keeps every build on
+a vulnerable Node; raise both after each Node security release.
 
 > **A 3D dependency will pin your React version.** If a game adds `@react-three/fiber`, note
 > that it declares a narrow React peer range (`>=19 <19.3` as of r3f 9.7) and lags React

@@ -224,6 +224,15 @@ export function orderSeriesLabel(role: Role): string {
 }
 
 /**
+ * The dash a role's order line is drawn with, for the DOM legend's swatch.
+ * The legend is the only legend, so it has to carry the second channel too:
+ * a solid swatch would leave colour as the one thing telling roles apart.
+ */
+export function orderSeriesDash(role: Role): number[] {
+  return ORDER_SERIES[role].dash
+}
+
+/**
  * The reveal, as a configuration object (section 2.2).
  *
  * The rules that make the chart teach the lesson rather than hide it:
@@ -234,9 +243,11 @@ export function orderSeriesLabel(role: Role): string {
  *     variation in demand and understates the contrast;
  *   - true customer demand is the **last** dataset, so Chart.js draws it on
  *     top of the four order curves, and it carries no dash;
- *   - the legend is Chart.js's own, whose default click handler toggles one
- *     dataset at a time — the single most useful control in the debrief, as
- *     it lets a host bring the chain in one stage at a time.
+ *   - Chart.js's own legend is off. The legend is real DOM in
+ *     `BullwhipChart` (section 2.2a), one switch per series — the single most
+ *     useful control in the debrief, as it lets a host bring the chain in one
+ *     stage at a time. A canvas legend as well would be a second, unreachable
+ *     copy of it.
  *
  * Nothing here computes: every plotted number is a server field.
  */
@@ -289,11 +300,7 @@ export function buildBullwhipConfig(view: ResultsView): ChartConfiguration<'line
       animation: { duration: 300 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: { usePointStyle: true, color: AXIS_COLOUR, font: { size: 14 } },
-        },
+        legend: { display: false },
         tooltip: { enabled: true },
       },
       scales: {

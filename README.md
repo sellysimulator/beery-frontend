@@ -14,7 +14,7 @@ checklist. `CLAUDE.md` is the agent-facing map of the same codebase, in more det
 
 ## Prerequisites
 
-- **Node >= 20.19** (or 22.12+), pinned in `.nvmrc` and `engines.node`.
+- **Node 22.23.4+, 24.22.1+ or 26.12.1+**, the `engines.node` range (Vite 7 alone needs 20.19 / 22.12, but Node 20 is end of life). `.nvmrc` pins 24.22.1, which CI builds on.
 - The backend, for anything past the welcome screen and the manuals. See `../Beery_Backend/README.md`.
 
 The toolchain is pinned to the combination the shared Novus stack verifies — React `~19.2.0`
@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 760 passed, 26 files
+npm run test:run        # vitest run — 958 passed, 28 files
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
