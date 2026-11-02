@@ -420,25 +420,27 @@ function isNumericText(text: string): boolean {
 }
 
 /**
- * `§2.6a`: the chart "also renders the same three series as a visually hidden
- * table — one row per week". That table, not the canvas, is this section's
- * surface for the chart. It is the table that is not the settlement recap.
+ * `§2.6a` and criterion 21: the history renders its series as tables, and
+ * those tables, not the canvases, are this section's surface for the charts.
+ * They are the tables that are not the settlement recap. There are two (the
+ * stock panel's and the orders panel's), so a "week" row is read across both.
  */
-function historyTable(): HTMLElement {
-  const tables = Array.from(document.querySelectorAll<HTMLElement>('table, [role="table"]'));
-  const found = tables.find((t) => !/holding cost/i.test(textOf(t)));
-  if (!found) {
+function historyTables(): HTMLElement[] {
+  const tables = Array.from(document.querySelectorAll<HTMLElement>('table, [role="table"]')).filter(
+    (t) => !/holding cost/i.test(textOf(t)),
+  );
+  if (tables.length === 0) {
     throw new Error(
-      '\u00a72.6a requires the chart to render its three series as a table as well as a canvas; ' +
+      '\u00a72.6a requires the history to render its series as tables as well as canvases; ' +
         `no such table was rendered. The screen rendered: ${bodyText()}`,
     );
   }
-  return found;
+  return tables;
 }
 
-/** The table's data rows: the ones whose every cell is a number. */
-function historyRows(): number[][] {
-  const rows = Array.from(historyTable().querySelectorAll<HTMLElement>('tr, [role="row"]'));
+/** One table's data rows: the ones whose every cell is a number. */
+function tableRows(table: HTMLElement): number[][] {
+  const rows = Array.from(table.querySelectorAll<HTMLElement>('tr, [role="row"]'));
   const data: number[][] = [];
   for (const row of rows) {
     const cells = Array.from(
@@ -449,13 +451,28 @@ function historyRows(): number[][] {
   return data;
 }
 
-/** The three series columns, with the week column dropped. */
+/**
+ * One row per closed week: the week, then every table's figures for it, in
+ * the order the tables appear. Each table carries its own week column, which
+ * is dropped after the first.
+ */
+function historyRows(): number[][] {
+  const perTable = historyTables().map(tableRows);
+  const weeks = perTable[0].length;
+  const merged: number[][] = [];
+  for (let index = 0; index < weeks; index += 1) {
+    const row = [...perTable[0][index]];
+    for (const rows of perTable.slice(1)) row.push(...rows[index].slice(1));
+    merged.push(row);
+  }
+  return merged;
+}
+
+/** The series columns, with the week column dropped. */
 function historySeries(): number[][] {
   const rows = historyRows();
   if (rows.length === 0) throw new Error('\u00a72.6a requires one table row per week played.');
-  const weeks = rows.map((_, index) => index + 1).join(',');
-  const columns = rows[0].map((_, index) => rows.map((row) => row[index]));
-  return columns.filter((column) => column.join(',') !== weeks);
+  return rows[0].slice(1).map((_, index) => rows.map((row) => row[index + 1]));
 }
 
 /** The waiting tick-list: the tightest block that is about waiting and names every role. */
@@ -824,55 +841,72 @@ describe('FAILURE MODE 1: no other player’s order is ever visible', () => {
 // Criterion 21 — the player's own history, and nobody else's
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 21: the history chart exposes the player’s own three series', () => {
-  it('renders one row per week of own_history', () => {
+describe('CRITERION 21: the history exposes the player’s own figures, as tables', () => {
+  // The fixture holds these two constant: `incoming_order` 8, `supply_line_after` 10.
+  const OWN_INCOMING = OWN_INVENTORY.map(() => 8);
+  const OWN_SUPPLY_LINE = OWN_INVENTORY.map(() => 10);
+
+  it('renders one row per closed week of own_history in every table', () => {
     renderPlaying('RETAILER');
 
     expect(historyRows()).toHaveLength(OWN_INVENTORY.length);
+    for (const table of historyTables()) {
+      expect(tableRows(table)).toHaveLength(OWN_INVENTORY.length);
+    }
   });
 
-  it('exposes exactly three series beside the week column', () => {
+  it('exposes closing_inventory, closing_backlog, supply_line_after, incoming_order and order', () => {
     renderPlaying('RETAILER');
 
-    expect(historySeries()).toHaveLength(3);
-  });
-
-  it('exposes closing_inventory, closing_backlog and order, and nothing else', () => {
-    renderPlaying('RETAILER');
-
-    const series = historySeries().map((column) => column.join(','));
-    expect(series.sort()).toEqual(
-      [OWN_INVENTORY.join(','), OWN_BACKLOG.join(','), OWN_ORDERS.join(',')].sort(),
+    const series = historySeries();
+    expect(series).toHaveLength(5);
+    expect(series.map((column) => column.join(',')).sort()).toEqual(
+      [
+        OWN_INVENTORY.join(','),
+        OWN_BACKLOG.join(','),
+        OWN_SUPPLY_LINE.join(','),
+        OWN_INCOMING.join(','),
+        OWN_ORDERS.join(','),
+      ].sort(),
     );
   });
 
-  it('carries nobody else’s figures — every number traces to own_history', () => {
+  it('carries nobody else’s figures — every number is one of the five own_history fields', () => {
     renderPlaying('RETAILER');
 
     const all = historySeries()
       .flat()
       .sort((a, b) => a - b);
-    const own = [...OWN_INVENTORY, ...OWN_BACKLOG, ...OWN_ORDERS].sort((a, b) => a - b);
+    const own = [
+      ...OWN_INVENTORY,
+      ...OWN_BACKLOG,
+      ...OWN_SUPPLY_LINE,
+      ...OWN_INCOMING,
+      ...OWN_ORDERS,
+    ].sort((a, b) => a - b);
     expect(all).toEqual(own);
   });
 
-  it('names no other role in the table', () => {
+  it('names no other role in the tables', () => {
     renderPlaying('RETAILER');
 
-    const text = textOf(historyTable());
-    for (const role of ['WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as Role[]) {
-      expect(text).not.toMatch(new RegExp(role, 'i'));
+    for (const table of historyTables()) {
+      const text = textOf(table);
+      for (const role of ['WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as Role[]) {
+        expect(text).not.toMatch(new RegExp(role, 'i'));
+      }
     }
   });
 
-  it('leaves the table in the accessibility tree, which is what §2.6a is for', () => {
-    // Visually hidden, not hidden: §3.4 needs a screen reader to read it.
+  it('leaves the tables in the accessibility tree, which is what §2.6a is for', () => {
+    // Visually hidden, not hidden: §3.4 needs a screen reader to read them.
     renderPlaying('RETAILER');
 
-    const table = historyTable();
-    expect(table.getAttribute('aria-hidden')).not.toBe('true');
-    expect(table.hasAttribute('hidden')).toBe(false);
-    expect(table.closest('[aria-hidden="true"]')).toBeNull();
+    for (const table of historyTables()) {
+      expect(table.getAttribute('aria-hidden')).not.toBe('true');
+      expect(table.hasAttribute('hidden')).toBe(false);
+      expect(table.closest('[aria-hidden="true"]')).toBeNull();
+    }
   });
 });
 

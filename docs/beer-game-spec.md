@@ -434,7 +434,13 @@ Week 6 settlement
   Total so far                     $21.50
 ```
 
-Plus a running chart of the player's own inventory, backlog and orders across weeks so far.
+Plus a running chart of the player's own history across weeks so far, in two panels:
+
+- **Stock:** on hand above zero, with what is on the way stacked on top of it, and backlog
+  (owed) drawn below zero.
+- **Orders:** the orders the player received against the orders they placed, on one axis.
+
+Every plotted figure is one of the player's own week records; nothing is summed or derived.
 
 ### 9.4 Waiting states
 Every wait MUST say what is being waited for and who is holding it up: *"Waiting for the Distributor to submit"*, *"Host has paused the game"*.
