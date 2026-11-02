@@ -7,7 +7,8 @@ import {
   orderSeriesLabel,
   type ResultsView,
 } from '../charts/chartSetup'
-import { ROLE_LABEL } from '../lobby/roleCopy'
+import { DEMAND_COLOUR, roleStyle } from '../charts/chartTheme'
+import Legend, { type LegendItem } from '../charts/Legend'
 import ErrorBoundary from '../shared/ErrorBoundary'
 import type { Role } from '../../types/game'
 
@@ -99,45 +100,30 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
     )
   }
 
-  function legendButton(key: SeriesKey, label: string, swatch: ReactElement): ReactElement {
-    const shown = !hidden.includes(key)
-    return (
-      <button
-        key={key}
-        type="button"
-        role="switch"
-        aria-checked={shown}
-        data-series={key}
-        onClick={() => toggle(key)}
-        className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-semibold transition ${
-          shown
-            ? 'border-border-strong bg-surface-raised text-ink'
-            : 'border-border bg-surface-sunken text-ink-subtle line-through'
-        }`}
-      >
-        {swatch}
-        {label}
-      </button>
-    )
-  }
+  const legendItems: LegendItem[] = [
+    {
+      key: DEMAND,
+      label: DEMAND_SERIES_LABEL,
+      swatch: { kind: 'line', color: DEMAND_COLOUR, width: 4 },
+    },
+    ...view.per_role.map((role) => ({
+      key: role.role,
+      label: orderSeriesLabel(role.role),
+      swatch: {
+        kind: 'line' as const,
+        color: roleStyle(role.role).colour,
+        dash: orderSeriesDash(role.role),
+      },
+    })),
+  ]
 
   return (
     <div className="flex flex-col gap-3">
-      <div
-        data-print="omit"
-        role="group"
-        aria-label="Show or hide a series"
-        className="flex flex-wrap items-center gap-2"
-      >
-        {legendButton(DEMAND, DEMAND_SERIES_LABEL, <LineSwatch tone="text-ink" width={4} />)}
-        {view.per_role.map((role) =>
-          legendButton(
-            role.role,
-            `${ROLE_LABEL[role.role]} orders`,
-            <LineSwatch tone={SWATCH[role.role]} dash={orderSeriesDash(role.role)} />,
-          ),
-        )}
-      </div>
+      <Legend
+        items={legendItems}
+        hidden={new Set<string>(hidden)}
+        onToggle={(key) => toggle(key as SeriesKey)}
+      />
 
       <ErrorBoundary
         fallback={
@@ -160,48 +146,6 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
       <WeekTable view={visible} />
     </div>
   )
-}
-
-/**
- * A legend swatch drawn as the line itself: the role's hue and the role's
- * dash, so the legend tells the series apart without colour exactly as the
- * chart does. The hue comes from the tokens via `currentColor`.
- */
-function LineSwatch({
-  tone,
-  dash,
-  width = 2.5,
-}: {
-  tone: string
-  dash?: number[]
-  width?: number
-}): ReactElement {
-  return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      viewBox="0 0 28 8"
-      className={`h-2 w-7 shrink-0 ${tone}`}
-    >
-      <line
-        x1="0"
-        y1="4"
-        x2="28"
-        y2="4"
-        stroke="currentColor"
-        strokeWidth={width}
-        strokeDasharray={dash && dash.length > 0 ? dash.join(' ') : undefined}
-      />
-    </svg>
-  )
-}
-
-/** The legend swatches, in the role hues from `src/index.css`. */
-const SWATCH: Record<Role, string> = {
-  RETAILER: 'text-role-retailer',
-  WHOLESALER: 'text-role-wholesaler',
-  DISTRIBUTOR: 'text-role-distributor',
-  FACTORY: 'text-role-factory',
 }
 
 export default BullwhipChart

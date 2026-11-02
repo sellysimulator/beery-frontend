@@ -12,23 +12,16 @@ import {
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import type { WeekRecord } from '../../types/game'
+import { AXIS_COLOUR, GRID_COLOUR, QUANTITY_COLOUR } from '../charts/chartTheme'
 import ErrorBoundary from '../shared/ErrorBoundary'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
-/**
- * The quantity colours from `index.css`. Chart.js paints onto a canvas, where
- * a CSS custom property is not resolved for it, so the three values are
- * written out here and are the same hues the rest of the screen uses.
- */
 const SERIES_COLOUR = {
-  inventory: '#1f6f9c',
-  backlog: '#a8420a',
-  order: '#c98a00',
+  inventory: QUANTITY_COLOUR.inventory,
+  backlog: QUANTITY_COLOUR.backlog,
+  order: QUANTITY_COLOUR.order,
 } as const
-
-const AXIS_COLOUR = '#5c5547'
-const GRID_COLOUR = '#e2dac8'
 
 export interface OwnHistoryChartProps {
   /** `your_state.own_history` — this player's own weeks, and nobody else's. */

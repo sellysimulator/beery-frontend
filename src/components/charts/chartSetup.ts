@@ -25,6 +25,7 @@ import {
 } from 'chart.js'
 import { ROLE_ORDER, type Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
+import { AXIS_COLOUR, DEMAND_COLOUR, GRID_COLOUR, roleStyle } from './chartTheme'
 
 /** Only the controllers, elements, scales and plugins this chart uses. */
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
@@ -187,34 +188,12 @@ export function resultsViewFromResponse(payload: ResultsResponse): ResultsView {
 
 /* ─── Series styling ─── */
 
-/**
- * The palette from `src/index.css`, written out as literals.
- *
- * Chart.js paints onto a canvas, where a CSS custom property is never
- * resolved for it, so these are the same hues the rest of the screen uses:
- * `--color-demand` for true customer demand and the four `--color-role-*`
- * values for the order streams.
- *
+/*
  * Colour is never the only channel. Each order series also carries its own
- * dash pattern and its own legend point style, so the chart survives a
- * projector, a photocopy and colour-blindness.
+ * dash pattern and its own legend point style (`roleStyle`), so the chart
+ * survives a projector, a photocopy and colour-blindness. The hues themselves
+ * live in `chartTheme.ts`, where a test keeps them in step with `index.css`.
  */
-const DEMAND_COLOUR = '#3f3a30'
-const AXIS_COLOUR = '#5c5547'
-const GRID_COLOUR = '#e2dac8'
-
-interface SeriesStyle {
-  colour: string
-  dash: number[]
-  point: 'triangle' | 'rect' | 'rectRot' | 'star'
-}
-
-const ORDER_SERIES: Record<Role, SeriesStyle> = {
-  RETAILER: { colour: '#1f6f9c', dash: [6, 3], point: 'triangle' },
-  WHOLESALER: { colour: '#04705a', dash: [14, 4], point: 'rect' },
-  DISTRIBUTOR: { colour: '#9c4f78', dash: [2, 3], point: 'rectRot' },
-  FACTORY: { colour: '#a8480a', dash: [10, 3, 2, 3], point: 'star' },
-}
 
 /** The label each series carries in the legend and in the hidden table. */
 export const DEMAND_SERIES_LABEL = 'True customer demand'
@@ -229,7 +208,7 @@ export function orderSeriesLabel(role: Role): string {
  * a solid swatch would leave colour as the one thing telling roles apart.
  */
 export function orderSeriesDash(role: Role): number[] {
-  return ORDER_SERIES[role].dash
+  return roleStyle(role).dash
 }
 
 /**
@@ -256,7 +235,7 @@ export function buildBullwhipConfig(view: ResultsView): ChartConfiguration<'line
   const labels = Array.from({ length: weeks }, (_, index) => String(index + 1))
 
   const orderDatasets: ChartDataset<'line'>[] = view.per_role.map((role) => {
-    const style = ORDER_SERIES[role.role]
+    const style = roleStyle(role.role)
     return {
       label: orderSeriesLabel(role.role),
       data: role.orders.slice(0, weeks),

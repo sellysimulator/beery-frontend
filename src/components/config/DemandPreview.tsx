@@ -10,6 +10,7 @@ import {
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import type { DemandConfig } from '../../types/game'
+import { BRAND_SOFT_COLOUR, DEMAND_COLOUR } from '../charts/chartTheme'
 import { EXAMPLE_DRAW_NOTE } from './copy'
 import { demandSeries, isExampleDraw, seriesAttribute } from './demandSeries'
 
@@ -104,8 +105,8 @@ export function DemandPreview({ demand, durationWeeks }: DemandPreviewProps): Re
         {
           label: 'Customer demand',
           data: series,
-          borderColor: cssVar('--color-demand', '#3f3a30'),
-          backgroundColor: cssVar('--color-brand-soft', '#fdefc9'),
+          borderColor: cssVar('--color-demand', DEMAND_COLOUR),
+          backgroundColor: cssVar('--color-brand-soft', BRAND_SOFT_COLOUR),
           borderWidth: 3,
           pointRadius: 0,
           tension: 0,

@@ -23,6 +23,7 @@ import {
   type ChartConfiguration,
   type ChartDataset,
 } from 'chart.js'
+import { AXIS_COLOUR, CURRENT_WEEK_COLOUR, DEMAND_COLOUR, GRID_COLOUR } from '../charts/chartTheme'
 
 /** Only the controllers, elements, scales and plugins this chart uses. */
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
@@ -37,18 +38,6 @@ export const DEMAND_CURVE_LABEL = 'True customer demand'
  * to read pixels off a canvas.
  */
 export const CURRENT_WEEK_POINT_RADIUS = 9
-
-/**
- * The palette from `src/index.css`, written out as literals.
- *
- * A CSS custom property is never resolved on a canvas, so these are copies of
- * `--color-demand` and `--color-brand` and have to be kept in step with that
- * file by hand (`21 §2.2a`).
- */
-const DEMAND_COLOUR = '#3f3a30'
-const CURRENT_WEEK_COLOUR = '#c98a00'
-const AXIS_COLOUR = '#5c5547'
-const GRID_COLOUR = '#e2dac8'
 
 /**
  * The host's demand curve: the **full** series, including the weeks not yet
