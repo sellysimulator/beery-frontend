@@ -55,6 +55,38 @@ function Missing({
   )
 }
 
+/*
+ * The inline bar's fixed log domain, 0.1x to 1000x, clamped at the ends. Its
+ * position is pure geometry from the server's ratio; it carries no text.
+ */
+const BAR_MIN = 0.1
+const BAR_MAX = 1000
+
+function logShare(value: number): number {
+  const clamped = Math.min(BAR_MAX, Math.max(BAR_MIN, value))
+  return (Math.log10(clamped) - Math.log10(BAR_MIN)) / (Math.log10(BAR_MAX) - Math.log10(BAR_MIN))
+}
+
+/** A decorative bar beside the ratio, with a tick where the ratio is 1x. */
+function InlineRatioBar({ ratio }: { ratio: number }): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      data-print="omit"
+      className="relative block h-2 w-24 shrink-0 rounded-sm bg-surface-sunken"
+    >
+      <span
+        className="absolute inset-y-0 left-0 rounded-sm bg-brand"
+        style={{ width: `${logShare(ratio) * 100}%` }}
+      />
+      <span
+        className="absolute -inset-y-0.5 w-px bg-ink-muted"
+        style={{ left: `${logShare(1) * 100}%` }}
+      />
+    </span>
+  )
+}
+
 function StatsRow({ role }: { role: RoleResultView }): ReactElement {
   return (
     <tr className="border-t border-border">
@@ -69,11 +101,16 @@ function StatsRow({ role }: { role: RoleResultView }): ReactElement {
         </span>
       </th>
       <td className="numeric bg-brand-soft px-3 py-3 text-2xl font-bold text-ink">
-        {role.bullwhip_ratio === null ? (
-          <Missing explanation={NULL_RATIO_EXPLANATION} noteId={RATIO_NOTE_ID} />
-        ) : (
-          figure(role.bullwhip_ratio)
-        )}
+        <span className="flex items-center gap-3">
+          {role.bullwhip_ratio === null ? (
+            <Missing explanation={NULL_RATIO_EXPLANATION} noteId={RATIO_NOTE_ID} />
+          ) : (
+            figure(role.bullwhip_ratio)
+          )}
+          {role.bullwhip_ratio !== null && role.bullwhip_ratio > 0 ? (
+            <InlineRatioBar ratio={role.bullwhip_ratio} />
+          ) : null}
+        </span>
       </td>
       <td className="numeric px-3 py-3">{figure(role.order_variance)}</td>
       <td className="numeric px-3 py-3">{role.peak_inventory}</td>

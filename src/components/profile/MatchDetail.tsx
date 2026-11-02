@@ -9,6 +9,8 @@ import {
 } from '../charts/chartSetup'
 import CostSummary from '../results/CostSummary'
 import BullwhipChart from '../results/BullwhipChart'
+import CumulativeCostChart from '../results/CumulativeCostChart'
+import NetInventoryChart from '../results/NetInventoryChart'
 import ChainCostBar from '../results/ChainCostBar'
 import RoleStatsTable from '../results/RoleStatsTable'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -156,9 +158,13 @@ export function MatchDetail({ gameId }: MatchDetailProps): ReactElement {
         <BullwhipChart view={view} />
       </section>
 
+      <CumulativeCostChart view={view} revealed={revealed} />
+
       <section aria-label="Bullwhip ratio per role">
         <RoleStatsTable view={view} />
       </section>
+
+      <NetInventoryChart view={view} />
     </div>
   )
 }

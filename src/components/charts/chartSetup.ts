@@ -13,11 +13,14 @@
  * reads that one view model and nothing else (section 2.0).
  */
 import {
+  BarElement,
   CategoryScale,
   Chart as ChartJS,
+  Filler,
   Legend,
   LineElement,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   Tooltip,
   type ChartConfiguration,
@@ -25,10 +28,23 @@ import {
 } from 'chart.js'
 import { ROLE_ORDER, type Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
-import { AXIS_COLOUR, DEMAND_COLOUR, GRID_COLOUR, roleStyle } from './chartTheme'
+import { AXIS_COLOUR, DEMAND_COLOUR, GRID_COLOUR, roleStyle, withAlpha } from './chartTheme'
 
-/** Only the controllers, elements, scales and plugins this chart uses. */
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
+/**
+ * Only the controllers, elements, scales and plugins the results charts use.
+ * Bars and the log axis serve the ratio bars, `Filler` the net-inventory areas.
+ */
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  LogarithmicScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Filler,
+  Tooltip,
+  Legend,
+)
 
 /* ─── The one view model (section 2.0) ─── */
 
@@ -211,6 +227,11 @@ export function orderSeriesDash(role: Role): number[] {
   return roleStyle(role).dash
 }
 
+export interface BullwhipConfigOptions {
+  /** The role drawn at full strength; the other role lines are faded. */
+  emphasis?: Role | null
+}
+
 /**
  * The reveal, as a configuration object (section 2.2).
  *
@@ -230,17 +251,24 @@ export function orderSeriesDash(role: Role): number[] {
  *
  * Nothing here computes: every plotted number is a server field.
  */
-export function buildBullwhipConfig(view: ResultsView): ChartConfiguration<'line'> {
+export function buildBullwhipConfig(
+  view: ResultsView,
+  options: BullwhipConfigOptions = {},
+): ChartConfiguration<'line'> {
+  const emphasis = options.emphasis ?? null
   const weeks = view.weeks_played
   const labels = Array.from({ length: weeks }, (_, index) => String(index + 1))
 
   const orderDatasets: ChartDataset<'line'>[] = view.per_role.map((role) => {
     const style = roleStyle(role.role)
+    // Emphasis only fades the other role lines; demand is never faded.
+    const colour =
+      emphasis === null || role.role === emphasis ? style.colour : withAlpha(style.colour, 0.35)
     return {
       label: orderSeriesLabel(role.role),
       data: role.orders.slice(0, weeks),
-      borderColor: style.colour,
-      backgroundColor: style.colour,
+      borderColor: colour,
+      backgroundColor: colour,
       borderDash: style.dash,
       borderWidth: 2,
       pointStyle: style.point,

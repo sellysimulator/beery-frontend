@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import http from '../api/http'
 import BullwhipChart from '../components/results/BullwhipChart'
+import CumulativeCostChart from '../components/results/CumulativeCostChart'
+import NetInventoryChart from '../components/results/NetInventoryChart'
 import ChainCostBar from '../components/results/ChainCostBar'
 import CostSummary, { formatMoney } from '../components/results/CostSummary'
 import DebriefNotes from '../components/results/DebriefNotes'
@@ -397,6 +399,8 @@ export function ResultsPage(): ReactElement {
           <BullwhipChart view={view} />
         </section>
 
+        <CumulativeCostChart view={view} revealed={revealed} />
+
         <section
           data-print="keep"
           aria-labelledby="results-ratios"
@@ -411,6 +415,8 @@ export function ResultsPage(): ReactElement {
           </p>
           <RoleStatsTable view={view} />
         </section>
+
+        <NetInventoryChart view={view} />
 
         <WeekByWeek view={view} />
 

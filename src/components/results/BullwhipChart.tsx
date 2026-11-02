@@ -10,7 +10,9 @@ import {
 import { DEMAND_COLOUR, roleStyle } from '../charts/chartTheme'
 import Legend, { type LegendItem } from '../charts/Legend'
 import ErrorBoundary from '../shared/ErrorBoundary'
-import type { Role } from '../../types/game'
+import { ROLE_ORDER, type Role } from '../../types/game'
+import { ROLE_LABEL } from '../lobby/roleCopy'
+import BullwhipRatioBars from './BullwhipRatioBars'
 
 export interface BullwhipChartProps {
   view: ResultsView
@@ -20,6 +22,13 @@ export interface BullwhipChartProps {
 const DEMAND = 'DEMAND'
 
 type SeriesKey = Role | typeof DEMAND
+
+/** The stepper's stages: the customer alone, then each role in `ROLE_ORDER`. */
+const STAGE_COUNT = ROLE_ORDER.length + 1
+
+function stageLabel(stage: number): string {
+  return stage === 0 ? 'Customer' : `+ ${ROLE_LABEL[ROLE_ORDER[stage - 1]]}`
+}
 
 /**
  * The same five series, read out as a table (section 2.2a).
@@ -82,6 +91,8 @@ function WeekTable({ view }: { view: ResultsView }): ReactElement {
  */
 export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
   const [hidden, setHidden] = useState<readonly SeriesKey[]>([])
+  // `null` is the start state: no stage chosen, every series on.
+  const [stage, setStage] = useState<number | null>(null)
 
   const visible = useMemo<ResultsView>(() => {
     if (hidden.length === 0) return view
@@ -92,9 +103,18 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
     }
   }, [view, hidden])
 
-  const config = buildBullwhipConfig(visible)
+  const emphasis = stage !== null && stage >= 1 ? ROLE_ORDER[stage - 1] : null
+  const config = buildBullwhipConfig(visible, { emphasis })
+  const shownRoles = ROLE_ORDER.filter((role) => !hidden.includes(role))
+
+  // A stage shows demand plus the first `next` roles, and hides the rest.
+  function goToStage(next: number): void {
+    setStage(next)
+    setHidden(ROLE_ORDER.slice(next))
+  }
 
   function toggle(key: SeriesKey): void {
+    setStage(null)
     setHidden((current) =>
       current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
     )
@@ -119,6 +139,37 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
 
   return (
     <div className="flex flex-col gap-3">
+      <div
+        data-print="omit"
+        role="group"
+        aria-label="Bring the chain in stage by stage"
+        className="flex flex-wrap items-center gap-2"
+      >
+        {Array.from({ length: STAGE_COUNT }, (_, index) => (
+          <button
+            key={index}
+            type="button"
+            aria-pressed={stage === index}
+            onClick={() => goToStage(index)}
+            className={`rounded-md border px-3 py-1.5 text-sm font-semibold transition ${
+              stage === index
+                ? 'border-brand bg-brand-soft text-ink'
+                : 'border-border-strong bg-surface-raised text-ink'
+            }`}
+          >
+            {stageLabel(index)}
+          </button>
+        ))}
+        <button
+          type="button"
+          disabled={stage === STAGE_COUNT - 1}
+          onClick={() => goToStage(stage === null ? 0 : stage + 1)}
+          className="rounded-md border border-border-strong px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+        >
+          Next stage
+        </button>
+      </div>
+
       <Legend
         items={legendItems}
         hidden={new Set<string>(hidden)}
@@ -144,6 +195,10 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
       </p>
 
       <WeekTable view={visible} />
+
+      <div data-print="omit">
+        <BullwhipRatioBars view={view} shown={shownRoles} />
+      </div>
     </div>
   )
 }
