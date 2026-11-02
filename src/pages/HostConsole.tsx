@@ -210,6 +210,7 @@ export function HostConsole(): ReactElement {
         <DemandCurve
           demandSeries={hostState.demand_series}
           currentWeek={hostState.week}
+          orderHistory={hostState.order_history}
         />
       </div>
 

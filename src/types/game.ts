@@ -367,6 +367,11 @@ export interface HostView {
   chain_total_cost: number
   /** One entry per role, in ROLE_ORDER. */
   roles: Record<Role, HostRoleView>
+  /**
+   * Each role's order for every closed week, in week order. Absent on an older
+   * backend, so every reader treats it as optional.
+   */
+  order_history?: Record<Role, number[]>
 }
 
 /* ─── REST: rooms (10 section 2) ─── */

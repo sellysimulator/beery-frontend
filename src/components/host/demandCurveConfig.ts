@@ -22,8 +22,27 @@ import {
   Tooltip,
   type ChartConfiguration,
   type ChartDataset,
+  type ChartType,
+  type Plugin,
 } from 'chart.js'
-import { AXIS_COLOUR, CURRENT_WEEK_COLOUR, DEMAND_COLOUR, GRID_COLOUR } from '../charts/chartTheme'
+import { ROLE_ORDER, type Role } from '../../types/game'
+import {
+  AXIS_COLOUR,
+  CURRENT_WEEK_COLOUR,
+  DEMAND_COLOUR,
+  GRID_COLOUR,
+  roleStyle,
+  withAlpha,
+} from '../charts/chartTheme'
+import { orderSeriesLabel } from '../charts/chartSetup'
+
+declare module 'chart.js' {
+  interface PluginOptionsByType<TType extends ChartType> {
+    currentWeekBand?: { index: number } | false
+    // Keeps the type parameter in use, as Chart.js's own declarations do.
+    __currentWeekBandType?: TType
+  }
+}
 
 /** Only the controllers, elements, scales and plugins this chart uses. */
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
@@ -38,6 +57,43 @@ export const DEMAND_CURVE_LABEL = 'True customer demand'
  * to read pixels off a canvas.
  */
 export const CURRENT_WEEK_POINT_RADIUS = 9
+
+export interface DemandCurveOptions {
+  /**
+   * Each role's order per closed week (`host_state.order_history`). Drawn as
+   * one line per role present; absent or null draws the demand line alone.
+   */
+  orderHistory?: Partial<Record<Role, number[]>> | null
+}
+
+/** Shade of the future: the same ink at a third of its strength, dashed. */
+const FUTURE_COLOUR = withAlpha(DEMAND_COLOUR, 0.35)
+const FUTURE_DASH = [4, 4]
+
+/**
+ * Shades the current week's column behind the lines. An inline plugin so the
+ * band is part of the configuration object, not of the component.
+ */
+const currentWeekBand: Plugin<'line'> = {
+  id: 'currentWeekBand',
+  beforeDatasetsDraw(chart, _args, options) {
+    const band = options as { index?: number } | false | undefined
+    if (!band || typeof band.index !== 'number') return
+    const x = chart.scales.x
+    const { top, bottom } = chart.chartArea
+    if (!x || band.index < 0 || band.index >= chart.data.labels!.length) return
+    const centre = x.getPixelForValue(band.index)
+    const half =
+      chart.data.labels!.length > 1
+        ? Math.abs(x.getPixelForValue(1) - x.getPixelForValue(0)) / 2
+        : 8
+    const { ctx } = chart
+    ctx.save()
+    ctx.fillStyle = withAlpha(CURRENT_WEEK_COLOUR, 0.14)
+    ctx.fillRect(centre - half, top, half * 2, bottom - top)
+    ctx.restore()
+  },
+}
 
 /**
  * The host's demand curve: the **full** series, including the weeks not yet
@@ -55,6 +111,7 @@ export const CURRENT_WEEK_POINT_RADIUS = 9
 export function buildDemandCurveConfig(
   demandSeries: number[],
   currentWeek: number,
+  options: DemandCurveOptions = {},
 ): ChartConfiguration<'line'> {
   const currentIndex = currentWeek - 1
   const isCurrent = (index: number): boolean => index === currentIndex
@@ -81,14 +138,41 @@ export function buildDemandCurveConfig(
     ),
     pointBorderColor: DEMAND_COLOUR,
     pointBorderWidth: demandSeries.map((_, index) => (isCurrent(index) ? 3 : 1)),
+    // Weeks after the current one have not happened: drawn faded and dashed.
+    segment: {
+      borderColor: (ctx) => (ctx.p1DataIndex > currentIndex ? FUTURE_COLOUR : DEMAND_COLOUR),
+      borderDash: (ctx) => (ctx.p1DataIndex > currentIndex ? FUTURE_DASH : undefined),
+    },
   }
+
+  // Closed weeks only, exactly as the server sent them. Before demand, so the
+  // demand line is drawn last and stays on top.
+  const history = options.orderHistory
+  const orderDatasets: ChartDataset<'line'>[] = history
+    ? ROLE_ORDER.filter((role) => history[role] !== undefined).map((role) => {
+        const style = roleStyle(role)
+        return {
+          label: orderSeriesLabel(role),
+          data: [...(history[role] as number[])],
+          borderColor: style.colour,
+          backgroundColor: style.colour,
+          borderDash: style.dash,
+          borderWidth: 2,
+          pointStyle: style.point,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          tension: 0,
+        }
+      })
+    : []
 
   return {
     type: 'line',
     data: {
       labels: demandSeries.map((_, index) => String(index + 1)),
-      datasets: [dataset],
+      datasets: [...orderDatasets, dataset],
     },
+    plugins: [currentWeekBand],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -97,6 +181,7 @@ export function buildDemandCurveConfig(
       plugins: {
         legend: { display: false },
         tooltip: { enabled: true },
+        currentWeekBand: { index: currentIndex },
       },
       scales: {
         x: {

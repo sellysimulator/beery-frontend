@@ -192,7 +192,17 @@ export function ChainDiagram({ roles, presenting = false }: ChainDiagramProps): 
                   />
                 </span>
               </div>
-              {last ? null : <FlowLane index={index + 1} large={presenting} />}
+              {last ? null : (
+                <FlowLane
+                  index={index + 1}
+                  large={presenting}
+                  inTransit={
+                    presenting
+                      ? undefined
+                      : { beer: view.supply_line, orders: view.orders_in_flight }
+                  }
+                />
+              )}
             </li>
           )
         })}

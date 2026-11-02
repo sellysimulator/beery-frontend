@@ -1346,3 +1346,193 @@ describe('§2.0: the module’s shape', () => {
     expect(bodyText().length).toBeGreaterThan(0);
   });
 });
+
+// ===========================================================================
+// BE-5 (CHARTS-PLAN.md): the live order streams in the curve's table, and the
+// lane chips (20 §2.1b). Appended; nothing above this line is changed.
+//
+// The file's `demandCurveConfig` wrapper forwards only (series, week), so the
+// builder's options are not visible here. Everything below is therefore read
+// from the DOM: the curve's hidden table and the chain's `data-chip` elements.
+// ===========================================================================
+
+/** Closed weeks are 1..WEEK-1. Values are unlike every other number in the view. */
+function be5Orders(role: Role): number[] {
+  const base = 5000 + ROLE_ORDER.indexOf(role) * 100;
+  return Array.from({ length: WEEK - 1 }, (_, i) => base + i);
+}
+
+function be5OrderHistory(): Record<Role, number[]> {
+  return {
+    RETAILER: be5Orders('RETAILER'),
+    WHOLESALER: be5Orders('WHOLESALER'),
+    DISTRIBUTOR: be5Orders('DISTRIBUTOR'),
+    FACTORY: be5Orders('FACTORY'),
+  };
+}
+
+function be5HeaderLabels(table: HTMLElement): string[] {
+  const row = table.querySelector<HTMLElement>('tr, [role="row"]');
+  return Array.from(row?.children ?? []).map((cell) => textOf(cell));
+}
+
+/** One text per data row for the column headed `label`, or null when there is no such column. */
+function be5Column(table: HTMLElement, label: string): string[] | null {
+  const index = be5HeaderLabels(table).indexOf(label);
+  if (index < 0) return null;
+  return dataRows(table).map((row) => textOf(row.children[index]));
+}
+
+async function be5Label(role: Role): Promise<string> {
+  const { orderSeriesLabel } = await import('../components/charts/chartSetup');
+  return orderSeriesLabel(role);
+}
+
+describe('BE-5 acceptance 2: with order_history, the curve’s table carries each role’s closed-week orders', () => {
+  it.each(ROLE_ORDER)('%s: a column headed with its series label, orders for closed weeks, empty for open ones', async (role) => {
+    renderRunning(hostView({ order_history: be5OrderHistory() }));
+
+    const column = be5Column(demandTable(), await be5Label(role));
+    expect(column).not.toBeNull();
+    expect(column).toHaveLength(DURATION);
+    be5Orders(role).forEach((value, i) => expect(numbersIn(column![i])).toEqual([value]));
+    for (let i = WEEK - 1; i < DURATION; i += 1) expect(column![i]).toBe('');
+  });
+
+  it('keeps the demand figures and the week-per-row shape', () => {
+    renderRunning(hostView({ order_history: be5OrderHistory() }));
+
+    const rows = dataRows(demandTable());
+    expect(rows).toHaveLength(DURATION);
+    rows.forEach((row, i) => expect(hasNumber(textOf(row), DEMAND_SERIES[i])).toBe(true));
+  });
+});
+
+describe('BE-5 failure mode: a missing order_history (older backend) renders as today', () => {
+  it('renders the console and the table with no order columns and no error', async () => {
+    renderRunning(hostView());
+
+    const table = demandTable();
+    expect(dataRows(table)).toHaveLength(DURATION);
+    for (const role of ROLE_ORDER) expect(be5Column(table, await be5Label(role))).toBeNull();
+  });
+
+  it('has exactly four fewer columns than with the overlay', () => {
+    const plain = renderRunning(hostView());
+    const without = be5HeaderLabels(demandTable()).length;
+    plain.unmount();
+    act(() => {
+      useGameStore.getState().reset();
+    });
+    seq = 0;
+    renderRunning(hostView({ order_history: be5OrderHistory() }));
+
+    expect(be5HeaderLabels(demandTable()).length).toBe(without + 4);
+  });
+});
+
+/** Every chip of a kind, in document order. */
+function be5Chips(kind: 'beer' | 'orders', root: ParentNode = document.body): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(`[data-chip="${kind}"]`));
+}
+
+/** The pair of numbers (beer, orders) of each lane that carries chips. */
+function be5LanePairs(root: ParentNode = document.body): Array<[number, number]> {
+  return be5Chips('beer', root).map((beer) => {
+    let node: HTMLElement | null = beer.parentElement;
+    while (node && node.querySelectorAll('[data-chip="orders"]').length === 0) node = node.parentElement;
+    if (!node || node.querySelectorAll('[data-chip="beer"]').length !== 1) {
+      throw new Error('a beer chip and an orders chip must share a lane, with no other lane’s chips');
+    }
+    return [Number(textOf(beer).match(/-?\d+/)?.[0]), Number(textOf(node.querySelector('[data-chip="orders"]')).match(/-?\d+/)?.[0])];
+  });
+}
+
+describe('BE-5 acceptance 2: the console’s lanes carry count chips', () => {
+  it('has three lanes with chips: none for Customer–Retailer, none for the Factory', () => {
+    renderRunning();
+
+    expect(be5Chips('beer')).toHaveLength(3);
+    expect(be5Chips('orders')).toHaveLength(3);
+  });
+
+  it('lane i+1 shows the upstream-of-it role’s supply_line and orders_in_flight', () => {
+    renderRunning();
+
+    const pairs = be5LanePairs();
+    const expected: Array<[number, number]> = (['RETAILER', 'WHOLESALER', 'DISTRIBUTOR'] as Role[]).map((role) => [
+      ROLE_NUMBERS[role].supply_line,
+      ROLE_NUMBERS[role].orders_in_flight,
+    ]);
+    expect([...pairs].sort((a, b) => a[0] - b[0])).toEqual(expected);
+  });
+
+  it('never shows the Factory’s figures in a chip', () => {
+    renderRunning();
+
+    const text = [...be5Chips('beer'), ...be5Chips('orders')].map((c) => textOf(c)).join(' ');
+    expect(hasNumber(text, ROLE_NUMBERS.FACTORY.supply_line)).toBe(false);
+    expect(hasNumber(text, ROLE_NUMBERS.FACTORY.orders_in_flight)).toBe(false);
+  });
+
+  it('labels each chip for assistive tech, shows the number as visible text, outside any aria-hidden', () => {
+    renderRunning();
+
+    for (const chip of be5Chips('beer')) {
+      const n = Number(textOf(chip).match(/-?\d+/)?.[0]);
+      expect(chip.getAttribute('aria-label')).toBe(`Beer on the way: ${n}`);
+      expect(chip.closest('[aria-hidden="true"]')).toBeNull();
+    }
+    for (const chip of be5Chips('orders')) {
+      const n = Number(textOf(chip).match(/-?\d+/)?.[0]);
+      expect(chip.getAttribute('aria-label')).toBe(`Orders in flight: ${n}`);
+      expect(chip.closest('[aria-hidden="true"]')).toBeNull();
+    }
+  });
+
+  it('shows a zero count rather than hiding the chip', () => {
+    const zero = { supply_line: 0, orders_in_flight: 0 };
+    renderRunning(hostView({}, { RETAILER: zero, WHOLESALER: zero, DISTRIBUTOR: zero }));
+
+    expect(be5Chips('beer')).toHaveLength(3);
+    for (const chip of be5Chips('beer')) expect(chip.getAttribute('aria-label')).toBe('Beer on the way: 0');
+    for (const chip of be5Chips('orders')) expect(chip.getAttribute('aria-label')).toBe('Orders in flight: 0');
+  });
+
+  it('follows a later host_state', () => {
+    renderRunning();
+    deliverHostState(hostView({}, { WHOLESALER: { supply_line: 777, orders_in_flight: 778 } }));
+
+    expect(be5LanePairs()).toContainEqual([777, 778]);
+  });
+});
+
+describe('BE-5 acceptance 3 / failure mode: no chips on the player chain', () => {
+  it('FlowLane without inTransit renders no chip at all', async () => {
+    const { FlowLane } = await import('../components/game/ChainFlow');
+    const { container } = render(<FlowLane index={1} />);
+
+    expect(container.querySelector('[data-chip]')).toBeNull();
+    expect(textOf(container)).not.toMatch(/beer on the way|orders in flight/i);
+  });
+
+  it('FlowLane with inTransit renders both chips, zero included', async () => {
+    const { FlowLane } = await import('../components/game/ChainFlow');
+    const { container } = render(<FlowLane index={1} inTransit={{ beer: 0, orders: 9 }} />);
+
+    expect(container.querySelector('[data-chip="beer"]')?.getAttribute('aria-label')).toBe('Beer on the way: 0');
+    expect(container.querySelector('[data-chip="orders"]')?.getAttribute('aria-label')).toBe('Orders in flight: 9');
+  });
+});
+
+describe('BE-5 acceptance 3 / failure mode: the player ChainFlow never renders chips', () => {
+  it.each(ROLE_ORDER)('%s: no [data-chip] and no chip aria-label', async (role) => {
+    const mod = (await import('../components/game/ChainFlow')) as unknown as Record<string, unknown>;
+    const ChainFlow = (mod.ChainFlow ?? mod.default) as ComponentType<{ role: Role }>;
+    const { container } = render(<ChainFlow role={role} />);
+
+    expect(container.firstChild).not.toBeNull();
+    expect(container.querySelector('[data-chip]')).toBeNull();
+    expect(container.querySelector('[aria-label^="Beer on the way"], [aria-label^="Orders in flight"]')).toBeNull();
+  });
+});

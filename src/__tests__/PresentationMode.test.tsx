@@ -851,3 +851,146 @@ describe('FAILURE MODE 9: the chain diagram’s backlog indicator carries a non-
     expect(links.some(nonColourSignal)).toBe(true);
   });
 });
+
+// ===========================================================================
+// BE-5 (CHARTS-PLAN.md): no order stream and no lane chip under `presenting`
+// (20 §2.1b). Appended; nothing above this line is changed. The builder is
+// wrapped with the real implementation underneath so its options are visible.
+// ===========================================================================
+
+const be5Rec = vi.hoisted(() => ({
+  calls: [] as Array<{ series: number[]; week: number; options: unknown }>,
+}));
+
+vi.mock('../components/host/demandCurveConfig', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  const build = actual.buildDemandCurveConfig as (...args: unknown[]) => unknown;
+  return {
+    ...actual,
+    buildDemandCurveConfig: (series: number[], week: number, options?: unknown) => {
+      be5Rec.calls.push({ series, week, options });
+      return build(series, week, options);
+    },
+  };
+});
+
+function be5Orders(role: Role): number[] {
+  const base = 5000 + ROLE_ORDER.indexOf(role) * 100;
+  return Array.from({ length: WEEK - 1 }, (_, i) => base + i);
+}
+
+const BE5_HISTORY: Record<Role, number[]> = {
+  RETAILER: be5Orders('RETAILER'),
+  WHOLESALER: be5Orders('WHOLESALER'),
+  DISTRIBUTOR: be5Orders('DISTRIBUTOR'),
+  FACTORY: be5Orders('FACTORY'),
+};
+const BE5_ALL_ORDERS = ROLE_ORDER.flatMap((role) => BE5_HISTORY[role]);
+
+function be5HeaderLabels(table: HTMLElement): string[] {
+  const row = table.querySelector<HTMLElement>('tr, [role="row"]');
+  return Array.from(row?.children ?? []).map((cell) => textOf(cell));
+}
+
+async function be5Labels(): Promise<string[]> {
+  const { orderSeriesLabel } = await import('../components/charts/chartSetup');
+  return ROLE_ORDER.map((role) => orderSeriesLabel(role));
+}
+
+async function be5Curve() {
+  const mod = (await import('../components/host/DemandCurve')) as unknown as Record<string, unknown>;
+  const found = mod.DemandCurve ?? mod.default;
+  return found as ComponentType<{
+    demandSeries: number[];
+    currentWeek: number;
+    presenting?: boolean;
+    orderHistory?: Partial<Record<Role, number[]>> | null;
+  }>;
+}
+
+describe('BE-5 acceptance 1 / failure mode: DemandCurve never overlays orders when presenting', () => {
+  beforeEach(() => {
+    be5Rec.calls.length = 0;
+  });
+
+  it('presenting: the builder gets no orderHistory and the table has no order column, whatever it was given', async () => {
+    const DemandCurve = await be5Curve();
+    const { container } = render(
+      <DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting orderHistory={BE5_HISTORY} />,
+    );
+
+    expect(be5Rec.calls.length).toBeGreaterThan(0);
+    for (const call of be5Rec.calls) {
+      expect((call.options as { orderHistory?: unknown } | undefined)?.orderHistory ?? null).toBeNull();
+    }
+    const text = textOf(container);
+    for (const value of BE5_ALL_ORDERS) expect(hasNumber(text, value)).toBe(false);
+    const headers = be5HeaderLabels(demandTable(container));
+    for (const label of await be5Labels()) expect(headers).not.toContain(label);
+  });
+
+  it('not presenting: the builder gets the orderHistory and the table shows the orders', async () => {
+    const DemandCurve = await be5Curve();
+    const { container } = render(
+      <DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting={false} orderHistory={BE5_HISTORY} />,
+    );
+
+    const last = be5Rec.calls[be5Rec.calls.length - 1];
+    expect((last.options as { orderHistory?: unknown }).orderHistory).toEqual(BE5_HISTORY);
+    const headers = be5HeaderLabels(demandTable(container));
+    for (const label of await be5Labels()) expect(headers).toContain(label);
+    expect(hasNumber(textOf(container), BE5_HISTORY.RETAILER[0])).toBe(true);
+  });
+
+  it.each([['undefined', undefined], ['null', null]])(
+    'not presenting with orderHistory %s: no overlay, no new columns, no error',
+    async (_name, value) => {
+      const DemandCurve = await be5Curve();
+      const plain = render(<DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting />);
+      const base = be5HeaderLabels(demandTable(plain.container)).length;
+      plain.unmount();
+
+      const { container } = render(
+        <DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting={false} orderHistory={value} />,
+      );
+
+      const last = be5Rec.calls[be5Rec.calls.length - 1];
+      expect((last.options as { orderHistory?: unknown } | undefined)?.orderHistory ?? null).toBeNull();
+      expect(be5HeaderLabels(demandTable(container)).length).toBe(base);
+    },
+  );
+});
+
+describe('BE-5 failure mode: order streams and chips do not leak into the projector view', () => {
+  it('the console shows them, the presenting root does not', async () => {
+    const user = userEvent.setup();
+    renderRunning({ ...hostView(), order_history: BE5_HISTORY });
+    const labels = await be5Labels();
+
+    // Not vacuous: the console beneath carries the streams and the chips.
+    const consoleHeaders = be5HeaderLabels(demandTable(document.body));
+    for (const label of labels) expect(consoleHeaders).toContain(label);
+    expect(document.querySelectorAll('[data-chip]').length).toBe(6);
+
+    await enterPresentation(user);
+    const root = presentingRoot();
+
+    const headers = be5HeaderLabels(demandTable(root));
+    for (const label of labels) expect(headers).not.toContain(label);
+    const text = textOf(root);
+    for (const value of BE5_ALL_ORDERS) expect(hasNumber(text, value)).toBe(false);
+    expect(root.querySelector('[data-chip]')).toBeNull();
+    expect(text).not.toMatch(/beer on the way|orders in flight/i);
+    expect(root.querySelector('[aria-label^="Beer on the way"], [aria-label^="Orders in flight"]')).toBeNull();
+  });
+
+  it('a host_state without order_history presents without error', async () => {
+    const user = userEvent.setup();
+    renderRunning();
+
+    await enterPresentation(user);
+
+    expect(presenting()).toBe(true);
+    expect(presentingRoot().querySelector('[data-chip]')).toBeNull();
+  });
+});
