@@ -74,8 +74,13 @@ src/
   utils/storage.ts       the only module that touches localStorage/sessionStorage
   pages/                 one module per route; each exports `route`
   components/
-    shared/  lobby/  config/  game/  host/  results/  profile/
-    manual/  charts/chartSetup.ts
+    shared/  lobby/  config/  game/  host/  results/  profile/  manual/
+    charts/              chartSetup.ts (results view model + bullwhip builder),
+                         chartTheme.ts (every canvas colour), ChartBox.tsx, Legend.tsx,
+                         plugins/crosshairSync.ts + plugins/CrosshairGroup.tsx
+    results/resultsChartsConfig.ts, game/ownHistoryConfig.ts,
+    host/demandCurveConfig.ts, profile/bullwhipTrendConfig.ts
+                         the other charts' pure builders, one module beside each chart
     game/views/          Board2D.tsx, Board3D.tsx (lazy), BoardViewToggle.tsx,
                          boardViewChoice.ts — the two registered boards and the seam
     game/views/board3d/  the 3D scene. sceneModel.ts is the pure heart (see §6.14);
@@ -115,7 +120,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-02: **958 tests / 28 files passed**, `eslint .` clean, `tsc -b`
+Verified green on 2026-11-02 (after the chart changes): **1206 tests / 37 files passed**, `eslint .` clean, `tsc -b`
 clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
@@ -224,10 +229,32 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     400ms, sends over the socket when connected and falls back to
     `PUT /rooms/{code}/config` when not (that REST reply has no `seq`, so it goes through
     `setConfig`, never `applyConfigUpdated`).
-13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal in
-    `components/charts/chartSetup.ts`, which also owns the `ResultsView` view model and the
-    pure `buildBullwhipConfig` builder — a canvas is opaque to jsdom, so the *config object*
-    is what tests assert.
+13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal (each chart module
+    registers what it uses; `ChartJS.register` is idempotent). `components/charts/chartSetup.ts`
+    owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
+    builder** whose output the component passes straight through: a canvas is opaque to
+    jsdom, so the *config object* is what tests assert, and tests never mock `chart.js` or
+    `react-chartjs-2`. The kit (2026-11-02, `../CHARTS-PLAN.md` BE-1):
+    - **`charts/chartTheme.ts`** is the only place a canvas colour literal may live
+      (`CHART_TOKENS`, keyed by the `--color-*` token it mirrors, plus `roleStyle(role)` and
+      `withAlpha`). `chartTheme.test.ts` fails when a literal drifts from `src/index.css`. A
+      new hex anywhere else in `src/` is a bug, except in `board3d/`'s own frozen palette.
+    - **`charts/ChartBox.tsx`** holds every new chart: an HTML title, the canvas in a
+      `role="img"` wrapper inside an `ErrorBoundary`, and a "Show table" toggle that unhides
+      the *same* screen-reader table, never a second copy.
+    - **`charts/Legend.tsx`** is the DOM legend. Its switches are `role="switch"` +
+      `aria-checked` + `data-series`, named exactly by the series label. The canvas legend
+      stays off.
+    - **`charts/plugins/crosshairSync.ts`** syncs the hovered week across charts that opt
+      in with `plugins.crosshairSync.group`. Wrap them in `plugins/CrosshairGroup.tsx` and
+      import `CrosshairGroup`/`useCrosshairGroup` from there.
+
+    Plot **server fields only**: a combination of two values is shown with geometry
+    (stacking, a sign flip below the axis), never as a computed series (rule 14's principle).
+    **B5 and B6, the host's live order streams on `DemandCurve` and the lane chips on
+    `ChainDiagram`, render on the host console only, never under `presenting`**: players
+    watch the projector, and mid-game order quantities on it would leak exactly what the game
+    hides.
 14. **The 3D board computes nothing and emits nothing.** `board3d/sceneModel.ts`'s
     `buildSceneModel(props)` returns a plain object — every pile count, sign string, fixture
     id, model placement, light, accent and prompt — and `WarehouseScene` walks it and emits

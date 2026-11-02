@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 958 passed, 28 files
+npm run test:run        # vitest run — 1206 passed, 37 files
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -149,7 +149,9 @@ src/
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export
 │   ├── profile/                match history, stats, role breakdown, guest-claim prompt
-│   ├── charts/chartSetup.ts    piecemeal Chart.js registration + the pure config builders
+│   ├── charts/                 chartSetup.ts (results view model + bullwhip builder),
+│   │                           chartTheme.ts (every canvas colour), ChartBox, Legend,
+│   │                           plugins/ (crosshair sync)
 │   └── manual/                 ManualBook — the react-pageflip book both manuals are read in
 └── __tests__/                  vitest, flat, one file per feature + setup.ts
 ```
