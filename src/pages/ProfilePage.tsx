@@ -1,29 +1,30 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { errorMessage } from '../api/http'
+import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { errorMessage } from "../api/http";
 import {
   getMyGames,
   getMyStats,
   type MatchHistoryResponse,
   type UserStatsResponse,
-} from '../api/users'
-import { useAuth } from '../auth/AuthContext'
-import MatchDetail from '../components/profile/MatchDetail'
-import MatchHistoryTable from '../components/profile/MatchHistoryTable'
-import ProfileClaimPrompt from '../components/profile/ProfileClaimPrompt'
-import RoleBreakdown from '../components/profile/RoleBreakdown'
-import StatsSummary from '../components/profile/StatsSummary'
-import Avatar from '../components/shared/Avatar'
-import LoadingSpinner from '../components/shared/LoadingSpinner'
-import type { RouteDescriptor } from '../routes/registry'
+} from "../api/users";
+import { useAuth } from "../auth/AuthContext";
+import BullwhipTrend from "../components/profile/BullwhipTrend";
+import MatchDetail from "../components/profile/MatchDetail";
+import MatchHistoryTable from "../components/profile/MatchHistoryTable";
+import ProfileClaimPrompt from "../components/profile/ProfileClaimPrompt";
+import RoleBreakdown from "../components/profile/RoleBreakdown";
+import StatsSummary from "../components/profile/StatsSummary";
+import Avatar from "../components/shared/Avatar";
+import LoadingSpinner from "../components/shared/LoadingSpinner";
+import type { RouteDescriptor } from "../routes/registry";
 
 /** Page size 20, and the client never asks for more (§3.2, `15 §3.5`). */
-const PAGE_SIZE = 20
+const PAGE_SIZE = 20;
 
 /** `?page=` is user input: a missing, malformed or zero value is page 1. */
 function pageFromQuery(raw: string | null): number {
-  const value = Number(raw)
-  return Number.isSafeInteger(value) && value >= 1 ? value : 1
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 1 ? value : 1;
 }
 
 /**
@@ -32,30 +33,32 @@ function pageFromQuery(raw: string | null): number {
  * line between "you have a profile" and "you could have one".
  */
 function SignInPrompt(): ReactElement {
-  const { signInWithGoogle } = useAuth()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const { signInWithGoogle } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function signIn(): Promise<void> {
-    setBusy(true)
-    setError('')
+    setBusy(true);
+    setError("");
     try {
-      await signInWithGoogle()
+      await signInWithGoogle();
     } catch (err) {
-      setError(errorMessage(err, 'Signing in did not work.'))
+      setError(errorMessage(err, "Signing in did not work."));
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
   }
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-16">
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold">Sign in to keep your results.</h1>
+        <h1 className="text-3xl font-semibold">
+          Sign in to keep your results.
+        </h1>
         <p className="text-ink-muted">
-          A profile is where your games, your costs and how much you amplified demand add
-          up across sessions. Playing as a guest works exactly the same; it just leaves
-          nothing behind.
+          A profile is where your games, your costs and how much you amplified
+          demand add up across sessions. Playing as a guest works exactly the
+          same; it just leaves nothing behind.
         </p>
       </header>
 
@@ -66,7 +69,7 @@ function SignInPrompt(): ReactElement {
           onClick={() => void signIn()}
           className="rounded-md bg-brand px-4 py-2 font-semibold text-ink-inverse transition hover:bg-brand-strong disabled:bg-surface-sunken disabled:text-ink-subtle"
         >
-          {busy ? 'Signing in…' : 'Sign in with Google'}
+          {busy ? "Signing in…" : "Sign in with Google"}
         </button>
       </div>
 
@@ -86,7 +89,7 @@ function SignInPrompt(): ReactElement {
         </Link>
       </p>
     </div>
-  )
+  );
 }
 
 /**
@@ -99,12 +102,12 @@ function SignInPrompt(): ReactElement {
  * mistake this page is shaped to avoid.
  */
 function AuthenticatedProfile(): ReactElement {
-  const { firebaseUser, logout } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const page = pageFromQuery(searchParams.get('page'))
+  const { firebaseUser, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = pageFromQuery(searchParams.get("page"));
 
-  const [stats, setStats] = useState<UserStatsResponse | null>(null)
-  const [statsError, setStatsError] = useState('')
+  const [stats, setStats] = useState<UserStatsResponse | null>(null);
+  const [statsError, setStatsError] = useState("");
 
   /**
    * The history, tagged with the page it answers for.
@@ -114,68 +117,80 @@ function AuthenticatedProfile(): ReactElement {
    * render. It is also what makes "a page replaces the table" (§3.2) true by
    * construction: there is one page in state, never a growing list.
    */
-  const [history, setHistory] = useState<{ page: number; data: MatchHistoryResponse } | null>(
-    null,
-  )
-  const [historyError, setHistoryError] = useState<{ page: number; message: string } | null>(
-    null,
-  )
+  const [history, setHistory] = useState<{
+    page: number;
+    data: MatchHistoryResponse;
+  } | null>(null);
+  const [historyError, setHistoryError] = useState<{
+    page: number;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     void (async () => {
       try {
-        const response = await getMyStats()
-        if (!cancelled) setStats(response)
+        const response = await getMyStats();
+        if (!cancelled) setStats(response);
       } catch (err) {
-        if (!cancelled) setStatsError(errorMessage(err, 'Your statistics could not be loaded.'))
+        if (!cancelled)
+          setStatsError(
+            errorMessage(err, "Your statistics could not be loaded."),
+          );
       }
-    })()
+    })();
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     void (async () => {
       try {
-        const response = await getMyGames(page, PAGE_SIZE)
+        const response = await getMyGames(page, PAGE_SIZE);
         // A page REPLACES the table; nothing is appended (§3.2).
-        if (!cancelled) setHistory({ page, data: response })
+        if (!cancelled) setHistory({ page, data: response });
       } catch (err) {
         if (!cancelled) {
-          setHistoryError({ page, message: errorMessage(err, 'Your games could not be loaded.') })
+          setHistoryError({
+            page,
+            message: errorMessage(err, "Your games could not be loaded."),
+          });
         }
       }
-    })()
+    })();
     return () => {
-      cancelled = true
-    }
-  }, [page])
+      cancelled = true;
+    };
+  }, [page]);
 
   /** The page number lives in the URL, so a reload returns to it (§3.2). */
   const goToPage = useCallback(
     (next: number) => {
       setSearchParams((previous) => {
-        const params = new URLSearchParams(previous)
-        params.set('page', String(Math.max(1, next)))
-        return params
-      })
+        const params = new URLSearchParams(previous);
+        params.set("page", String(Math.max(1, next)));
+        return params;
+      });
     },
     [setSearchParams],
-  )
+  );
 
-  const displayName = firebaseUser?.displayName ?? firebaseUser?.email ?? 'You'
+  const displayName = firebaseUser?.displayName ?? firebaseUser?.email ?? "You";
 
-  const shownHistory = history && history.page === page ? history.data : null
+  const shownHistory = history && history.page === page ? history.data : null;
   const shownHistoryError =
-    historyError && historyError.page === page ? historyError.message : null
+    historyError && historyError.page === page ? historyError.message : null;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-10">
       <header className="flex flex-wrap items-center gap-4">
-        <Avatar photoUrl={firebaseUser?.photoURL ?? null} displayName={displayName} size={56} />
+        <Avatar
+          photoUrl={firebaseUser?.photoURL ?? null}
+          displayName={displayName}
+          size={56}
+        />
         <h1 className="grow text-3xl font-semibold">{displayName}</h1>
         <button
           type="button"
@@ -208,17 +223,24 @@ function AuthenticatedProfile(): ReactElement {
           {shownHistoryError}
         </p>
       ) : (
-        <MatchHistoryTable
-          matches={shownHistory?.matches ?? []}
-          total={shownHistory?.total ?? 0}
-          page={page}
-          pageSize={shownHistory?.page_size ?? PAGE_SIZE}
-          onPageChange={goToPage}
-          loading={shownHistory === null}
-        />
+        <>
+          {/* Directly above the table and only once the page has loaded, so it
+              follows the stats in DOM order (§2.5). */}
+          {shownHistory ? (
+            <BullwhipTrend matches={shownHistory.matches} />
+          ) : null}
+          <MatchHistoryTable
+            matches={shownHistory?.matches ?? []}
+            total={shownHistory?.total ?? 0}
+            page={page}
+            pageSize={shownHistory?.page_size ?? PAGE_SIZE}
+            onPageChange={goToPage}
+            loading={shownHistory === null}
+          />
+        </>
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -230,8 +252,8 @@ function AuthenticatedProfile(): ReactElement {
  * they finished, reopenable in full.
  */
 export function ProfilePage(): ReactElement {
-  const { mode } = useAuth()
-  return mode === 'authenticated' ? <AuthenticatedProfile /> : <SignInPrompt />
+  const { mode } = useAuth();
+  return mode === "authenticated" ? <AuthenticatedProfile /> : <SignInPrompt />;
 }
 
 /**
@@ -242,14 +264,18 @@ export function ProfilePage(): ReactElement {
  * exactly what one page module contributing two paths is for.
  */
 export function MatchDetailPage(): ReactElement {
-  const { gameId } = useParams<{ gameId: string }>()
-  return <MatchDetail gameId={gameId} />
+  const { gameId } = useParams<{ gameId: string }>();
+  return <MatchDetail gameId={gameId} />;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const route: RouteDescriptor[] = [
-  { path: '/profile', guard: 'auth+backend', element: <ProfilePage /> },
-  { path: '/profile/games/:gameId', guard: 'auth+backend', element: <MatchDetailPage /> },
-]
+  { path: "/profile", guard: "auth+backend", element: <ProfilePage /> },
+  {
+    path: "/profile/games/:gameId",
+    guard: "auth+backend",
+    element: <MatchDetailPage />,
+  },
+];
 
-export default ProfilePage
+export default ProfilePage;
