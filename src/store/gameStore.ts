@@ -231,6 +231,27 @@ function mintAlertId(): string {
   return `alert-${alertCounter}`
 }
 
+/**
+ * The host's view with `role` ticked as decided for `week`, or the same view
+ * when it is for another week or there is none.
+ *
+ * `host_state` is what the console reads every "decided" mark from, and the
+ * server sends one per submission. `order_submitted` is the same fact,
+ * broadcast to the room including the host, so applying it here too means a
+ * `host_state` that never arrives cannot leave a seat on "Still deciding" —
+ * which is exactly what happened on the final week, whose closing submission
+ * used to send the host no state at all. The tick and the awaiting list are
+ * server facts, not arithmetic; the next `host_state` replaces both wholesale.
+ */
+function markDecided(view: HostView | null, role: Role, week: number): HostView | null {
+  if (!view || view.week !== week || view.roles[role].has_submitted) return view
+  return {
+    ...view,
+    awaiting_roles: view.awaiting_roles.filter((awaiting) => awaiting !== role),
+    roles: { ...view.roles, [role]: { ...view.roles[role], has_submitted: true } },
+  }
+}
+
 /** The role held by `alias`, or null. */
 function roleForAlias(roleToAlias: RoleToAlias, alias: string | null): Role | null {
   if (!alias) return null
@@ -386,6 +407,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
       applySequenced(p.seq, (state) => ({
         awaitingRoles: state.awaitingRoles.filter((role) => role !== p.role),
         hasSubmitted: state.myRole === p.role ? true : state.hasSubmitted,
+        hostState: markDecided(state.hostState, p.role, p.week),
       })),
 
     applyWeekClosed: (p) =>

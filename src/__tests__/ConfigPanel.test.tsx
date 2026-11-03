@@ -41,6 +41,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 import { ConfigPanel } from '../components/config/ConfigPanel';
+import { resetLimitsCacheForTests } from '../components/config/useLimits';
 import { useGameStore } from '../store/gameStore';
 import { setHostRoom, setHostSecret } from '../utils/storage';
 import type {
@@ -116,9 +117,13 @@ const rest = vi.hoisted(() => ({
   putRejection: null as unknown,
 }));
 
+const limitsFixture = await vi.hoisted(async () => await import('./limitsFixture'));
+
 const httpRec = vi.hoisted(() => {
   const get = async (url: string) => {
     if (/presets/.test(url)) return { data: rest.presets ?? { presets: [] } };
+    // The server's ranges (`GET /rooms/limits`): the form has no copy of its own.
+    if (/\/rooms\/limits$/.test(url)) return { data: limitsFixture.TEST_LIMITS };
     return { data: rest.configResponse ?? {} };
   };
   const put = async (...args: unknown[]) => {
@@ -193,7 +198,6 @@ function visibilityDefaults(over: Partial<VisibilityConfig> = {}): VisibilityCon
     show_running_cost_to_players: true,
     show_leaderboard_during_game: false,
     max_order_quantity: null,
-    allow_negative_orders: false,
     ...over,
   };
 }
@@ -407,9 +411,9 @@ const WORDS: Record<string, RegExp> = {
   initial_inventory: /initial inventory|starting inventory/i,
   initial_backlog: /initial backlog|starting backlog/i,
   shipping_delay_weeks: /shipping delay/i,
-  information_delay_weeks: /information delay/i,
+  information_delay_weeks: /order delay|information delay/i,
   initial_pipeline_quantity: /(pipeline quantity|in.transit)/i,
-  initial_order_in_pipeline: /order in pipeline|initial order/i,
+  initial_order_in_pipeline: /incoming orders|order in pipeline|initial order/i,
   holding_cost_per_unit_week: /holding cost/i,
   backlog_cost_per_unit_week: /backlog cost/i,
   fixed_order_cost: /fixed order cost/i,
@@ -424,7 +428,6 @@ const WORDS: Record<string, RegExp> = {
   show_running_cost_to_players: /running cost/i,
   show_leaderboard_during_game: /leaderboard/i,
   max_order_quantity: /max(imum)? order/i,
-  allow_negative_orders: /negative order/i,
   beta: /supply line|already ordered/i,
   theta: /(theta|smooth)/i,
   alpha: /(alpha|stock adjust)/i,
@@ -811,32 +814,32 @@ describe('per-role editors (§2)', () => {
 // ---------------------------------------------------------------------------
 
 describe('save path (§3.1)', () => {
-  it('shows 104 after saving 500 weeks [AC 12, FM 1]', async () => {
+  it('refuses 500 weeks beside the field and never sends it [AC 12, FM 1]', async () => {
+    // Amended 2026-11-02: nothing is clamped. The range comes from the
+    // server's own limits (`GET /rooms/limits`), the message says it, and the
+    // value never reaches the wire, where the server would refuse it too.
     const user = await mountPanel();
     clearWire();
 
     await setNumber(user, field('duration_weeks'), '500');
-    await waitForSave();
-    expect(lastSavedConfig().duration_weeks).toBe(500);
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
-    // The server clamps and answers with what it stored (§3.1a).
-    applyConfig(baseConfig({ duration_weeks: 104 }));
-
-    await waitFor(() =>
-      expect(
-        inputValue(field('duration_weeks')),
-        'the field must render from the stored config, not from local form state (§3.0)',
-      ).toBe('104'),
-    );
+    expect(savedConfigs().some((c) => c.duration_weeks === 500)).toBe(false);
+    await waitFor(() => expect(bodyText()).toMatch(/Maximum is 104 weeks\./i));
+    expect(field('duration_weeks').getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('notes the clamp inline [§3.1]', async () => {
-    const user = await mountPanel();
-    await setNumber(user, field('duration_weeks'), '500');
-    await waitForSave();
-    applyConfig(baseConfig({ duration_weeks: 104 }));
-
-    await waitFor(() => expect(bodyText()).toMatch(/Maximum is 104 weeks\./i));
+  it('reads every range from the server, not from a copy of its own', async () => {
+    // The ranges are fetched once and shared; forget them so this mount asks.
+    resetLimitsCacheForTests();
+    httpRec.get.mockClear();
+    await mountPanel();
+    expect(
+      httpRec.get.mock.calls.some((c) => /\/rooms\/limits$/.test(String(c[0]))),
+      'the form must ask the server for its ranges',
+    ).toBe(true);
+    expect(field('duration_weeks').getAttribute('max')).toBe('104');
+    expect(field('demand.step_week').getAttribute('min')).toBe('2');
   });
 
   it('emits config_update over the socket when connected [AC 14]', async () => {
@@ -868,18 +871,18 @@ describe('save path (§3.1)', () => {
     expect((calls[0][1] as Json).config).toMatchObject({ duration_weeks: 24 });
   });
 
-  it('renders the clamped value the REST response carries [AC 12, AC 14]', async () => {
+  it('renders the value the REST response carries [AC 12, AC 14]', async () => {
     rest.configResponse = {
       room_code: ROOM,
       state: 'CONFIGURING',
-      config: baseConfig({ duration_weeks: 104 }),
+      config: baseConfig({ duration_weeks: 24 }),
     };
     const user = await mountPanel({ connected: false });
 
-    await setNumber(user, field('duration_weeks'), '500');
+    await setNumber(user, field('duration_weeks'), '24');
     await waitForSave();
 
-    await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('104'), { timeout: 2000 });
+    await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('24'), { timeout: 2000 });
   });
 
   it('debounces typing into a numeric field [AC 15, FM 7]', async () => {
@@ -935,8 +938,10 @@ describe('server rejection (§3.2)', () => {
       },
     };
 
+    // A value the form's own range check accepts, so it is sent; the mocked
+    // server refuses it anyway. (A value outside the range is never sent.)
     const user = await mountPanel({ connected: false });
-    await setNumber(user, field('duration_weeks'), '2');
+    await setNumber(user, field('duration_weeks'), '24');
     await waitForSave();
 
     await waitFor(() => {
@@ -1021,6 +1026,40 @@ describe('visibility levers (§2)', () => {
     ]) {
       expect(text, `missing the explanation ${line}`).toMatch(line);
     }
+  });
+});
+
+describe('labels that say what the engine does (2026-11-02)', () => {
+  it('has no negative-orders switch: the option was removed', async () => {
+    await mountPanel();
+    expect(findField('visibility.allow_negative_orders')).toBeNull();
+    expect(bodyText()).not.toMatch(/negative order/i);
+  });
+
+  it('says beside both caps that 0 means unlimited', async () => {
+    await mountPanel();
+    const text = bodyText();
+    expect(text).toMatch(/0 or blank = unlimited/i);
+    expect(text).toMatch(/0 or blank = no limit/i);
+  });
+
+  it('describes the order delay as orders arriving AT the role', async () => {
+    // A role's information delay is how long its customer's orders take to
+    // reach it (`config_models.order_delay_weeks`): the Wholesaler's sets the
+    // Retailer's lead time. The label said the opposite.
+    await mountPanel();
+    const text = bodyText();
+    expect(text).toMatch(/order delay to this role/i);
+    expect(text).toMatch(/takes to reach this role/i);
+    expect(text).not.toMatch(/the supplier seeing it/i);
+  });
+
+  it('says what the Retailer’s "orders already placed" really does', async () => {
+    await mountPanel();
+    const text = bodyText();
+    expect(text).toMatch(/incoming orders already on the way/i);
+    expect(text).toMatch(/Wholesaler.s value is what the Retailer sees/i);
+    expect(text).toMatch(/Retailer bot.s first guess at demand/i);
   });
 });
 

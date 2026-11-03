@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { useConfigFormContext } from './configFormContext'
 import { BOT_BETA_LABEL } from './copy'
 import { NumberField, SliderField } from './fields'
 
@@ -13,42 +14,45 @@ import { NumberField, SliderField } from './fields'
  * what the supply-line lever teaches, with a bot instead of a volunteer.
  */
 export function BotSection(): ReactElement {
+  // The server's ranges, never a copy (`useLimits`).
+  const { limits } = useConfigFormContext()
+  const weight = limits.max_bot_weight
   return (
     <div className="flex flex-col gap-4">
       <SliderField
         name="bot.beta"
         label={BOT_BETA_LABEL}
-        hint="0 is a bot that ignores its supply line and panics. 1 is a bot that counts every unit already on its way."
+        hint={`0 is a bot that ignores its supply line and panics. ${weight} is a bot that counts every unit already on its way.`}
         min={0}
-        max={1}
+        max={weight}
         step={0.05}
         lowLabel="0 — panicking"
-        highLabel="1 — steady"
+        highLabel={`${weight} — steady`}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <NumberField
           name="bot.theta"
           label="Demand smoothing"
-          hint="How fast a bot updates its view of demand. 0 to 1."
+          hint={`How fast a bot updates its view of demand. 0 to ${weight}.`}
           min={0}
-          max={1}
+          max={weight}
           step={0.05}
         />
         <NumberField
           name="bot.alpha"
           label="Stock correction"
-          hint="How hard a bot pulls its inventory back to target. 0 to 1."
+          hint={`How hard a bot pulls its inventory back to target. 0 to ${weight}.`}
           min={0}
-          max={1}
+          max={weight}
           step={0.05}
         />
         <NumberField
           name="bot.target_stock_multiplier"
           label="Target stock multiplier"
-          hint="Target inventory as a multiple of the starting inventory."
+          hint={`Target inventory as a multiple of the starting inventory. 0 to ${limits.max_target_stock_multiplier}.`}
           min={0}
-          max={10}
+          max={limits.max_target_stock_multiplier}
           step={0.5}
         />
       </div>

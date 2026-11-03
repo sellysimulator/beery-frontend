@@ -70,7 +70,8 @@ src/
   contexts/BackendStatusContext.tsx   health poll, 'checking' | 'ok' | 'down'
   store/gameStore.ts     the one Zustand store
   types/game.ts          TS mirrors of every wire payload (647 lines)
-  schemas/configSchema.ts  Zod mirrors of GameConfig — a UI hint, not a gate
+  schemas/configSchema.ts  buildConfigFormSchema(limits): the host form's checks, built
+                         from the server's ranges (GET /rooms/limits) — no copy here
   utils/storage.ts       the only module that touches localStorage/sessionStorage
   pages/                 one module per route; each exports `route`
   components/
@@ -120,7 +121,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-02 (after the chart changes): **1206 tests / 37 files passed**, `eslint .` clean, `tsc -b`
+Verified green on 2026-11-02 (after the review fixes: server-sourced limits, two week-cost figures, no negative orders): **1237 tests / 39 files passed**, `eslint .` clean, `tsc -b`
 clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
@@ -223,12 +224,19 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.
     Palette is Okabe-Ito for colour-blind safety, and **colour is never the only signal** —
     backlog and alerts always carry an icon and a label too.
-12. **Forms**: react-hook-form + Zod, only in the host config panel.
-    `schemas/configSchema.ts` is a *hint* — a value it rejects is still sent, because the
-    server clamps and the panel renders the clamped value back. `useConfigSave` debounces
-    400ms, sends over the socket when connected and falls back to
+12. **Forms**: react-hook-form + Zod, only in the host config panel. **The ranges are the
+    server's, never ours** (2026-11-02): `useLimits()` fetches `GET /rooms/limits` once and
+    `buildConfigFormSchema(limits)` builds every check, `min`/`max` and hint from it (sections
+    read `ConfigFormContext.limits`); there is no `FORM_LIMITS` and must never be one — add a
+    bound to the backend's `core/limits.py`. Until the ranges arrive the panel shows its
+    loading line. **A value outside its range is refused, never clamped**: `NumberField` does
+    not send it and the Zod message shows beside it; the server refuses one that arrives
+    anyway (422 / `join_error` naming the field and the range). The order form does the same
+    with `your_state.min_order_quantity`/`max_order_quantity`. There are no negative orders.
+    `useConfigSave` debounces 400ms, sends over the socket when connected and falls back to
     `PUT /rooms/{code}/config` when not (that REST reply has no `seq`, so it goes through
-    `setConfig`, never `applyConfigUpdated`).
+    `setConfig`, never `applyConfigUpdated`). Tests that mount the panel must serve
+    `/rooms/limits` (`src/__tests__/limitsFixture.ts`).
 13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal (each chart module
     registers what it uses; `ChartJS.register` is idempotent). `components/charts/chartSetup.ts`
     owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
@@ -254,7 +262,9 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     **B5 and B6, the host's live order streams on `DemandCurve` and the lane chips on
     `ChainDiagram`, render on the host console only, never under `presenting`**: players
     watch the projector, and mid-game order quantities on it would leak exactly what the game
-    hides.
+    hides. Under `presenting` the demand curve also stops at the current week
+    (`revealedDemand`), so no future demand reaches the projector; the console's own curve
+    keeps the whole series.
 14. **The 3D board computes nothing and emits nothing.** `board3d/sceneModel.ts`'s
     `buildSceneModel(props)` returns a plain object — every pile count, sign string, fixture
     id, model placement, light, accent and prompt — and `WarehouseScene` walks it and emits
@@ -270,6 +280,11 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     field is a bug**, including a plausible one: a settlement whose
     `holding_cost ≠ closing_inventory × rate` renders the server's figure, never the product
     (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat.
+15. **No screen says "Week cost".** Wherever a week's cost appears (recap, decision panel,
+    3D ledger and cost corner) it is two figures: "Holding & backlog"
+    (`settlement.carrying_cost` / `week_holding_backlog_cost`) and "Order cost"
+    (`week_order_cost`, *"not yet charged"* while it is `null`). The stored sum is
+    `WeekRecord.total_week_cost` and is never shown as a single figure (2026-11-02).
 
 ## 7. Storage scopes — not interchangeable
 
@@ -294,6 +309,11 @@ permanently paused game, not an error.
 ## 8. Gotchas
 
 - **Don't add a `tailwind.config.js`** — v4 is CSS-first and the theme is in `index.css`.
+- **No native `<select>`.** Dropdowns are `components/shared/Select.tsx` (a WAI-ARIA
+  select-only combobox drawn in the theme's tokens; disabled options carry a `detail` reason).
+  Name it with `<label htmlFor>` / `aria-labelledby` / `aria-label` — **never wrap it in a
+  `<label>`**, or an option click bubbles to the label and reopens the list. Tests drive it by
+  clicking the `combobox`, then the `option` (`Select.test.tsx`).
 - **Don't put `firebase.ts` in `.gitignore`** and don't move it into `src/`. `DEPLOY.md`'s
   checklist and `envSurface.test.ts` both assert it stays tracked at the root.
 - **Don't point `VITE_SOCKET_URL` at `beersim.web.app`** or any `*.web.app` /

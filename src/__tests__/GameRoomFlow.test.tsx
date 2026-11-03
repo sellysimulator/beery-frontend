@@ -194,7 +194,6 @@ function gameConfig(): GameConfig {
       show_running_cost_to_players: true,
       show_leaderboard_during_game: false,
       max_order_quantity: null,
-      allow_negative_orders: false,
     },
     bot: { theta: 0.36, alpha: 0.26, beta: 0.34, target_stock_multiplier: 1 },
   };
@@ -246,7 +245,7 @@ function ownHistory(role: Role): WeekRecord[] {
     backlog_cost: 0,
     fixed_order_cost: 0,
     purchase_cost: 0,
-    week_cost: 4,
+    total_week_cost: 4,
     cumulative_cost: 21.5,
     production_started: null,
     production_queued: null,
@@ -273,8 +272,8 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: ownHistory(role),
+    min_order_quantity: 0,
     max_order_quantity: 500,
-    allow_negative_orders: false,
     show_supply_line_prominently: true,
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
@@ -282,7 +281,8 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     accumulated_cost: 21.5,
-    week_cost: 4,
+    week_holding_backlog_cost: 4,
+    week_order_cost: null,
     ...over,
   };
 }

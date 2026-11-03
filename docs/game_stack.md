@@ -187,6 +187,20 @@ never compared.
 - **The host is not in the participant list.** They render the room; they do not appear in
   it, hold no alias and take no seat. A host counted as a player is an off-by-one that
   survives every test with four players in it.
+- **No native `<select>`.** The browser draws a native select's popup in the operating
+  system's chrome, the one part of every screen a game's theme cannot reach. Each game has
+  its own `components/shared/Select.tsx`, a WAI-ARIA select-only combobox (a
+  `button role="combobox"` that keeps focus, a `listbox` driven by
+  `aria-activedescendant`, Up/Down/Home/End/Enter/Space/Escape/Tab, typeahead,
+  outside-click close) styled in that game's own tokens. Name it with `<label htmlFor>`,
+  `aria-labelledby` or `aria-label` and **never nest it in a `<label>`**: a click on an
+  option bubbles to the label, which re-clicks the trigger and reopens the list. Beery's is
+  the reference (`Beery/Beery_Frontend/src/components/shared/Select.tsx`).
+- **A host's seat picker never offers a seat someone else holds.** List it, disabled, with
+  the holder's name ("Taken by Ana"), and have the server **refuse** an assignment to a held
+  seat rather than move it. Moving it silently unseats the holder, which the host reads as
+  two people sharing a seat until one of them vanishes from it. Reassigning is two
+  deliberate steps: unseat, then assign. (Found in Beery, 2026-11-02.)
 
 ### Socket handshake — `autoConnect: false` **[HARD-WON]**
 
@@ -774,6 +788,28 @@ Host-supplied config needs **upper** bounds and cross-field checks, not just flo
 Reject a second submission for the same round (`if player["last"] is not None: return`).
 Without it, each call appends another history entry *and* re-serialises the whole room through
 Redis — O(n²) work that one client can trigger in a loop.
+
+### The host's "who has submitted" tracker, through the last round
+
+A host console that ticks players off as they submit reads those ticks from the host's
+state, so the server sends the host a fresh state **on every submission — including the one
+that completes the round.** Do not skip it on the reasoning that the round close which
+follows sends a state for the next round anyway: the **final** round's close ends the game
+and sends no next round, so the host's last state is the one from before the last
+submission, and the console ends every game showing that player as still deciding. A host
+view built after the game finishes must not reset the per-player submitted flags either (an
+engine that clears its pending submissions on close reports everyone as undecided at
+FINISHED). A client store that also applies the room-wide "X submitted" event to the host's
+view is a cheap second line of defence, not a substitute. Test it end to end: humans plus
+bots, played to the last round, and assert the host's last state marks every seat
+submitted. (Beery and Pulky each shipped a variant of this; found 2026-11-02.)
+
+**Broadcast every participant the server creates.** Bots filled in at `start_game` are
+participants like any other, and a client only knows a participant from a participant-list
+event. If start emits only "game started" plus a role map, every client holds a list with
+no entry for the bot seats, and anything rendered from that list — names, a Bot badge, the
+live results' cost cards — comes out blank for exactly those seats. Emit the lobby /
+participant-list payload again after the seats are filled. (Found in Beery, 2026-11-02.)
 
 ### Redis — three distinct roles
 

@@ -64,6 +64,28 @@ export interface DemandCurveOptions {
    * one line per role present; absent or null draws the demand line alone.
    */
   orderHistory?: Partial<Record<Role, number[]>> | null
+  /**
+   * Plot demand only through this week (1-indexed, inclusive) — the projector's
+   * rule, see `revealedDemand`. Absent or null plots the whole series, which is
+   * the host console's view.
+   */
+  revealedThroughWeek?: number | null
+}
+
+/**
+ * The part of the demand series the room has already seen: weeks 1 to `week`,
+ * the open week included.
+ *
+ * It is the engine's own rule, not a second one: `player_view` truncates
+ * `customer_demand_series` to `demand_series[:week]` (`07 §3.8`), because the
+ * open week has already been settled and its demand is the Retailer's incoming
+ * order on screen right now. Anything after it is the future, which only the
+ * host may see — so the projector, which every player is looking at, plots
+ * this and nothing else (`20 §2.4`). A week before the first, or a series
+ * shorter than `week`, simply yields what exists.
+ */
+export function revealedDemand(demandSeries: number[], week: number): number[] {
+  return demandSeries.slice(0, Math.max(0, Math.floor(week)))
 }
 
 /** Shade of the future: the same ink at a third of its strength, dashed. */
@@ -96,13 +118,19 @@ const currentWeekBand: Plugin<'line'> = {
 }
 
 /**
- * The host's demand curve: the **full** series, including the weeks not yet
- * played, with the current week marked.
+ * The host's demand curve: by default the **full** series, including the
+ * weeks not yet played, with the current week marked.
  *
  * The host is the only person entitled to see the future of the series
  * (`07 §3.9` sends it to their sid alone), and seeing where the step lands
- * before it lands is what lets them run the session — so nothing here
- * truncates at `currentWeek`.
+ * before it lands is what lets them run the session — so the console's curve
+ * never truncates at `currentWeek`.
+ *
+ * The projector is the exception: with `revealedThroughWeek` set, the demand
+ * line stops at that week (`revealedDemand`), so no future value is in the
+ * configuration at all — not merely drawn faded. The x axis keeps every week
+ * of the game, so the room still sees how far through it is; the length of
+ * the game is on the projector's header anyway.
  *
  * `currentWeek` is 1-indexed, as every week in Beery is. A value outside the
  * series simply marks nothing, which is the right answer before the first
@@ -115,29 +143,35 @@ export function buildDemandCurveConfig(
 ): ChartConfiguration<'line'> {
   const currentIndex = currentWeek - 1
   const isCurrent = (index: number): boolean => index === currentIndex
+  const revealedThroughWeek = options.revealedThroughWeek
+  const plotted =
+    revealedThroughWeek === undefined || revealedThroughWeek === null
+      ? demandSeries
+      : revealedDemand(demandSeries, revealedThroughWeek)
 
   const dataset: ChartDataset<'line'> = {
     label: DEMAND_CURVE_LABEL,
-    // The whole series. Never sliced to the week played so far.
-    data: [...demandSeries],
+    // The whole series on the console; on the projector, only what the room
+    // has already seen. Never sliced anywhere else.
+    data: [...plotted],
     borderColor: DEMAND_COLOUR,
     backgroundColor: DEMAND_COLOUR,
     borderWidth: 3,
     tension: 0,
     // The mark, in three channels at once: size, shape and colour. Size alone
     // would be invisible on a projector; colour alone fails section 3.5.
-    pointRadius: demandSeries.map((_, index) =>
+    pointRadius: plotted.map((_, index) =>
       isCurrent(index) ? CURRENT_WEEK_POINT_RADIUS : 0,
     ),
-    pointHoverRadius: demandSeries.map((_, index) =>
+    pointHoverRadius: plotted.map((_, index) =>
       isCurrent(index) ? CURRENT_WEEK_POINT_RADIUS : 4,
     ),
-    pointStyle: demandSeries.map((_, index) => (isCurrent(index) ? 'rectRot' : 'circle')),
-    pointBackgroundColor: demandSeries.map((_, index) =>
+    pointStyle: plotted.map((_, index) => (isCurrent(index) ? 'rectRot' : 'circle')),
+    pointBackgroundColor: plotted.map((_, index) =>
       isCurrent(index) ? CURRENT_WEEK_COLOUR : DEMAND_COLOUR,
     ),
     pointBorderColor: DEMAND_COLOUR,
-    pointBorderWidth: demandSeries.map((_, index) => (isCurrent(index) ? 3 : 1)),
+    pointBorderWidth: plotted.map((_, index) => (isCurrent(index) ? 3 : 1)),
     // Weeks after the current one have not happened: drawn faded and dashed.
     segment: {
       borderColor: (ctx) => (ctx.p1DataIndex > currentIndex ? FUTURE_COLOUR : DEMAND_COLOUR),

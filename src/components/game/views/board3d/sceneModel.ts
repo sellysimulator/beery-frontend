@@ -1450,7 +1450,14 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
         view.backlog_cost_per_unit_week,
       )} ${money(settlement.backlog_cost)}`,
     )
-    lines.push(`Week cost ${money(settlement.carrying_cost)}`)
+    // Two lines, never one "week cost": the order cost is charged only when
+    // the week closes, so while it is open it is still to come (2026-11-02).
+    lines.push(`Holding & backlog ${money(settlement.carrying_cost)}`)
+    lines.push(
+      typeof view.week_order_cost === 'number'
+        ? `Order cost ${money(view.week_order_cost)}`
+        : 'Order cost not yet charged',
+    )
 
     // The one line `show_running_cost_to_players` gates. With the flag off the
     // server sends neither field and the row is absent entirely.
@@ -1498,14 +1505,14 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
 /**
  * The cost corner: absent, entirely, when the host is not showing running cost.
  *
- * All three of `week_cost`, `balance` and `accumulated_cost` missing means no
+ * All three of `week_holding_backlog_cost`, `balance` and `accumulated_cost` missing means no
  * plinth, no plate, no bills and nothing about running cost anywhere in the
  * scene (`19` AC 6). The precedence between `balance` and `accumulated_cost`
  * is `DecisionPanel`'s, unchanged.
  */
 function buildCostCorner(view: PlayerView): SceneFixture[] {
   const present =
-    view.week_cost !== undefined ||
+    view.week_holding_backlog_cost !== undefined ||
     view.balance !== undefined ||
     view.accumulated_cost !== undefined
   if (!present) return []
@@ -1514,11 +1521,13 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
   const money = (value: number): string => formatMoney(view.currency_symbol, value)
   const signs: SceneSign[] = []
 
-  if (view.week_cost !== undefined) {
+  // "Holding & backlog", never "this week": the order cost is a figure of its
+  // own and is not charged until the week closes (2026-11-02).
+  if (view.week_holding_backlog_cost !== undefined) {
     signs.push(
       sign(
         'cost-week',
-        `THIS WEEK ${money(view.week_cost)}`,
+        `HOLDING & BACKLOG ${money(view.week_holding_backlog_cost)}`,
         at(base, 0, 2.6, 0),
         SIGN_SIZE.label,
         TEXT_HEX.ink,
@@ -1564,7 +1573,7 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
 
   // The bills stand for the figure beside them and are scaled like any other
   // pile: `÷10` currency units, capped at 20 (24 §4.2).
-  const billed = view.balance ?? view.accumulated_cost ?? view.week_cost ?? 0
+  const billed = view.balance ?? view.accumulated_cost ?? view.week_holding_backlog_cost ?? 0
   return [
     {
       id: 'cost-corner',

@@ -62,7 +62,7 @@ function history(role: WeekRecord['role'] = 'RETAILER'): WeekRecord[] {
     backlog_cost: 0,
     fixed_order_cost: 0,
     purchase_cost: 0,
-    week_cost: 0,
+    total_week_cost: 0,
     cumulative_cost: 0,
     production_started: null,
     production_queued: null,

@@ -69,7 +69,7 @@ export interface DecisionPanelProps {
 export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
   const money = (value: number): string => formatMoney(view.currency_symbol, value)
   const showRunningCost =
-    view.week_cost !== undefined ||
+    view.week_holding_backlog_cost !== undefined ||
     view.accumulated_cost !== undefined ||
     view.balance !== undefined
 
@@ -162,8 +162,21 @@ export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
           aria-label="Your costs"
         >
           <h3 className="text-sm uppercase tracking-wide text-ink-muted">Your costs</h3>
-          {view.week_cost !== undefined ? (
-            <p className="text-lg">{`This week ${money(view.week_cost)}`}</p>
+          {/* Two figures, never one "week cost": they are charged at different
+              moments. Holding and backlog are charged as the week opens; the
+              order cost only when it closes, so while it is open it reads "not
+              yet charged" — which is why "Total so far" jumps at the close. */}
+          {view.week_holding_backlog_cost !== undefined ? (
+            <p className="text-lg">
+              {`Holding & backlog this week ${money(view.week_holding_backlog_cost)}`}
+            </p>
+          ) : null}
+          {view.week_holding_backlog_cost !== undefined ? (
+            <p className="text-lg">
+              {typeof view.week_order_cost === 'number'
+                ? `Order cost this week ${money(view.week_order_cost)}`
+                : 'Order cost this week: not yet charged (charged when the week closes)'}
+            </p>
           ) : null}
           {view.balance !== undefined ? (
             <p className="text-lg font-semibold">{`Balance ${money(view.balance)}`}</p>

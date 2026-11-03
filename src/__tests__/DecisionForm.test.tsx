@@ -141,7 +141,6 @@ function gameConfig(): GameConfig {
       show_running_cost_to_players: true,
       show_leaderboard_during_game: false,
       max_order_quantity: null,
-      allow_negative_orders: false,
     },
     bot: { theta: 0.36, alpha: 0.26, beta: 0.34, target_stock_multiplier: 1 },
   };
@@ -191,8 +190,8 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: [],
-    max_order_quantity: null,
-    allow_negative_orders: false,
+    min_order_quantity: 0,
+    max_order_quantity: 9999,
     show_supply_line_prominently: true,
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
@@ -353,24 +352,31 @@ describe('CRITERION 9: the minimum and the maximum are stated in text', () => {
     expect(text).toMatch(/max(imum)?\b[^0-9]{0,14}500\b/i);
   });
 
-  it('states that there is no minimum once allow_negative_orders is set', () => {
-    // §2.3: "the form states that there is no minimum and sets no `min`
-    // attribute". There is no negative floor on the wire.
-    renderForm(viewFor('WHOLESALER', { max_order_quantity: 500, allow_negative_orders: true }));
+  it('takes both bounds from your_state, as min and max attributes', () => {
+    // Amended 2026-11-02: there are no negative orders. The floor is the
+    // server's `min_order_quantity` (always 0), never one the form invents.
+    renderForm(viewFor('WHOLESALER', { min_order_quantity: 0, max_order_quantity: 500 }));
 
-    const text = formText();
-    expect(text).toMatch(/min(imum)?/i);
-    expect(text).not.toMatch(/min(imum)?\b[^0-9-]{0,14}0\b/i);
+    expect(orderInput().getAttribute('min')).toBe('0');
+    expect(orderInput().getAttribute('max')).toBe('500');
   });
 
-  it('sets no `min` attribute, and invents no floor, when negatives are allowed', () => {
-    // Deriving a floor from `max_order_quantity` would be client-side game
-    // arithmetic (§2.3, 00-conventions §4).
-    renderForm(viewFor('WHOLESALER', { max_order_quantity: 500, allow_negative_orders: true }));
+  it('refuses an order outside the bounds in the server’s own words, and sends nothing', async () => {
+    const user = userEvent.setup();
+    renderForm(viewFor('WHOLESALER', { max_order_quantity: 500 }));
 
-    expect(orderInput().hasAttribute('min')).toBe(false);
-    expect(formText()).not.toMatch(/-\s*500\b/);
-    expect(formText()).not.toMatch(/min(imum)?\b[^0-9]{0,14}-\d/i);
+    for (const typed of ['501', '-1', '4.5']) {
+      await typeOrder(user, typed);
+      expect(formText()).toContain('Order must be a whole number from 0 to 500.');
+      expect(confirmControl()).toBeDisabled();
+    }
+    await user.click(confirmControl());
+    expect(emitsOf('submit_order')).toHaveLength(0);
+
+    await typeOrder(user, '500');
+    expect(formText()).not.toContain('Order must be a whole number');
+    await user.click(confirmControl());
+    expect(emitsOf('submit_order')[0].order).toBe(500);
   });
 
   it('states the constraint as text, not only as an input attribute', () => {
@@ -513,7 +519,7 @@ describe('CRITERION 13: confirming emits submit_order for the open week', () => 
 describe('FAILURE MODE 5: no client-computed total reaches the wire', () => {
   it('emits exactly {room_id, week, order}', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_cost: 9.25 }));
+    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
 
     await typeOrder(user, '37');
     await user.click(confirmControl());
@@ -524,12 +530,20 @@ describe('FAILURE MODE 5: no client-computed total reaches the wire', () => {
 
   it('puts no display-only figure on the wire, on any emit', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_cost: 9.25 }));
+    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
 
     await typeOrder(user, '37');
     await user.click(confirmControl());
 
-    const forbidden = ['accumulated_cost', 'week_cost', 'balance', 'total', 'inventory', 'backlog'];
+    const forbidden = [
+      'accumulated_cost',
+      'week_holding_backlog_cost',
+      'week_order_cost',
+      'balance',
+      'total',
+      'inventory',
+      'backlog',
+    ];
     const keys = rec.emits.flatMap((e) => Object.keys((e.payload ?? {}) as object));
     for (const key of forbidden) expect(keys).not.toContain(key);
   });

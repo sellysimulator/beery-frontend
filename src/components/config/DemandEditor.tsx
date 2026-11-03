@@ -1,6 +1,5 @@
 import { useState, type ChangeEvent, type DragEvent, type ReactElement } from 'react'
-import { FORM_LIMITS } from '../../schemas/configSchema'
-import type { CustomDemand, DemandConfig, DemandKind } from '../../types/game'
+import type { CustomDemand, DemandConfig, DemandKind, Limits } from '../../types/game'
 import { useConfigFormContext } from './configFormContext'
 import { pathPatch } from './configPatch'
 import { DEMAND_KIND_DESCRIPTION, DEMAND_KIND_LABEL, DISTRIBUTION_LABEL } from './copy'
@@ -9,10 +8,18 @@ import { DEMAND_KINDS } from './demandDefaults'
 import DemandPreview from './DemandPreview'
 import { NumberField, SelectField } from './fields'
 
-const quantity = { min: 0, max: FORM_LIMITS.max_order_quantity, step: 1 }
-const week = { min: 1, max: FORM_LIMITS.max_weeks, step: 1, unit: 'weeks' }
+interface ParameterBlockProps {
+  demand: DemandConfig
+  durationWeeks: number
+  /** The server's ranges (`GET /rooms/limits`), never a copy. */
+  limits: Limits
+}
 
-function ParameterBlock({ demand }: { demand: DemandConfig }): ReactElement | null {
+function ParameterBlock({ demand, durationWeeks, limits }: ParameterBlockProps): ReactElement | null {
+  const quantity = { min: 0, max: limits.max_order_quantity, step: 1 }
+  // A step or a ramp start can fall no later than the game's last week, and a
+  // step no earlier than week `min_step_week`: the server's rules, read here.
+  const lastWeek = Math.min(durationWeeks, limits.max_weeks)
   switch (demand.kind) {
     case 'CONSTANT':
       return (
@@ -25,7 +32,14 @@ function ParameterBlock({ demand }: { demand: DemandConfig }): ReactElement | nu
       return (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <NumberField name="demand.initial_value" label="Before the step" {...quantity} />
-          <NumberField name="demand.step_week" label="Step happens in week" {...week} />
+          <NumberField
+            name="demand.step_week"
+            label="Step happens in week"
+            hint={`Week ${limits.min_step_week} to ${lastWeek}.`}
+            min={limits.min_step_week}
+            max={lastWeek}
+            step={1}
+          />
           <NumberField name="demand.step_value" label="After the step" {...quantity} />
         </div>
       )
@@ -37,11 +51,18 @@ function ParameterBlock({ demand }: { demand: DemandConfig }): ReactElement | nu
           <NumberField
             name="demand.slope_per_week"
             label="Change per week"
-            min={-FORM_LIMITS.max_order_quantity}
-            max={FORM_LIMITS.max_order_quantity}
+            min={-limits.max_order_quantity}
+            max={limits.max_order_quantity}
             step={0.5}
           />
-          <NumberField name="demand.start_week" label="Ramp starts in week" {...week} />
+          <NumberField
+            name="demand.start_week"
+            label="Ramp starts in week"
+            hint={`Week 1 to ${lastWeek}.`}
+            min={1}
+            max={lastWeek}
+            step={1}
+          />
           <NumberField
             name="demand.cap"
             label="Ceiling"
@@ -58,13 +79,21 @@ function ParameterBlock({ demand }: { demand: DemandConfig }): ReactElement | nu
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <NumberField name="demand.base" label="Base level" {...quantity} />
           <NumberField name="demand.amplitude" label="Swing above and below" {...quantity} />
-          <NumberField name="demand.period_weeks" label="Weeks per cycle" {...week} />
+          <NumberField
+            name="demand.period_weeks"
+            label="Weeks per cycle"
+            hint={`${limits.min_period_weeks} to ${limits.max_period_weeks} weeks.`}
+            min={limits.min_period_weeks}
+            max={limits.max_period_weeks}
+            step={1}
+            unit="weeks"
+          />
           <NumberField
             name="demand.phase"
             label="Phase"
-            hint="Radians. 0 starts the cycle at the base level."
-            min={-Math.PI * 2}
-            max={Math.PI * 2}
+            hint="Radians, up to one full turn either way. 0 starts the cycle at the base level."
+            min={-limits.max_phase}
+            max={limits.max_phase}
             step={0.1}
           />
         </div>
@@ -84,15 +113,17 @@ function ParameterBlock({ demand }: { demand: DemandConfig }): ReactElement | nu
           <NumberField
             name="demand.mean"
             label="Mean"
+            hint={`0 to ${limits.max_order_quantity}.`}
             min={0}
-            max={FORM_LIMITS.max_unit_value}
+            max={limits.max_order_quantity}
             step={0.5}
           />
           <NumberField
             name="demand.stdev"
             label="Standard deviation"
+            hint={`0 to ${limits.max_order_quantity}.`}
             min={0}
-            max={FORM_LIMITS.max_unit_value}
+            max={limits.max_order_quantity}
             step={0.5}
           />
           <NumberField name="demand.min" label="Never below" {...quantity} />
@@ -122,17 +153,17 @@ export interface DemandEditorProps {
  * (`18 section 3.1a`), and a `step_week` surviving into a `SEASONAL` config is a
  * scenario nobody described (AC 7, FM 2).
  *
- * `CUSTOM` is the one generator with a hard client-side block: a series shorter
- * than `duration_weeks` is the single demand error the server rejects rather
- * than clamps, and a host should not have to submit to find that out
- * (`18 section 3.2`).
+ * `CUSTOM` has one more client-side block: a series shorter than
+ * `duration_weeks` is refused by the server, and a host should not have to
+ * submit to find that out (`18 section 3.2`). Every other range here is the
+ * server's own (`useLimits`), checked beside the field before anything is sent.
  */
 export function DemandEditor({
   demand,
   durationWeeks,
   onKindChange,
 }: DemandEditorProps): ReactElement {
-  const { saveApi, readOnly } = useConfigFormContext()
+  const { saveApi, readOnly, limits } = useConfigFormContext()
 
   /**
    * The unsaved paste, tagged with the generator it was typed against.
@@ -151,12 +182,17 @@ export function DemandEditor({
   const parsed = activeDraft === null ? null : parseCustomValues(activeDraft.text)
   const values = parsed ? parsed.values : storedValues
   const shortfall = Math.max(0, durationWeeks - values.length)
+  // Week entries above the order ceiling: the server refuses the series, so
+  // the form names them and does not send it (it used to be clamped to 9999).
+  const tooLarge = values.filter((value) => value > limits.max_order_quantity)
 
   function commitCustom(text: string): void {
     setDraft({ kind: demand.kind, text, error: null })
     const result = parseCustomValues(text)
-    // Blocked, not clamped: sending a short series earns a 422 naming the field.
-    if (result.values.length >= durationWeeks) {
+    // Blocked, not clamped: sending a short series, or one with a week above
+    // the ceiling, earns a 422 naming the field.
+    const fits = result.values.every((value) => value <= limits.max_order_quantity)
+    if (result.values.length >= durationWeeks && fits) {
       saveApi.save(pathPatch('demand.values', result.values))
     }
   }
@@ -198,7 +234,7 @@ export function DemandEditor({
         </p>
       </div>
 
-      <ParameterBlock demand={demand} />
+      <ParameterBlock demand={demand} durationWeeks={durationWeeks} limits={limits} />
 
       {demand.kind === 'CUSTOM' ? (
         <div className="flex flex-col gap-2">
@@ -234,6 +270,13 @@ export function DemandEditor({
               Ignored {parsed.rejected.length} value
               {parsed.rejected.length === 1 ? '' : 's'} that are not whole numbers:{' '}
               {parsed.rejected.slice(0, 5).join(', ')}
+            </p>
+          ) : null}
+          {tooLarge.length ? (
+            <p role="alert" className="text-sm text-danger">
+              {`Each week can be at most ${limits.max_order_quantity}. Too large: ${tooLarge
+                .slice(0, 5)
+                .join(', ')}. The series is not saved until every week fits.`}
             </p>
           ) : null}
           {shortfall > 0 ? (

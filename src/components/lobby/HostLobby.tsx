@@ -4,6 +4,7 @@ import { useGameStore } from '../../store/gameStore'
 import { getHostSecret } from '../../utils/storage'
 import { ROLE_ORDER, type Role, type RoleAssignmentMode } from '../../types/game'
 import ManualLink from '../manual/ManualLink'
+import Select from '../shared/Select'
 import { configPanelScreen } from '../../pages/shellScreens'
 import InvitePanel from './InvitePanel'
 import ParticipantList from './ParticipantList'
@@ -119,22 +120,18 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
 
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold">How roles are handed out</h2>
-          <label className="flex flex-col gap-1 text-sm">
-            <span>Role assignment</span>
-            <select
-              value={roleAssignmentMode ?? ''}
+          <div className="flex flex-col gap-1 text-sm">
+            <span id="role-assignment-label">Role assignment</span>
+            <Select<RoleAssignmentMode>
+              aria-labelledby="role-assignment-label"
+              value={roleAssignmentMode}
+              placeholder="Not set yet"
               disabled={hostSecret === null}
-              onChange={(event) => handleMode(event.target.value as RoleAssignmentMode)}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-            >
-              {roleAssignmentMode === null ? <option value="">Not set yet</option> : null}
-              {MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {ROLE_MODE_LABEL[mode]}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={handleMode}
+              options={MODES.map((mode) => ({ value: mode, label: ROLE_MODE_LABEL[mode] }))}
+              className="w-full sm:max-w-sm"
+            />
+          </div>
           {roleAssignmentMode ? (
             <p className="text-sm text-ink-muted">{ROLE_MODE_DESCRIPTION[roleAssignmentMode]}</p>
           ) : null}

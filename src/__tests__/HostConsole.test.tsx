@@ -1536,3 +1536,61 @@ describe('BE-5 acceptance 3 / failure mode: the player ChainFlow never renders c
     expect(container.querySelector('[aria-label^="Beer on the way"], [aria-label^="Orders in flight"]')).toBeNull();
   });
 });
+
+/** A role card's tick state in words, without the glyph beside it. */
+function tickState(role: Role): string {
+  return textOf(roleCard(role).querySelector('[data-field="has_submitted"]')).replace(/^[^A-Za-z]+/, '');
+}
+
+describe('the final week: the last order to arrive ends the game decided, not "Still deciding"', () => {
+  // Two humans and two bots. The bots and one human are in; the other human's
+  // order closes the final week and finishes the game. The backend now sends a
+  // `host_state` for that submission too, but the console must not depend on
+  // it: `order_submitted` reaches the host as well, and the tracker has to end
+  // the game with all four seats decided either way.
+  it('ticks the last submitter from order_submitted, through week_closed and game_finished', () => {
+    const participants = participantsFor({
+      DISTRIBUTOR: { is_bot: true },
+      FACTORY: { is_bot: true },
+    });
+    renderRunning(
+      hostView(
+        { week: DURATION, awaiting_roles: ['WHOLESALER'] },
+        {
+          RETAILER: { has_submitted: true },
+          WHOLESALER: { has_submitted: false },
+          DISTRIBUTOR: { has_submitted: true, is_bot: true },
+          FACTORY: { has_submitted: true, is_bot: true },
+        },
+      ),
+      participants,
+    );
+
+    dispatch('order_submitted', {
+      seq: nextSeq(),
+      week: DURATION,
+      role: 'WHOLESALER',
+      display_name: NAMES.WHOLESALER,
+      is_bot: false,
+    });
+    dispatch('week_closed', { seq: nextSeq(), week: DURATION, next_week: null, awaiting_roles: [] });
+    dispatch('game_finished', { seq: nextSeq(), ...gameFinished(DURATION) });
+
+    expect(ROLE_ORDER.map((role) => tickState(role))).toEqual(ROLE_ORDER.map(() => 'Decided'));
+    expect(bodyText()).not.toMatch(/still deciding/i);
+  });
+
+  it('leaves another week’s host view alone: an order for week N never ticks week N + 1', () => {
+    renderRunning(hostView({ week: WEEK }, { DISTRIBUTOR: { has_submitted: false } }));
+
+    dispatch('order_submitted', {
+      seq: nextSeq(),
+      week: WEEK - 1,
+      role: 'DISTRIBUTOR',
+      display_name: NAMES.DISTRIBUTOR,
+      is_bot: false,
+    });
+
+    expect(tickState('DISTRIBUTOR')).toBe('Still deciding');
+  });
+});

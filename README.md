@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 1206 passed, 37 files
+npm run test:run        # vitest run — 1237 passed, 39 files
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -126,7 +126,7 @@ src/
 ├── contexts/BackendStatusContext.tsx
 ├── store/gameStore.ts          the Zustand store — written only by socket handlers
 ├── types/game.ts               TypeScript mirrors of every wire payload
-├── schemas/configSchema.ts     Zod mirror of GameConfig — a form hint, not a gate
+├── schemas/configSchema.ts     the host form's checks, built from GET /rooms/limits (no copy)
 ├── utils/storage.ts            alias, guest id, session_token, host_secret, display name,
 │                               board_view
 ├── pages/                      one module per route, each exporting a `route` descriptor

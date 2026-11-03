@@ -60,12 +60,16 @@ export function DecisionForm({
     ? 'How many units to start producing'
     : `How many units to order from ${supplier ?? 'your supplier'}`
 
-  const parsed = Number.parseInt(value, 10)
-  const hasNumber = value.trim() !== '' && Number.isFinite(parsed)
+  // The bounds the server enforces, from `your_state`: the form checks exactly
+  // what the engine checks, and refuses with the engine's own words. There
+  // are no negative orders; the floor is always the server's 0.
+  const minimum = view.min_order_quantity
   const maximum = view.max_order_quantity
-  const aboveMaximum = hasNumber && maximum !== null && parsed > maximum
-  const belowMinimum = hasNumber && !view.allow_negative_orders && parsed < 0
-  const canSubmit = hasNumber && !aboveMaximum && !belowMinimum && !disabled
+  const parsed = Number(value)
+  const hasNumber = value.trim() !== '' && Number.isFinite(parsed)
+  const outOfRange =
+    hasNumber && (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum)
+  const canSubmit = hasNumber && !outOfRange && !disabled
 
   // The server's lead time, added to the store's week. Nothing else.
   const arrivalWeek = week + view.order_arrival_lead_weeks
@@ -87,11 +91,7 @@ export function DecisionForm({
         view.order_arrival_lead_weeks,
       )}, around week ${arrivalWeek}.`
 
-  const minimumText = view.allow_negative_orders
-    ? 'Minimum: none — negative orders are allowed in this game.'
-    : 'Minimum 0 units.'
-  const maximumText =
-    maximum === null ? 'Maximum: none set.' : `Maximum ${maximum} units.`
+  const boundsText = `Minimum ${minimum} units, maximum ${maximum} units.`
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
@@ -115,8 +115,8 @@ export function DecisionForm({
         type="number"
         inputMode="numeric"
         step={1}
-        min={view.allow_negative_orders ? undefined : 0}
-        max={maximum ?? undefined}
+        min={minimum}
+        max={maximum}
         value={value}
         disabled={disabled}
         onChange={(event) => setValue(event.target.value)}
@@ -159,14 +159,13 @@ export function DecisionForm({
         </button>
       </div>
 
-      <p className="text-sm text-ink-muted">{`${minimumText} ${maximumText}`}</p>
+      <p className="text-sm text-ink-muted">{boundsText}</p>
 
-      {aboveMaximum ? (
-        <p className="text-sm text-danger">{`That is above the maximum of ${maximum} units.`}</p>
-      ) : null}
-      {belowMinimum ? (
+      {/* The server's own refusal, word for word: an out-of-range order is
+          refused there too, never cut down to fit. */}
+      {outOfRange ? (
         <p className="text-sm text-danger">
-          Negative orders are not allowed in this game.
+          {`Order must be a whole number from ${minimum} to ${maximum}.`}
         </p>
       ) : null}
       {notice ? (

@@ -10,6 +10,7 @@ import http from './http'
 import type {
   ConfigResponse,
   GameConfig,
+  Limits,
   PresetListResponse,
   RoomCreateRequest,
   RoomCreateResponse,
@@ -59,5 +60,14 @@ export async function updateRoomConfig(
 
 export async function listPresets(): Promise<PresetListResponse> {
   const { data } = await http.get<PresetListResponse>('/rooms/presets')
+  return data
+}
+
+/**
+ * Every range the host form checks. The backend is the only copy of these
+ * numbers; the form builds its checks from this response (2026-11-02).
+ */
+export async function getLimits(): Promise<Limits> {
+  const { data } = await http.get<Limits>('/rooms/limits')
   return data
 }

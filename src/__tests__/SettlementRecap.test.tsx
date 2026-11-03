@@ -139,7 +139,6 @@ function gameConfig(): GameConfig {
       show_running_cost_to_players: true,
       show_leaderboard_during_game: false,
       max_order_quantity: null,
-      allow_negative_orders: false,
     },
     bot: { theta: 0.36, alpha: 0.26, beta: 0.34, target_stock_multiplier: 1 },
   };
@@ -166,7 +165,7 @@ function settlementFor(role: Role, over: Partial<WeekSettlement> = {}): WeekSett
 }
 
 /**
- * The required half of `PlayerView`. `accumulated_cost`, `week_cost` and
+ * The required half of `PlayerView`. `accumulated_cost`, the two week figures and
  * `balance` are deliberately absent: they are the keys
  * `show_running_cost_to_players` gates, and their absence is criterion 6.
  */
@@ -189,8 +188,8 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: [],
-    max_order_quantity: null,
-    allow_negative_orders: false,
+    min_order_quantity: 0,
+    max_order_quantity: 9999,
     show_supply_line_prominently: true,
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
@@ -203,7 +202,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
 
 /** `§2.5a` exactly: the fixture criterion 18 asserts against. */
 function fixtureView(): PlayerView {
-  return viewFor('RETAILER', { accumulated_cost: 21.5, week_cost: 4 });
+  return viewFor('RETAILER', { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null });
 }
 
 let seq = 0;
@@ -371,10 +370,26 @@ describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fix
     expect(line).toMatch(/\$0\.00/);
   });
 
-  it('renders the week-cost line from settlement.carrying_cost', () => {
+  it('renders the holding & backlog line from settlement.carrying_cost', () => {
     renderRecap(fixtureView());
 
-    expect(row(/week cost/i)).toMatch(/\$4\.00/);
+    expect(row(/holding & backlog/i)).toMatch(/\$4\.00/);
+  });
+
+  it('never says "Week cost": the order cost is its own line, not yet charged', () => {
+    // 2026-11-02: one "week cost" was holding + backlog on screen and the
+    // whole week in the record, and "Total so far" jumped by the difference.
+    renderRecap(fixtureView());
+
+    expect(recapText()).not.toMatch(/week cost/i);
+    expect(row(/order cost/i)).toMatch(/not yet charged/i);
+    expect(row(/order cost/i)).not.toMatch(/\$/);
+  });
+
+  it('shows the order cost the server sends once it has been charged', () => {
+    renderRecap(viewFor('RETAILER', { accumulated_cost: 21.5, week_order_cost: 14 }));
+
+    expect(row(/order cost/i)).toMatch(/\$14\.00/);
   });
 
   it('renders the running total from your_state.accumulated_cost', () => {
@@ -383,7 +398,7 @@ describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fix
     expect(row(/total so far/i)).toMatch(/\$21\.50/);
   });
 
-  it('renders the nine lines in the §2.5 order', () => {
+  it('renders the lines in the §2.5 order', () => {
     renderRecap(fixtureView());
 
     const order = [
@@ -393,7 +408,8 @@ describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fix
       rowIndex(/unfulfilled/i),
       rowIndex(/holding cost/i),
       rowIndex(/backlog cost/i),
-      rowIndex(/week cost/i),
+      rowIndex(/holding & backlog/i),
+      rowIndex(/order cost/i),
       rowIndex(/total so far/i),
     ];
 
@@ -403,10 +419,10 @@ describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fix
 
   it('uses the configured currency symbol rather than a hardcoded one', () => {
     renderRecap(
-      viewFor('RETAILER', { currency_symbol: '€', accumulated_cost: 21.5, week_cost: 4 }),
+      viewFor('RETAILER', { currency_symbol: '€', accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null }),
     );
 
-    expect(row(/week cost/i)).toMatch(/€\s*4\.00/);
+    expect(row(/holding & backlog/i)).toMatch(/€\s*4\.00/);
     expect(bodyText()).not.toMatch(/\$/);
   });
 });
@@ -423,13 +439,13 @@ describe('CRITERION 19: the ledger names this role’s actual neighbours', () =>
   ];
 
   it.each(upstream)('%s receives from its upstream neighbour', (role, supplier) => {
-    renderRecap(viewFor(role, { accumulated_cost: 21.5, week_cost: 4 }));
+    renderRecap(viewFor(role, { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null }));
 
     expect(row(/received/i)).toMatch(supplier);
   });
 
   it('the Factory receives "Finished production", not a supplier name', () => {
-    renderRecap(viewFor('FACTORY', { accumulated_cost: 21.5, week_cost: 4 }));
+    renderRecap(viewFor('FACTORY', { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null }));
 
     expect(recapText()).toMatch(/finished production/i);
     expect(recapText()).not.toMatch(/received from/i);
@@ -443,7 +459,7 @@ describe('CRITERION 19: the ledger names this role’s actual neighbours', () =>
   ];
 
   it.each(downstream)('%s shows its downstream customer on the demand line', (role, label) => {
-    renderRecap(viewFor(role, { accumulated_cost: 21.5, week_cost: 4 }));
+    renderRecap(viewFor(role, { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null }));
 
     expect(row(label)).toMatch(/\b8\b/);
   });
@@ -456,17 +472,17 @@ describe('CRITERION 19: the ledger names this role’s actual neighbours', () =>
 describe('CRITERION 20: with starting_capital > 0 the last line is a Balance', () => {
   it('reads "Balance" and shows starting_capital - accumulated_cost', () => {
     // D8: the server sends the transform; 978.50 = 1000.00 - 21.50.
-    renderRecap(viewFor('RETAILER', { accumulated_cost: 21.5, week_cost: 4, balance: 978.5 }));
+    renderRecap(viewFor('RETAILER', { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null, balance: 978.5 }));
 
     expect(row(/balance/i)).toMatch(/\$978\.50/);
     expect(recapText()).not.toMatch(/total so far/i);
   });
 
   it('keeps the week’s own lines unchanged, because D8 is a display transform', () => {
-    renderRecap(viewFor('RETAILER', { accumulated_cost: 21.5, week_cost: 4, balance: 978.5 }));
+    renderRecap(viewFor('RETAILER', { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null, balance: 978.5 }));
 
     expect(row(/holding cost/i)).toMatch(/\$4\.00/);
-    expect(row(/week cost/i)).toMatch(/\$4\.00/);
+    expect(row(/holding & backlog/i)).toMatch(/\$4\.00/);
   });
 });
 
@@ -476,7 +492,7 @@ describe('CRITERION 20: with starting_capital > 0 the last line is a Balance', (
 
 describe('CRITERION 6: with the running cost hidden, the last line is absent', () => {
   it('omits the running total entirely when the gated keys are absent', () => {
-    // §3.8: `accumulated_cost`, `week_cost` and `balance` are simply not sent.
+    // §3.8: `accumulated_cost`, the week figures and `balance` are simply not sent.
     renderRecap(viewFor('RETAILER'));
 
     expect(bodyText()).not.toMatch(/total so far/i);
@@ -490,7 +506,7 @@ describe('CRITERION 6: with the running cost hidden, the last line is absent', (
 
     expect(row(/holding cost/i)).toMatch(/\$4\.00/);
     expect(row(/backlog cost/i)).toMatch(/\$0\.00/);
-    expect(row(/week cost/i)).toMatch(/\$4\.00/);
+    expect(row(/holding & backlog/i)).toMatch(/\$4\.00/);
   });
 });
 
@@ -506,7 +522,7 @@ describe('FAILURE MODE 4: the money figure is the server’s, never a product', 
       viewFor('RETAILER', {
         settlement: settlementFor('RETAILER', { holding_cost: 99, carrying_cost: 99 }),
         accumulated_cost: 21.5,
-        week_cost: 99,
+        week_holding_backlog_cost: 99, week_order_cost: null,
       }),
     );
 
@@ -525,7 +541,7 @@ describe('FAILURE MODE 4: the money figure is the server’s, never a product', 
           carrying_cost: 11.25,
         }),
         accumulated_cost: 21.5,
-        week_cost: 11.25,
+        week_holding_backlog_cost: 11.25, week_order_cost: null,
       }),
     );
 
@@ -534,7 +550,7 @@ describe('FAILURE MODE 4: the money figure is the server’s, never a product', 
     expect(line).not.toMatch(/\$3\.00/);
   });
 
-  it('renders settlement.carrying_cost as the week cost, not holding + backlog', () => {
+  it('renders settlement.carrying_cost as holding & backlog, not holding + backlog', () => {
     // holding 4.00 + backlog 7.25 would be 11.25; the server says 12.75.
     renderRecap(
       viewFor('RETAILER', {
@@ -544,11 +560,11 @@ describe('FAILURE MODE 4: the money figure is the server’s, never a product', 
           carrying_cost: 12.75,
         }),
         accumulated_cost: 21.5,
-        week_cost: 12.75,
+        week_holding_backlog_cost: 12.75, week_order_cost: null,
       }),
     );
 
-    const line = row(/week cost/i);
+    const line = row(/holding & backlog/i);
     expect(line).toMatch(/\$12\.75/);
     expect(line).not.toMatch(/\$11\.25/);
   });
@@ -576,7 +592,7 @@ describe('FAILURE MODE 7: "Unfulfilled" is the payload’s field, not a subtract
           carrying_cost: 8,
         }),
         accumulated_cost: 21.5,
-        week_cost: 8,
+        week_holding_backlog_cost: 8, week_order_cost: null,
       }),
     );
 
@@ -601,7 +617,7 @@ describe('FAILURE MODE 7: "Unfulfilled" is the payload’s field, not a subtract
           carrying_cost: 14,
         }),
         accumulated_cost: 21.5,
-        week_cost: 14,
+        week_holding_backlog_cost: 14, week_order_cost: null,
       }),
     );
 

@@ -81,8 +81,8 @@ export interface VisibilityConfig {
   show_supply_line_prominently: boolean
   show_running_cost_to_players: boolean
   show_leaderboard_during_game: boolean
+  /** `null` (or `0` as typed) means "no per-game cap"; the global ceiling still applies. */
   max_order_quantity: number | null
-  allow_negative_orders: boolean
 }
 
 export interface ConstantDemand {
@@ -159,8 +159,13 @@ export interface GameConfig {
   bot: BotConfig
 }
 
-/** The hard ceilings from `00-decisions.md` section 5. */
+/**
+ * Every range the host form checks, as `GET /rooms/limits` serves it
+ * (`app/core/limits.py`). The backend is the only copy: the form builds its
+ * checks from this response and keeps no number of its own (2026-11-02).
+ */
 export interface Limits {
+  /** Orders, demand quantities, and both optional caps (where 0 means "unlimited"). */
   max_order_quantity: number
   max_weeks: number
   min_weeks: number
@@ -170,8 +175,16 @@ export interface Limits {
   max_unit_value: number
   /** `random_seed` is held to plus or minus this: `Number.MAX_SAFE_INTEGER`. */
   max_random_seed: number
-  /** The ceiling of the stored `period_weeks` column. */
+  /** `STEP` demand: the step may not fall in week 1; its upper bound is the game's length. */
+  min_step_week: number
+  min_period_weeks: number
   max_period_weeks: number
+  /** `SEASONAL` phase, in radians, either way. */
+  max_phase: number
+  max_currency_symbol_length: number
+  /** The bot's theta, alpha and beta lie in [0, max_bot_weight]. */
+  max_bot_weight: number
+  max_target_stock_multiplier: number
 }
 
 /* ─── Engine records (07 section 2) ─── */
@@ -190,6 +203,13 @@ export interface WeekRecord {
   closing_inventory: number
   closing_backlog: number
   supply_line_after: number
+  /**
+   * This role's OWN incoming-order pipeline after the week: orders its
+   * downstream customer placed that are still travelling to it. Not the
+   * player's on-screen "orders in flight" (`PlayerView.orders_in_flight`),
+   * which are their own orders going upstream. The export calls this column
+   * `incoming_orders_in_flight_after`.
+   */
   orders_in_flight_after: number
   order: number
   was_bot: boolean
@@ -199,7 +219,12 @@ export interface WeekRecord {
   backlog_cost: number
   fixed_order_cost: number
   purchase_cost: number
-  week_cost: number
+  /**
+   * Holding + backlog + fixed order + purchase cost for the week. Never shown
+   * as one "week cost": the screens show holding & backlog and the order cost
+   * as two figures. Was `week_cost` until 2026-11-02.
+   */
+  total_week_cost: number
   cumulative_cost: number
   /** FACTORY only, else null. */
   production_started: number | null
@@ -302,8 +327,13 @@ export interface PlayerView {
   awaiting_roles: Role[]
   own_history: WeekRecord[]
 
-  max_order_quantity: number | null
-  allow_negative_orders: boolean
+  /**
+   * The bounds the server enforces on an order, both inclusive. The form
+   * refuses outside them with the server's own message; the server refuses
+   * too, and never clamps. The floor is always 0: there are no negative orders.
+   */
+  min_order_quantity: number
+  max_order_quantity: number
   show_supply_line_prominently: boolean
 
   /** Weeks from placing an order now to that order arriving; the server computes it. */
@@ -315,7 +345,17 @@ export interface PlayerView {
   backlog_cost_per_unit_week: number
 
   accumulated_cost?: number
-  week_cost?: number
+  /**
+   * Holding and backlog cost for the open week (once the game is over, for the
+   * last closed week). Shown as "Holding & backlog", never as a "week cost".
+   */
+  week_holding_backlog_cost?: number
+  /**
+   * Fixed order cost + purchase cost for the same week. `null` while the week
+   * is open: the order is charged only when the week closes ("not yet
+   * charged").
+   */
+  week_order_cost?: number | null
   /** `starting_capital - accumulated_cost` (D8). */
   balance?: number
   /** Truncated to `week` entries — a player never sees future demand. */

@@ -11,7 +11,6 @@ import { DEMAND_COLOUR, roleStyle } from '../charts/chartTheme'
 import Legend, { type LegendItem } from '../charts/Legend'
 import ErrorBoundary from '../shared/ErrorBoundary'
 import { ROLE_ORDER, type Role } from '../../types/game'
-import { ROLE_LABEL } from '../lobby/roleCopy'
 import BullwhipRatioBars from './BullwhipRatioBars'
 
 export interface BullwhipChartProps {
@@ -22,13 +21,6 @@ export interface BullwhipChartProps {
 const DEMAND = 'DEMAND'
 
 type SeriesKey = Role | typeof DEMAND
-
-/** The stepper's stages: the customer alone, then each role in `ROLE_ORDER`. */
-const STAGE_COUNT = ROLE_ORDER.length + 1
-
-function stageLabel(stage: number): string {
-  return stage === 0 ? 'Customer' : `+ ${ROLE_LABEL[ROLE_ORDER[stage - 1]]}`
-}
 
 /**
  * The same five series, read out as a table (section 2.2a).
@@ -88,11 +80,21 @@ function WeekTable({ view }: { view: ResultsView }): ReactElement {
  * because bringing the chain in one stage at a time is the single most
  * useful control in the debrief and it has to work with a keyboard, with a
  * screen reader, and on a machine where the canvas never got a context.
+ *
+ * Every series has its own switch, and each one adds or removes **that
+ * series only**. This replaced a cumulative stepper whose "+ Factory" button
+ * showed all four stages at once, which is not what a button named after one
+ * stage reads as doing. The one control that touches every series is the
+ * Show all / Clear selection toggle beside them; the debrief's "bring the
+ * chain in" is Clear selection, then the switches one at a time.
+ *
+ * The role switched on last is drawn at full strength and the others fade,
+ * so the stage just added is the one the room looks at. Show all, Clear
+ * selection, or switching that role off again drops the emphasis.
  */
 export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
   const [hidden, setHidden] = useState<readonly SeriesKey[]>([])
-  // `null` is the start state: no stage chosen, every series on.
-  const [stage, setStage] = useState<number | null>(null)
+  const [newest, setNewest] = useState<Role | null>(null)
 
   const visible = useMemo<ResultsView>(() => {
     if (hidden.length === 0) return view
@@ -103,21 +105,28 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
     }
   }, [view, hidden])
 
-  const emphasis = stage !== null && stage >= 1 ? ROLE_ORDER[stage - 1] : null
-  const config = buildBullwhipConfig(visible, { emphasis })
   const shownRoles = ROLE_ORDER.filter((role) => !hidden.includes(role))
+  // One role on its own has nothing to stand out from.
+  const emphasis = newest !== null && shownRoles.length > 1 ? newest : null
+  const config = buildBullwhipConfig(visible, { emphasis })
 
-  // A stage shows demand plus the first `next` roles, and hides the rest.
-  function goToStage(next: number): void {
-    setStage(next)
-    setHidden(ROLE_ORDER.slice(next))
-  }
+  const allKeys: readonly SeriesKey[] = [DEMAND, ...view.per_role.map((role) => role.role)]
+  const allShown = allKeys.every((key) => !hidden.includes(key))
+  const nothingShown = allKeys.every((key) => hidden.includes(key))
 
   function toggle(key: SeriesKey): void {
-    setStage(null)
+    const turningOn = hidden.includes(key)
     setHidden((current) =>
       current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
     )
+    if (key === DEMAND) return
+    if (turningOn) setNewest(key)
+    else if (newest === key) setNewest(null)
+  }
+
+  function toggleAll(): void {
+    setNewest(null)
+    setHidden(allShown ? allKeys : [])
   }
 
   const legendItems: LegendItem[] = [
@@ -139,42 +148,28 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
 
   return (
     <div className="flex flex-col gap-3">
-      <div
-        data-print="omit"
-        role="group"
-        aria-label="Bring the chain in stage by stage"
-        className="flex flex-wrap items-center gap-2"
-      >
-        {Array.from({ length: STAGE_COUNT }, (_, index) => (
-          <button
-            key={index}
-            type="button"
-            aria-pressed={stage === index}
-            onClick={() => goToStage(index)}
-            className={`rounded-md border px-3 py-1.5 text-sm font-semibold transition ${
-              stage === index
-                ? 'border-brand bg-brand-soft text-ink'
-                : 'border-border-strong bg-surface-raised text-ink'
-            }`}
-          >
-            {stageLabel(index)}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <Legend
+          items={legendItems}
+          hidden={new Set<string>(hidden)}
+          onToggle={(key) => toggle(key as SeriesKey)}
+          ariaLabel="Choose the series to show"
+        />
         <button
           type="button"
-          disabled={stage === STAGE_COUNT - 1}
-          onClick={() => goToStage(stage === null ? 0 : stage + 1)}
-          className="rounded-md border border-border-strong px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+          data-print="omit"
+          onClick={toggleAll}
+          className="rounded-md border border-brand px-3 py-1.5 text-sm font-semibold text-brand-strong transition hover:bg-brand-soft"
         >
-          Next stage
+          {allShown ? 'Clear selection' : 'Show all'}
         </button>
       </div>
 
-      <Legend
-        items={legendItems}
-        hidden={new Set<string>(hidden)}
-        onToggle={(key) => toggle(key as SeriesKey)}
-      />
+      {nothingShown ? (
+        <p role="status" className="text-sm text-ink-muted">
+          Nothing is selected. Switch a series on to draw it.
+        </p>
+      ) : null}
 
       <ErrorBoundary
         fallback={
@@ -190,8 +185,8 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
       </ErrorBoundary>
 
       <p className="text-sm text-ink-muted">
-        Switch a series off to bring the chain in one stage at a time — Retailer first,
-        then upstream.
+        To bring the chain in one stage at a time, clear the selection, then switch
+        on customer demand and each stage in turn — Retailer first, then upstream.
       </p>
 
       <WeekTable view={visible} />

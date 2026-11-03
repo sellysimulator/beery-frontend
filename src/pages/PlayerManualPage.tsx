@@ -139,7 +139,9 @@ const BODY: ManualPageSpec[] = [
           <strong>Incoming order</strong> — how much your customer wants from you this week.
         </li>
         <li>
-          <strong>Your costs</strong> — this week's, and your running total.
+          <strong>Your costs</strong> — this week's holding and backlog cost, your order cost
+          (charged when the week closes, so until then it reads "not yet charged"), and your
+          running total.
         </li>
       </ul>
     ),
@@ -156,14 +158,17 @@ const BODY: ManualPageSpec[] = [
           you get.
         </p>
         <p>
-          <strong>2. Decide.</strong> Enter one number: how much to order from your supplier. The
-          screen tells you when it will arrive. Shortcuts are available — match the order you
-          just received, repeat your last order, or order nothing.
+          <strong>2. Decide.</strong> Enter one number: how much to order from your supplier —
+          a whole number from 0 up to the game's maximum, which the screen shows. A number
+          outside that is refused, never cut down to fit. The screen tells you when it will
+          arrive. Shortcuts are available — match the order you just received, repeat your last
+          order, or order nothing.
         </p>
         <p>
           <strong>3. Confirm and wait.</strong> Once you submit, you'll see who else still has to
-          decide. Everyone's order is hidden until the week closes. There is no time limit — the
-          week closes when everyone has decided, or when the host closes it.
+          decide. The other players never see your order — not now, and not after the week
+          closes; they only see that you have decided. There is no time limit — the week closes
+          when everyone has decided, or when the host closes it.
         </p>
         <p>Then the next week begins.</p>
       </>

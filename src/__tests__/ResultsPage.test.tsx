@@ -872,11 +872,32 @@ describe('CRITERION 8: one row per role, in ROLE_ORDER, with all seven columns',
       /variance/i,
       /inventory/i,
       /backlog/i,
-      /fill/i,
+      /shipped vs waiting/i,
       /average|avg|mean/i,
     ]) {
       expect(heading).toMatch(re);
     }
+  });
+
+  it('calls the fill_rate column "Shipped vs waiting", never "Fill rate", and defines it', async () => {
+    await renderReady();
+
+    // 2026-11-02: the figure is sum(shipped) / sum(obligation), and obligation
+    // counts each week's backlog again, so "fill rate" promised something it
+    // does not measure. The computation is unchanged; only the words are.
+    const headers = Array.from(ratioTable().querySelectorAll('th[scope="col"]')).map(textOf);
+    expect(headers).toContain('Shipped vs waiting');
+    expect(document.body.textContent ?? '').not.toMatch(/fill rate/i);
+
+    const header = Array.from(ratioTable().querySelectorAll<HTMLElement>('th[scope="col"]')).find(
+      (th) => textOf(th) === 'Shipped vs waiting',
+    ) as HTMLElement;
+    const definitionId = header.getAttribute('aria-describedby');
+    expect(definitionId).toBeTruthy();
+    const definition = document.getElementById(definitionId as string);
+    expect(definition).not.toBeNull();
+    expect(textOf(definition as HTMLElement)).toMatch(/units shipped ÷ units owed/i);
+    expect(textOf(definition as HTMLElement)).toMatch(/counting each week.s backlog again/i);
   });
 });
 

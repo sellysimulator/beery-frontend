@@ -3,14 +3,20 @@ import { ROLE_ORDER, type Role } from '../../types/game'
 import { orderSeriesLabel } from '../charts/chartSetup'
 import { Line } from 'react-chartjs-2'
 import ErrorBoundary from '../shared/ErrorBoundary'
-import { DEMAND_CURVE_LABEL, buildDemandCurveConfig } from './demandCurveConfig'
+import { DEMAND_CURVE_LABEL, buildDemandCurveConfig, revealedDemand } from './demandCurveConfig'
 
 export interface DemandCurveProps {
-  /** `host_state.demand_series` — the FULL series, future weeks included. */
+  /**
+   * `host_state.demand_series` — the FULL series, future weeks included. Under
+   * `presenting` only its revealed part is rendered (`revealedDemand`).
+   */
   demandSeries: number[]
   /** 1-indexed, as every week is. */
   currentWeek: number
-  /** Projector styling: larger type, thicker rules (§2.4, §3.5). */
+  /**
+   * Projector styling: larger type, thicker rules (§2.4, §3.5) — and only the
+   * weeks the room has already seen, never the future of the series.
+   */
   presenting?: boolean
   /**
    * `host_state.order_history`. Ignored when `presenting`: the order streams
@@ -27,24 +33,29 @@ const CURRENT_WEEK_CELL = 'Current week'
  *
  * Visually hidden, and the only place the plotted numbers exist as text: a
  * canvas is opaque to a screen reader and to a test alike. One row per week of
- * the **full** series, with the week number, the demand value and whether that
- * week is the current one.
+ * whatever the chart plots — the **full** series on the console, the revealed
+ * weeks on the projector — with the week number, the demand value and whether
+ * that week is the current one. It is handed the series the chart was built
+ * from, never a longer one: a hidden table is still in the projector's DOM.
  */
 function DemandTable({
   demandSeries,
   currentWeek,
   orderHistory,
+  revealedOnly,
 }: {
   demandSeries: number[]
   currentWeek: number
   orderHistory: Partial<Record<Role, number[]>> | null
+  revealedOnly: boolean
 }): ReactElement {
   const overlaid = orderHistory ? ROLE_ORDER.filter((role) => orderHistory[role]) : []
   return (
     <table className="sr-only">
       <caption>
-        True customer demand for every week of the game, including the weeks not yet
-        played
+        {revealedOnly
+          ? 'True customer demand for every week played so far'
+          : 'True customer demand for every week of the game, including the weeks not yet played'}
       </caption>
       <thead>
         <tr>
@@ -87,6 +98,12 @@ function DemandTable({
  * the step is about to land, which is the difference between running a session
  * and watching one.
  *
+ * Under `presenting` the whole room is watching, so the curve and its table
+ * stop at the current week (`revealedDemand`, the engine's own
+ * `customer_demand_series` rule): a projector showing where the step lands
+ * before it lands would hand every player the one thing the game hides from
+ * them. That is the same reason the order overlay is dropped there.
+ *
  * The configuration is `buildDemandCurveConfig(...)` and nothing else: this
  * component passes it straight through and adds nothing to it (§2.1a). The
  * canvas is wrapped in an error boundary because a chart that cannot get a
@@ -100,7 +117,11 @@ export function DemandCurve({
   orderHistory = null,
 }: DemandCurveProps): ReactElement {
   const overlay = presenting ? null : orderHistory
-  const config = buildDemandCurveConfig(demandSeries, currentWeek, { orderHistory: overlay })
+  const shown = presenting ? revealedDemand(demandSeries, currentWeek) : demandSeries
+  const config = buildDemandCurveConfig(demandSeries, currentWeek, {
+    orderHistory: overlay,
+    revealedThroughWeek: presenting ? currentWeek : null,
+  })
 
   return (
     <section
@@ -142,7 +163,12 @@ export function DemandCurve({
         </ErrorBoundary>
       )}
 
-      <DemandTable demandSeries={demandSeries} currentWeek={currentWeek} orderHistory={overlay} />
+      <DemandTable
+        demandSeries={shown}
+        currentWeek={currentWeek}
+        orderHistory={overlay}
+        revealedOnly={presenting}
+      />
     </section>
   )
 }

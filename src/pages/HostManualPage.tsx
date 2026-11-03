@@ -113,9 +113,11 @@ const BODY: ManualPageSpec[] = [
         </p>
         <p>
           <strong>Starting conditions</strong>, per role or all at once. Opening inventory.
-          Opening backlog. How many weeks shipments spend in transit. How many weeks orders take
-          to reach the supplier. How much is already in the pipeline at week one. For the
-          Factory, the production delay and any capacity limit.
+          Opening backlog. How many weeks shipments spend in transit. How many weeks a
+          customer's orders take to reach each role — set on the role the orders travel to, so
+          the Wholesaler's sets how long the Retailer's orders take. How much is already in the
+          pipeline at week one. For the Factory, the production delay and any capacity limit
+          (0 means unlimited).
         </p>
       </>
     ),
@@ -230,11 +232,13 @@ const BODY: ManualPageSpec[] = [
             room is waiting on them.
           </li>
           <li>
-            <strong>Swap in a bot</strong> for a player who has dropped out.
+            <strong>Swap in a bot</strong> for a player who has dropped out — even while
+            paused; the bot plays as soon as you resume. The game still counts for that player.
           </li>
           <li>
             <strong>End early</strong> if the session is running short — you still get full
-            results for the weeks played.
+            results for the weeks played. The week in progress is dropped, cost and all, so your
+            console and the results show the same totals.
           </li>
         </ul>
       </>

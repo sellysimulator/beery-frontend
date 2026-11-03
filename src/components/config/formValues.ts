@@ -4,7 +4,7 @@
  * `useForm({ values })` re-syncs the whole form whenever this object changes,
  * which is exactly the arrangement `18 section 3.0` describes: the store holds
  * the truth, React Hook Form holds only the keystrokes of the field being
- * edited, and a value the server clamped reappears in the input the moment the
+ * edited, and what the server stored reappears in the input the moment the
  * response lands (AC 12, FM 1).
  */
 import type { ConfigFormValues } from '../../schemas/configSchema'
@@ -56,7 +56,6 @@ export const PLACEHOLDER_FORM_VALUES: ConfigFormValues = {
     show_running_cost_to_players: true,
     show_leaderboard_during_game: false,
     max_order_quantity: null,
-    allow_negative_orders: false,
   },
   bot: { theta: 0.25, alpha: 0.3, beta: 0.25, target_stock_multiplier: 3.0 },
 }
@@ -68,7 +67,7 @@ export const PLACEHOLDER_FORM_VALUES: ConfigFormValues = {
  * host who picks a different generator sees that generator's parameter block at
  * once, filled with its declared defaults — which is precisely what the payload
  * sent alongside it says (`18 section 3.1a`). It stops applying as soon as the
- * stored config agrees, so nothing here can mask a clamp.
+ * stored config agrees, so nothing here can mask what the server stored.
  */
 export function toFormValues(
   config: GameConfig,

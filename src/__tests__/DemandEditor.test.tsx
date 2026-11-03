@@ -92,9 +92,13 @@ vi.mock('socket.io-client', () => {
 
 const rest = vi.hoisted(() => ({ configResponse: null as unknown }));
 
+const limitsFixture = await vi.hoisted(async () => await import('./limitsFixture'));
+
 const httpRec = vi.hoisted(() => ({
   get: vi.fn(async (url: string) => {
     if (/presets/.test(url)) return { data: { presets: [] } };
+    // The server's ranges (`GET /rooms/limits`): the form has no copy of its own.
+    if (/\/rooms\/limits$/.test(url)) return { data: limitsFixture.TEST_LIMITS };
     return { data: {} };
   }),
   put: vi.fn(async (...args: unknown[]) => {
@@ -154,7 +158,6 @@ function visibilityDefaults(): VisibilityConfig {
     show_running_cost_to_players: true,
     show_leaderboard_during_game: false,
     max_order_quantity: null,
-    allow_negative_orders: false,
   };
 }
 
@@ -310,10 +313,31 @@ function kindSelect(): HTMLSelectElement | null {
   );
 }
 
+/** The generator picker when it is the app's own dropdown: the combobox whose list offers a kind. */
+function kindCombobox(): HTMLElement | null {
+  return (
+    screen.queryAllByRole('combobox').find((combo) => {
+      const list = document.getElementById(combo.getAttribute('aria-controls') ?? '');
+      return Array.from(list?.querySelectorAll('[role="option"]') ?? []).some((o) =>
+        KINDS.includes(o.getAttribute('data-value') as Kind),
+      );
+    }) ?? null
+  );
+}
+
 async function chooseKind(user: ReturnType<typeof userEvent.setup>, kind: Kind): Promise<void> {
   const select = kindSelect();
   if (select) {
     await user.selectOptions(select, kind);
+    return;
+  }
+  const combo = kindCombobox();
+  if (combo) {
+    await user.click(combo);
+    const list = document.getElementById(combo.getAttribute('aria-controls') ?? '');
+    const option = list?.querySelector<HTMLElement>(`[role="option"][data-value="${kind}"]`);
+    if (!option) throw new Error(`The generator picker offers no ${kind}.`);
+    await user.click(option);
     return;
   }
   const named = new RegExp(kind, 'i');

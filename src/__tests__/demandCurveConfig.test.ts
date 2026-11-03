@@ -11,6 +11,7 @@ import type { ChartConfiguration } from 'chart.js'
 import {
   buildDemandCurveConfig,
   DEMAND_CURVE_LABEL,
+  revealedDemand,
 } from '../components/host/demandCurveConfig'
 import { orderSeriesLabel } from '../components/charts/chartSetup'
 import { DEMAND_COLOUR, roleStyle, withAlpha } from '../components/charts/chartTheme'
@@ -224,5 +225,59 @@ describe('buildDemandCurveConfig: the current week band', () => {
 
     expect(Array.isArray(config.plugins)).toBe(true)
     expect((config.plugins ?? []).length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+/**
+ * Task 4 (2026-11-02): the projector plots only the weeks the room has already
+ * seen — weeks 1 to the open week, the engine's own `customer_demand_series`
+ * rule (`07 §3.8`) — while the host console keeps the whole series.
+ */
+describe('buildDemandCurveConfig: revealedThroughWeek (the projector)', () => {
+  function pointArrays(config: ChartConfiguration<'line'>): unknown[][] {
+    const demand = demandDataset(config)
+    return ['pointRadius', 'pointHoverRadius', 'pointStyle', 'pointBackgroundColor', 'pointBorderWidth'].map(
+      (key) => demand[key] as unknown[],
+    )
+  }
+
+  it('revealedDemand is weeks 1 to the open week, the open week included', () => {
+    expect(revealedDemand(SERIES, WEEK)).toEqual(SERIES.slice(0, WEEK))
+    expect(revealedDemand(SERIES, 1)).toEqual([SERIES[0]])
+    expect(revealedDemand(SERIES, 0)).toEqual([])
+    expect(revealedDemand(SERIES, DURATION + 5)).toEqual(SERIES)
+  })
+
+  it('carries no demand value past the revealed week, in data or in any per-point array', () => {
+    const config = buildDemandCurveConfig([...SERIES], WEEK, { revealedThroughWeek: WEEK })
+
+    expect(demandDataset(config).data).toEqual(SERIES.slice(0, WEEK))
+    for (const future of SERIES.slice(WEEK)) {
+      expect(demandDataset(config).data as number[]).not.toContain(future)
+    }
+    for (const array of pointArrays(config)) expect(array).toHaveLength(WEEK)
+  })
+
+  it('still marks the open week, which is the last point plotted', () => {
+    const config = buildDemandCurveConfig([...SERIES], WEEK, { revealedThroughWeek: WEEK })
+    const radii = demandDataset(config).pointRadius as number[]
+
+    expect(radii[WEEK - 1]).toBeGreaterThan(0)
+    expect(radii.filter((r) => r > 0)).toHaveLength(1)
+  })
+
+  it('keeps the x axis the length of the game, so the room sees how far through it is', () => {
+    const config = buildDemandCurveConfig([...SERIES], WEEK, { revealedThroughWeek: WEEK })
+
+    expect(config.data.labels).toHaveLength(DURATION)
+  })
+
+  it.each([
+    ['absent', {}],
+    ['null', { revealedThroughWeek: null }],
+  ] as const)('%s: the console view, the whole series future included', (_name, options) => {
+    const config = buildDemandCurveConfig([...SERIES], WEEK, options)
+
+    expect(demandDataset(config).data).toEqual(SERIES)
   })
 })

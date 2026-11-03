@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { FORM_LIMITS } from '../../schemas/configSchema'
+import { useConfigFormContext } from './configFormContext'
 import { VISIBILITY_COPY } from './copy'
 import { NumberField, SwitchField } from './fields'
 
@@ -10,8 +10,13 @@ import { NumberField, SwitchField } from './fields'
  * saying what it teaches, always rendered rather than hidden behind a tooltip:
  * these are the settings a host changes *between* two runs of the same
  * scenario to make a point, and the point is the thing worth reading.
+ *
+ * There is no "negative orders" switch: the option was removed on 2026-11-02.
+ * It never worked (a negative order froze the week), and every order now has a
+ * floor of 0.
  */
 export function VisibilitySection(): ReactElement {
+  const { limits } = useConfigFormContext()
   return (
     <div className="flex flex-col gap-3">
       {VISIBILITY_COPY.map((lever) => (
@@ -27,19 +32,13 @@ export function VisibilitySection(): ReactElement {
         <NumberField
           name="visibility.max_order_quantity"
           label="Largest order a player may place"
-          hint="Leave blank for no limit beyond the hard ceiling."
+          hint={`0 or blank = no limit of your own; the hard ceiling of ${limits.max_order_quantity} still applies. A player's order above the limit is refused, not cut down.`}
           placeholder="No limit"
           nullable
           min={0}
-          max={FORM_LIMITS.max_order_quantity}
+          max={limits.max_order_quantity}
         />
       </div>
-
-      <SwitchField
-        name="visibility.allow_negative_orders"
-        label="Allow negative orders"
-        explanation="Lets a player send stock back up the chain. Off is the standard game."
-      />
     </div>
   )
 }

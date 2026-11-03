@@ -346,6 +346,17 @@ function assignControl(displayName: string): HTMLElement {
   throw new Error(`No control carries the frozen accessible name "${label}" (17 §2.4b, AC 26).`);
 }
 
+/** The option for `role` in a combobox seat picker's list, open or not. */
+function seatOption(control: HTMLElement, role: Role): HTMLElement | null {
+  const list = document.getElementById(control.getAttribute('aria-controls') ?? '');
+  return (
+    Array.from(list?.querySelectorAll<HTMLElement>('[role="option"]') ?? []).find(
+      (candidate) =>
+        candidate.getAttribute('data-value') === role || new RegExp(role, 'i').test(candidate.textContent ?? ''),
+    ) ?? null
+  );
+}
+
 /** Places a participant into a role through that control. */
 async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName: string, role: Role) {
   const control = assignControl(displayName);
@@ -358,6 +369,16 @@ async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName
       throw new Error(`"Assign role for ${displayName}" offers no ${role} option (AC 26).`);
     }
     await user.selectOptions(control, option.value);
+    return;
+  }
+
+  if (control.getAttribute('role') === 'combobox') {
+    await user.click(control);
+    const option = seatOption(control, role);
+    if (!option) {
+      throw new Error(`"Assign role for ${displayName}" offers no ${role} option (AC 26).`);
+    }
+    await user.click(option);
     return;
   }
 
@@ -788,12 +809,13 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
     renderHostRoom();
     settleClaim();
 
-    const selector = screen.getByRole('combobox', { name: NAMES.roleAssignment }) as HTMLSelectElement;
-    const option = Array.from(selector.options).find(
-      (o) => o.value === 'PLAYER_CHOOSES' || /player.?chooses/i.test(o.textContent ?? ''),
-    );
+    const selector = screen.getByRole('combobox', { name: NAMES.roleAssignment });
+    await user.click(selector);
+    const option = screen
+      .getAllByRole('option')
+      .find((o) => o.getAttribute('data-value') === 'PLAYER_CHOOSES' || /player.?chooses/i.test(o.textContent ?? ''));
     expect(option).toBeDefined();
-    await user.selectOptions(selector, option!.value);
+    await user.click(option!);
 
     const payloads = emitsOf('set_role_mode');
     expect(payloads).toHaveLength(1);
@@ -840,6 +862,41 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
     const keys = emitsOf('assign_role').flatMap((p) => Object.keys(p));
     expect(keys).not.toContain('identity');
     expect(keys).not.toContain('display_name');
+  });
+
+  it('lists a role someone else holds as taken by them, and does not let the host pick it', async () => {
+    // Picking a held role used to move it silently, leaving its holder
+    // roleless. The server now refuses it (11 §3.5), so the picker must not
+    // offer it: it is listed, disabled, with who holds it.
+    const user = userEvent.setup();
+    armedTab();
+    renderHostRoom();
+    settleClaim(
+      lobbyUpdate({
+        role_assignment_mode: 'HOST_ASSIGNS',
+        participants: [
+          participant({ alias: 'P1', display_name: 'Bea', role: 'FACTORY' }),
+          participant({ alias: 'P2', display_name: 'Cal' }),
+        ],
+        role_to_alias: { RETAILER: null, WHOLESALER: null, DISTRIBUTOR: null, FACTORY: 'P1' },
+      }),
+    );
+
+    const calsPicker = assignControl('Cal');
+    await user.click(calsPicker);
+    const factory = seatOption(calsPicker, 'FACTORY');
+    expect(factory).not.toBeNull();
+    expect(factory).toHaveAttribute('aria-disabled', 'true');
+    expect(factory).toHaveTextContent(/taken by bea/i);
+    await user.click(factory!);
+    expect(emitsOf('assign_role')).toHaveLength(0);
+
+    // The holder's own picker still offers the role they hold, as chosen.
+    const beasPicker = assignControl('Bea');
+    await user.click(beasPicker);
+    const own = seatOption(beasPicker, 'FACTORY');
+    expect(own).not.toHaveAttribute('aria-disabled');
+    expect(own).toHaveAttribute('aria-selected', 'true');
   });
 });
 

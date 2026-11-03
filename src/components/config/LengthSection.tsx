@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { FORM_LIMITS } from '../../schemas/configSchema'
+import { useConfigFormContext } from './configFormContext'
 import { NumberField, SwitchField } from './fields'
 
 /**
@@ -13,15 +13,17 @@ import { NumberField, SwitchField } from './fields'
  * does not play.
  */
 export function LengthSection(): ReactElement {
+  // The server's ranges, never a copy (`useLimits`).
+  const { limits } = useConfigFormContext()
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
           name="duration_weeks"
           label="Weeks to play"
-          hint={`Between ${FORM_LIMITS.min_weeks} and ${FORM_LIMITS.max_weeks}. Below ${FORM_LIMITS.min_weeks} the bullwhip has no room to develop.`}
-          min={FORM_LIMITS.min_weeks}
-          max={FORM_LIMITS.max_weeks}
+          hint={`Between ${limits.min_weeks} and ${limits.max_weeks}. Below ${limits.min_weeks} the bullwhip has no room to develop.`}
+          min={limits.min_weeks}
+          max={limits.max_weeks}
           unit="weeks"
         />
         <NumberField
@@ -30,8 +32,8 @@ export function LengthSection(): ReactElement {
           hint="Leave blank and the server picks one. The same seed replays the same game."
           placeholder="Chosen at start"
           nullable
-          min={-FORM_LIMITS.max_random_seed}
-          max={FORM_LIMITS.max_random_seed}
+          min={-limits.max_random_seed}
+          max={limits.max_random_seed}
         />
       </div>
 

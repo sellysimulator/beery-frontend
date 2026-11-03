@@ -148,7 +148,7 @@ function historyFor(role: Role): WeekRecord[] {
     backlog_cost: 0,
     fixed_order_cost: 0,
     purchase_cost: 0,
-    week_cost: 4,
+    total_week_cost: 4,
     cumulative_cost: 21.5,
     production_started: null,
     production_queued: null,
@@ -156,7 +156,7 @@ function historyFor(role: Role): WeekRecord[] {
 }
 
 /**
- * The gated keys — `accumulated_cost`, `week_cost`, `balance`, `neighbours`,
+ * The gated keys — `accumulated_cost`, `week_holding_backlog_cost`, `balance`, `neighbours`,
  * `chain`, `leaderboard`, `customer_demand_series` — are all absent by
  * default, because their absence is exactly what AC 6, AC 11 and AC 23 turn
  * on. `production_queue` follows `07 §3.8`: the Factory's unstarted
@@ -181,8 +181,8 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: historyFor(role),
-    max_order_quantity: null,
-    allow_negative_orders: false,
+    min_order_quantity: 0,
+    max_order_quantity: 9999,
     show_supply_line_prominently: true,
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
@@ -652,10 +652,12 @@ describe('cost visibility: absent means absent, not hidden', () => {
     expect(signText(model, 'ledger-row-0')).toBe('Nothing has settled yet')
   })
 
-  it('week_cost alone builds the corner; balance outranks accumulated_cost', () => {
-    const weekOnly = modelFor('DISTRIBUTOR', { week_cost: 7.5 })
+  it('the holding & backlog figure alone builds the corner; balance outranks accumulated_cost', () => {
+    // Never "this week": the order cost is a figure of its own, not yet
+    // charged while the week is open (2026-11-02).
+    const weekOnly = modelFor('DISTRIBUTOR', { week_holding_backlog_cost: 7.5, week_order_cost: null })
     expect(fixtureIds(weekOnly)).toContain('cost-corner')
-    expect(signText(weekOnly, 'cost-week')).toBe('THIS WEEK $7.50')
+    expect(signText(weekOnly, 'cost-week')).toBe('HOLDING & BACKLOG $7.50')
 
     const both = modelFor('DISTRIBUTOR', { balance: 81.25, accumulated_cost: 44 })
     expect(signText(both, 'cost-balance')).toBe('BALANCE $81.25')
@@ -887,7 +889,8 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
       orders_in_flight_slots: role === 'FACTORY' ? [] : [40, 40, 40, 40],
       production_queue: role === 'FACTORY' ? 90 : null,
       accumulated_cost: 61.25,
-      week_cost: 7.5,
+      week_holding_backlog_cost: 7.5,
+      week_order_cost: null,
       balance: 81.25,
       customer_demand_series: [3, 4, 9],
       neighbours: { RETAILER: { inventory: 71, backlog: 72 } },
@@ -1017,7 +1020,9 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
 
     expect(ledger).toHaveLength(2)
     expect(ledger[1].text.split('\n').length).toBeGreaterThan(1)
-    expect(ledger[1].text).toContain('Week cost')
+    expect(ledger[1].text).toContain('Holding & backlog')
+    expect(ledger[1].text).toContain('Order cost not yet charged')
+    expect(ledger[1].text).not.toContain('Week cost')
     expect(ledger[1].text).toContain('Holding cost')
 
     // The team board's four plaques are one mesh while they agree, and break

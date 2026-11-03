@@ -13,10 +13,10 @@ function Row({ label, value }: { label: string; value: string }): ReactElement {
   )
 }
 
-function readRole(config: GameConfig, role: Role, key: string): string {
+function readRole(config: GameConfig, role: Role, key: string, unset = '—'): string {
   const source = config.roles[role] as unknown as Record<string, unknown>
   const value = source[key]
-  if (value === null || value === undefined) return '—'
+  if (value === null || value === undefined) return unset
   return String(value)
 }
 
@@ -108,7 +108,9 @@ export function ConfigSummary({ config }: ConfigSummaryProps): ReactElement {
                     </th>
                     {ROLE_ORDER.map((role) => (
                       <td key={role} className="numeric py-1.5 text-ink">
-                        {readRole(config, role, row.key)}
+                        {/* A cap that is not set is "Unlimited", not a dash:
+                            the dash belongs to a row the role does not have. */}
+                        {readRole(config, role, row.key, row.nullable ? (row.placeholder ?? '—') : '—')}
                       </td>
                     ))}
                   </tr>
@@ -144,10 +146,6 @@ export function ConfigSummary({ config }: ConfigSummaryProps): ReactElement {
                 ? 'No limit'
                 : String(config.visibility.max_order_quantity)
             }
-          />
-          <Row
-            label="Allow negative orders"
-            value={config.visibility.allow_negative_orders ? 'On' : 'Off'}
           />
         </dl>
       </section>
