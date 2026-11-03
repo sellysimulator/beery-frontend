@@ -12,6 +12,8 @@ export interface RoleGridProps {
   roles: GameConfigRoles
   /** Sends a patch immediately; *Apply to all* is a finished decision. */
   onApplyToAll: (patch: ConfigPatch) => void
+  /** A read-only last row of server figures (`LeadTimeRow`), if any. */
+  leadTimes?: ReactElement
 }
 
 /**
@@ -24,7 +26,7 @@ export interface RoleGridProps {
  * `information_delay_weeks` on screen, so pressing the button cannot silently
  * push a value the host was never able to see.
  */
-export function RoleGrid({ group, roles, onApplyToAll }: RoleGridProps): ReactElement {
+export function RoleGrid({ group, roles, onApplyToAll, leadTimes }: RoleGridProps): ReactElement {
   const { readOnly, saveApi, limits } = useConfigFormContext()
   const rows = ROLE_ROW_GROUPS[group]
 
@@ -101,6 +103,7 @@ export function RoleGrid({ group, roles, onApplyToAll }: RoleGridProps): ReactEl
                 ))}
               </tr>
             ))}
+            {leadTimes ?? null}
           </tbody>
         </table>
       </div>

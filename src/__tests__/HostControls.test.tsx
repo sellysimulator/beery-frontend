@@ -236,6 +236,7 @@ function hostView(
   return {
     week: WEEK,
     duration_weeks: DURATION,
+    weeks_played: WEEK - 1,
     phase: 'DECISION',
     currency_symbol: '$',
     demand_series: [...DEMAND_SERIES],
@@ -664,6 +665,21 @@ describe('CRITERION 12: the end-the-game confirmation names the current week', (
     await user.click(control(/end the game now|end the game|end game/i, 'End the game now'));
 
     expect(textOf(dialog())).toMatch(/results/i);
+  });
+
+  it('says what ending now keeps from host_state.weeks_played, and that the open week is dropped', async () => {
+    // 2026-11-03: the warning said "the game ends at week 17", one week more
+    // than the results then reported, because `end_early` drops the open
+    // week. It now prints the server's count, here deliberately not 17 − 1.
+    const user = userEvent.setup();
+    renderAt('RUNNING', hostView({ weeks_played: 9 }));
+
+    await user.click(control(/end the game now|end the game|end game/i, 'End the game now'));
+
+    const text = textOf(dialog());
+    expect(text).toMatch(/9 weeks played/i);
+    expect(text).not.toMatch(/16 weeks/i);
+    expect(text).toMatch(/drops/i);
   });
 });
 

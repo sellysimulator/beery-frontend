@@ -295,6 +295,7 @@ function hostView(over: Partial<HostView> = {}, roleOver: Partial<Record<Role, P
   return {
     week: WEEK,
     duration_weeks: DURATION,
+    weeks_played: WEEK - 1,
     phase: 'DECISION',
     currency_symbol: '$',
     demand_series: [...DEMAND_SERIES],
@@ -1211,6 +1212,18 @@ describe('CRITERION 22: at FINISHED the console shows the final chain, the weeks
     const text = bodyText();
     expect(text).toMatch(/finished/i);
     expect(text).toMatch(new RegExp(`${WEEK}\\s*weeks played`, 'i'));
+  });
+
+  it('before game_finished arrives, reads the count from host_state.weeks_played, never week', () => {
+    // 2026-11-03: the fallback was `host_state.week`, one too many after an
+    // early end (the open week is dropped). The server's count wins.
+    seatRoom('RUNNING');
+    deliverHostState(hostView({ phase: 'FINISHED', weeks_played: 11 }));
+    renderConsole();
+
+    const text = bodyText();
+    expect(text).toMatch(/11\s*weeks played/i);
+    expect(text).not.toMatch(new RegExp(`${WEEK}\\s*weeks played`, 'i'));
   });
 
   it('links to the results screen for this room', () => {

@@ -8,10 +8,17 @@ import { NumberField, SliderField } from './fields'
  *
  * `beta` gets the slider and the top of the section because it is the single
  * most instructive knob in the form (`beer-game-spec.md section 8.5`): it is how
- * much a bot accounts for what it has already ordered but not yet received. At
- * 0 the bot re-orders to cover a shortfall it has already covered and panics
- * its way into the bullwhip; at 1 it is steady. Demonstrating that is most of
- * what the supply-line lever teaches, with a bot instead of a volunteer.
+ * much of its supply line a bot counts before ordering more. At 0 the bot
+ * re-orders to cover a shortfall it has already covered and panics its way
+ * into the bullwhip; at 1 it counts every unit in transit and swings far less.
+ *
+ * It does not make the bot steady, and the copy must not say so (2026-11-03,
+ * `08 §3.1`). The bot aims for a stock of `target_stock_multiplier` times its
+ * starting inventory, keeps no target for its pipeline, and its supply line is
+ * only the beer already shipped to it, not orders its supplier has yet to
+ * ship. So even at 1, with flat demand, it orders well above demand at first
+ * and then cuts back. The labels describe what the knob changes, not an
+ * outcome it does not deliver.
  */
 export function BotSection(): ReactElement {
   // The server's ranges, never a copy (`useLimits`).
@@ -22,12 +29,12 @@ export function BotSection(): ReactElement {
       <SliderField
         name="bot.beta"
         label={BOT_BETA_LABEL}
-        hint={`0 is a bot that ignores its supply line and panics. ${weight} is a bot that counts every unit already on its way.`}
+        hint={`0 is a bot that ignores the beer already on its way and keeps re-ordering for it. ${weight} is a bot that counts every unit in transit: its swings are much milder, but it still over-orders at first — it aims for the target stock below, and orders its supplier has not shipped yet are invisible to it.`}
         min={0}
         max={weight}
         step={0.05}
-        lowLabel="0 — panicking"
-        highLabel={`${weight} — steady`}
+        lowLabel="0 — ignores it"
+        highLabel={`${weight} — counts all of it`}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -50,7 +57,7 @@ export function BotSection(): ReactElement {
         <NumberField
           name="bot.target_stock_multiplier"
           label="Target stock multiplier"
-          hint={`Target inventory as a multiple of the starting inventory. 0 to ${limits.max_target_stock_multiplier}.`}
+          hint={`Target inventory as a multiple of the starting inventory. A target above the starting stock makes a bot order more than demand while it builds it. 0 to ${limits.max_target_stock_multiplier}.`}
           min={0}
           max={limits.max_target_stock_multiplier}
           step={0.5}

@@ -198,7 +198,6 @@ export function Board3DPanels({
             // remount key `Board2D` uses, deliberately character for character.
             key={`${week}-${isChangingOrder ? 'change' : 'new'}`}
             view={view}
-            week={week}
             disabled={paused}
             initialOrder={initialOrder}
             isChange={isChangingOrder}

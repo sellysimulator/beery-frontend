@@ -1,12 +1,17 @@
 import { useState, type ChangeEvent, type DragEvent, type ReactElement } from 'react'
-import type { CustomDemand, DemandConfig, DemandKind, Limits } from '../../types/game'
+import type { DemandConfig, DemandKind, GameConfig, Limits } from '../../types/game'
 import { useConfigFormContext } from './configFormContext'
-import { pathPatch } from './configPatch'
-import { DEMAND_KIND_DESCRIPTION, DEMAND_KIND_LABEL, DISTRIBUTION_LABEL } from './copy'
+import {
+  DEMAND_KIND_DESCRIPTION,
+  DEMAND_KIND_LABEL,
+  DEMAND_KINDS,
+  DISTRIBUTION_LABEL,
+} from './copy'
 import { formatCustomValues, parseCustomValues, readDroppedFile } from './customValues'
-import { DEMAND_KINDS } from './demandDefaults'
 import DemandPreview from './DemandPreview'
 import { NumberField, SelectField } from './fields'
+import { pendingDemand } from './formValues'
+import { useConfigPreview } from './useConfigPreview'
 
 interface ParameterBlockProps {
   demand: DemandConfig
@@ -137,9 +142,14 @@ function ParameterBlock({ demand, durationWeeks, limits }: ParameterBlockProps):
 }
 
 export interface DemandEditorProps {
-  /** The demand the form is showing: the stored object, or a pending kind's defaults. */
-  demand: DemandConfig
-  durationWeeks: number
+  /** The stored config: what the server holds, and what the preview starts from. */
+  config: GameConfig
+  /**
+   * A generator the host has just picked that the stored config does not
+   * have yet, or null. Its parameters are the server's defaults, so they are
+   * shown once the stored config carries them.
+   */
+  pendingKind: DemandKind | null
   /** Switching generator replaces the whole demand object. */
   onKindChange: (kind: DemandKind) => void
 }
@@ -147,11 +157,16 @@ export interface DemandEditorProps {
 /**
  * The customer demand generator, its parameters, and a live preview.
  *
- * Changing the generator replaces the parameter block *and* the demand object
- * with that kind's declared defaults, carrying nothing across: the server does
- * exactly the same with a payload that changes `demand.kind`
- * (`18 section 3.1a`), and a `step_week` surviving into a `SEASONAL` config is a
- * scenario nobody described (AC 7, FM 2).
+ * Changing the generator sends the new kind alone, carrying nothing across:
+ * the server replaces the demand object and fills every parameter with that
+ * kind's declared defaults (`18 section 3.1a`), and a `step_week` surviving
+ * into a `SEASONAL` config is a scenario nobody described (AC 7, FM 2). Until
+ * the stored config comes back with them, the parameter block says it is
+ * waiting; this panel keeps no copy of the defaults (2026-11-03).
+ *
+ * The preview is the server's (`POST /rooms/preview`): the stored config, with
+ * the generator the host just picked or the series they are pasting in place
+ * of the stored demand, so a host sees what they are about to save.
  *
  * `CUSTOM` has one more client-side block: a series shorter than
  * `duration_weeks` is refused by the server, and a host should not have to
@@ -159,11 +174,13 @@ export interface DemandEditorProps {
  * server's own (`useLimits`), checked beside the field before anything is sent.
  */
 export function DemandEditor({
-  demand,
-  durationWeeks,
+  config,
+  pendingKind,
   onKindChange,
 }: DemandEditorProps): ReactElement {
   const { saveApi, readOnly, limits } = useConfigFormContext()
+  const durationWeeks = config.duration_weeks
+  const demand: DemandConfig = pendingKind === null ? config.demand : pendingDemand(pendingKind)
 
   /**
    * The unsaved paste, tagged with the generator it was typed against.
@@ -178,7 +195,7 @@ export function DemandEditor({
   )
   const activeDraft = draft !== null && draft.kind === demand.kind ? draft : null
 
-  const storedValues = demand.kind === 'CUSTOM' ? (demand as CustomDemand).values : []
+  const storedValues = demand.kind === 'CUSTOM' ? (demand.values ?? []) : []
   const parsed = activeDraft === null ? null : parseCustomValues(activeDraft.text)
   const values = parsed ? parsed.values : storedValues
   const shortfall = Math.max(0, durationWeeks - values.length)
@@ -193,7 +210,10 @@ export function DemandEditor({
     // the ceiling, earns a 422 naming the field.
     const fits = result.values.every((value) => value <= limits.max_order_quantity)
     if (result.values.length >= durationWeeks && fits) {
-      saveApi.save(pathPatch('demand.values', result.values))
+      // The kind goes with the series. Without it a host switching from
+      // another generator saved `values` into that generator's object, which
+      // ignored them, and the game never became `CUSTOM` (2026-11-03).
+      saveApi.save({ demand: { kind: 'CUSTOM', values: result.values } })
     }
   }
 
@@ -217,8 +237,14 @@ export function DemandEditor({
     commitCustom(event.target.value)
   }
 
-  const previewDemand: DemandConfig =
-    demand.kind === 'CUSTOM' ? { kind: 'CUSTOM', values } : demand
+  // The draft the server previews: the stored config, with the demand the
+  // editor is showing. Unchanged, it is the stored config itself, so the
+  // lead-time row's request is this one too (answers are keyed by content).
+  const previewDraft =
+    demand === config.demand && activeDraft === null
+      ? config
+      : { ...config, demand: demand.kind === 'CUSTOM' ? { kind: 'CUSTOM', values } : demand }
+  const preview = useConfigPreview(previewDraft)
 
   return (
     <div className="flex flex-col gap-5">
@@ -234,7 +260,13 @@ export function DemandEditor({
         </p>
       </div>
 
-      <ParameterBlock demand={demand} durationWeeks={durationWeeks} limits={limits} />
+      {pendingKind !== null && pendingKind !== 'CUSTOM' ? (
+        <p role="status" className="text-sm text-ink-muted">
+          {`Loading the ${DEMAND_KIND_LABEL[pendingKind]} settings from the server…`}
+        </p>
+      ) : (
+        <ParameterBlock demand={demand} durationWeeks={durationWeeks} limits={limits} />
+      )}
 
       {demand.kind === 'CUSTOM' ? (
         <div className="flex flex-col gap-2">
@@ -292,7 +324,7 @@ export function DemandEditor({
         </div>
       ) : null}
 
-      <DemandPreview demand={previewDemand} durationWeeks={durationWeeks} />
+      <DemandPreview state={preview} />
     </div>
   )
 }

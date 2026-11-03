@@ -113,6 +113,7 @@ export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
       <SupplyLine
         kind="shipments"
         slots={view.supply_line_slots}
+        slotWeeks={view.supply_line_slot_weeks}
         total={view.supply_line}
         prominent={view.show_supply_line_prominently}
       />
@@ -128,6 +129,7 @@ export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
         <SupplyLine
           kind="orders"
           slots={view.orders_in_flight_slots}
+          slotWeeks={view.orders_in_flight_slot_weeks}
           total={view.orders_in_flight}
           prominent={view.show_supply_line_prominently}
         />

@@ -77,9 +77,10 @@ const BODY: ManualPageSpec[] = [
     content: (
       <>
         <p>
-          <strong>Nothing happens immediately.</strong> When you place an order, it takes a
-          couple of weeks just to reach your supplier, and a couple more for the beer to arrive.
-          So an order you place today shows up in your warehouse roughly four weeks from now.
+          <strong>Nothing happens immediately.</strong> When you place an order, it takes
+          weeks just to reach your supplier, and more weeks for the beer to arrive. Your order
+          form tells you exactly how many, and the week it should land: the host sets the delays,
+          and the game works the number out for your seat.
         </p>
         <p>
           This means you are always ordering for a situation you can't see yet — and it means
@@ -192,8 +193,8 @@ const BODY: ManualPageSpec[] = [
           every week until you do.
         </li>
         <li>
-          <strong>You cannot ship what you don't have.</strong> If a customer wants 12 and you
-          have 5, you ship 5 and owe 7.
+          <strong>You cannot ship what you don't have.</strong> If a customer wants more than
+          you have, you ship everything on your shelf and owe them the rest.
         </li>
       </ul>
     ),
@@ -207,7 +208,7 @@ const BODY: ManualPageSpec[] = [
         <ManualCallout title="Before you increase an order, look at what's already on the way.">
           The most common mistake in this game — by a wide margin — is to see low inventory,
           order more, see inventory still low next week because nothing has arrived yet, and
-          order more again. You end up with four weeks of panic orders landing at once, a
+          order more again. You end up with weeks of panic orders landing at once, a
           warehouse you can't afford, and then you slam the brakes and order nothing, which
           starves everyone upstream of you.
         </ManualCallout>
@@ -258,7 +259,7 @@ const PAGES: ManualPageSpec[] = [
         </p>
         <p className="text-3xl font-bold">Player manual</p>
         <p className="text-ink-muted">
-          One link in the chain, one number a week, and the four weeks you can't see.
+          One link in the chain, one number a week, and the weeks you can't see.
         </p>
       </>
     ),

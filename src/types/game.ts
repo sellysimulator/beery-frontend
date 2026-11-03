@@ -187,6 +187,21 @@ export interface Limits {
   max_target_stock_multiplier: number
 }
 
+/**
+ * What a draft config will play, from `POST /rooms/preview` (`10 §3.5b`,
+ * `app/core/preview.py`). The server runs the engine's own demand generator
+ * and lead-time function on the draft; the host form keeps no copy of either
+ * (2026-11-03).
+ */
+export interface ConfigPreview {
+  /** Weeks 1..duration_weeks of customer demand, index 0 = week 1. */
+  demand_series: number[]
+  /** `STOCHASTIC` with no `random_seed` yet: an example draw, not the game. */
+  demand_is_example: boolean
+  /** Weeks from each role ordering to that order arriving. */
+  lead_times: Record<Role, number>
+}
+
 /* ─── Engine records (07 section 2) ─── */
 
 /** One role's complete record for one week. */
@@ -243,6 +258,12 @@ export interface WeekSettlement {
   opening_inventory: number
   opening_backlog: number
   arrived: number
+  /**
+   * Stock after receiving and before shipping, read off the engine's own
+   * settlement step (2026-11-03). The recap prints it; it never adds
+   * `opening_inventory + arrived` itself.
+   */
+  inventory_after_arrival: number
   incoming_order: number
   /** `incoming_order + opening_backlog`. */
   obligation: number
@@ -311,6 +332,11 @@ export interface PlayerView {
   supply_line: number
   supply_line_slots: number[]
   /**
+   * Weeks until each slot of `supply_line_slots` arrives, aligned with it
+   * (2026-11-03). The board labels a slot from this, never from its position.
+   */
+  supply_line_slot_weeks: number[]
+  /**
    * What this role has ordered and its supplier has not yet received — the
    * SUPPLIER's order pipeline, never this role's own, which would show the
    * player next week's incoming demand (`07 §3.8`).
@@ -318,6 +344,8 @@ export interface PlayerView {
   orders_in_flight: number
   /** The same pipeline as a list. `0` and `[]` for FACTORY, which has no supplier. */
   orders_in_flight_slots: number[]
+  /** Weeks until each order of `orders_in_flight_slots` reaches the supplier. */
+  orders_in_flight_slot_weeks: number[]
   incoming_order: number
   last_order: number | null
   settlement: WeekSettlement
@@ -338,6 +366,8 @@ export interface PlayerView {
 
   /** Weeks from placing an order now to that order arriving; the server computes it. */
   order_arrival_lead_weeks: number
+  /** The week an order placed now arrives: `week + order_arrival_lead_weeks`, on the server. */
+  order_arrival_week: number
   /** FACTORY only: units that exceeded capacity and are waiting for the line. */
   production_queue: number | null
   /** This role's own rates, for the recap's "8 units x $0.50" line. */
@@ -395,6 +425,12 @@ export interface HostRoleView {
 export interface HostView {
   week: number
   duration_weeks: number
+  /**
+   * Complete weeks so far: what the results will report, and what ending the
+   * game now keeps, since the open week is dropped (`07 §3.5`). `week` is one
+   * higher while a week is open. Added 2026-11-03.
+   */
+  weeks_played: number
   phase: GamePhase
   currency_symbol: string
   /**

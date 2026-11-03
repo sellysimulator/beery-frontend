@@ -8,6 +8,7 @@
  */
 import http from './http'
 import type {
+  ConfigPreview,
   ConfigResponse,
   GameConfig,
   Limits,
@@ -69,5 +70,15 @@ export async function listPresets(): Promise<PresetListResponse> {
  */
 export async function getLimits(): Promise<Limits> {
   const { data } = await http.get<Limits>('/rooms/limits')
+  return data
+}
+
+/**
+ * The demand series and lead times a draft config will play (`10 §3.5b`).
+ * No authentication: nothing is stored, and no room is read. A draft the
+ * server refuses is a 422 whose `detail` names the field and the range.
+ */
+export async function previewConfig(config: object): Promise<ConfigPreview> {
+  const { data } = await http.post<ConfigPreview>('/rooms/preview', { config })
   return data
 }

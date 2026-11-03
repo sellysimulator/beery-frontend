@@ -151,6 +151,7 @@ function settlementFor(role: Role, over: Partial<WeekSettlement> = {}): WeekSett
     opening_inventory: 12,
     opening_backlog: 0,
     arrived: 4,
+    inventory_after_arrival: 16,
     incoming_order: 8,
     obligation: 8,
     shipped: 8,
@@ -180,8 +181,10 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     backlog: 0,
     supply_line: 0,
     supply_line_slots: [],
+    supply_line_slot_weeks: [],
     orders_in_flight: role === 'FACTORY' ? 0 : 40,
     orders_in_flight_slots: role === 'FACTORY' ? [] : [17, 23],
+    orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2],
     incoming_order: 8,
     last_order: 8,
     settlement: settlementFor(role),
@@ -194,6 +197,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
+    order_arrival_week: 6 + 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     ...over,
@@ -513,6 +517,40 @@ describe('CRITERION 6: with the running cost hidden, the last line is absent', (
 // ---------------------------------------------------------------------------
 // Failure mode 4 — client-computed cost
 // ---------------------------------------------------------------------------
+
+describe('2026-11-03: the stock after arrival is the server’s figure, never a sum', () => {
+  it('prints settlement.inventory_after_arrival even when it contradicts opening + arrived', () => {
+    // 12 opening + 4 arrived would be 16. The server says 23, and the recap
+    // prints the server's figure on both lines that show it.
+    renderRecap(
+      viewFor('RETAILER', {
+        settlement: settlementFor('RETAILER', { inventory_after_arrival: 23 }),
+      }),
+    );
+
+    expect(row(/received/i)).toMatch(/\b23\b/);
+    expect(row(/received/i)).not.toMatch(/\b16\b/);
+    expect(row(/shipped/i)).toMatch(/\b23\b/);
+  });
+
+  it('says the backlog fell, not that it stayed, when an old backlog is shipped in full', () => {
+    // Nothing unfulfilled this week, yet the backlog went from 5 to 0.
+    renderRecap(
+      viewFor('RETAILER', {
+        settlement: settlementFor('RETAILER', {
+          opening_backlog: 5,
+          obligation: 13,
+          shipped: 13,
+          unfulfilled: 0,
+          closing_backlog: 0,
+        }),
+      }),
+    );
+
+    expect(row(/unfulfilled/i)).toMatch(/backlog now 0/i);
+    expect(row(/unfulfilled/i)).not.toMatch(/stays/i);
+  });
+});
 
 describe('FAILURE MODE 4: the money figure is the server’s, never a product', () => {
   it('renders settlement.holding_cost even when it contradicts units x rate', () => {

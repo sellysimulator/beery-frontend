@@ -4,8 +4,6 @@ import { UPSTREAM_LABEL } from './RoleBanner'
 
 export interface DecisionFormProps {
   view: PlayerView
-  /** The open week, from the store. It goes out with the emit as a guard. */
-  week: number
   /** Paused, or the game is over: the confirm control is dead (§2.7, FM 10). */
   disabled: boolean
   /** Pre-fills the input when the player reopens a submitted order. */
@@ -34,16 +32,15 @@ function weeksPhrase(weeks: number): string {
  * reloads mid-decision loses their unconfirmed typing and nothing else
  * (§3.3).
  *
- * The arrival preview is the one client-side arithmetic this screen is
- * allowed: `week + your_state.order_arrival_lead_weeks`, a single number the
- * server computed for exactly this sentence. The form never assembles a lead
- * time out of individual delays — none are sent, because the Retailer and the
- * Factory each break a different term of that sum
- * (`07-game-engine.md` section 3.8).
+ * The arrival preview does no arithmetic: the lead time and the arrival week
+ * are `your_state.order_arrival_lead_weeks` and `order_arrival_week`, both
+ * computed by the server for exactly this sentence (2026-11-03; the form used
+ * to add the week itself). The form never assembles a lead time out of
+ * individual delays — none are sent, because the Retailer and the Factory
+ * each break a different term of that sum (`07-game-engine.md` section 3.8).
  */
 export function DecisionForm({
   view,
-  week,
   disabled,
   initialOrder,
   isChange,
@@ -71,8 +68,8 @@ export function DecisionForm({
     hasNumber && (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum)
   const canSubmit = hasNumber && !outOfRange && !disabled
 
-  // The server's lead time, added to the store's week. Nothing else.
-  const arrivalWeek = week + view.order_arrival_lead_weeks
+  // The server's lead time and the server's arrival week. Nothing added here.
+  const arrivalWeek = view.order_arrival_week
   const preview = isFactory
     ? `Producing ${parsed} units. It will finish in ${weeksPhrase(
         view.order_arrival_lead_weeks,

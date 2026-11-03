@@ -53,8 +53,16 @@ function substituteWarning(playerName: string): string {
   return `${playerName} will be replaced by an automated player for the rest of the game. They'll keep their seat in the results, but they won't decide again. This can't be undone.`
 }
 
-function endGameWarning(week: number): string {
-  return `The game ends at week ${week}. You'll get full results for the weeks played.`
+/**
+ * What ending now keeps. Both figures are the server's: `week` is the open
+ * week, which `end_early` drops, and `weeksPlayed` is `host_state.weeks_played`,
+ * the complete weeks the results will report. The warning used to say "the
+ * game ends at week N" — one week more than the results then showed
+ * (2026-11-03).
+ */
+function endGameWarning(week: number, weeksPlayed: number): string {
+  const played = weeksPlayed === 1 ? '1 week' : `${weeksPlayed} weeks`
+  return `Week ${week} is still open: ending now drops it, cost and all, and the game finishes with ${played} played. You'll get full results for those weeks.`
 }
 
 interface ConfirmDialogProps {
@@ -205,8 +213,10 @@ export interface HostControlsProps {
   paused: boolean
   /** `host_state.awaiting_roles` — who has not decided this week. */
   awaitingRoles: Role[]
-  /** `host_state.week`, named in the end-of-game warning. */
+  /** `host_state.week`, the open week the end-of-game warning says is dropped. */
   week: number
+  /** `host_state.weeks_played`: what ending now keeps. Never `week - 1` here. */
+  weeksPlayed: number
   /** Presentation mode is local state; nothing goes on the wire (§3.4a). */
   onPresent: () => void
 }
@@ -234,6 +244,7 @@ export function HostControls({
   paused,
   awaitingRoles,
   week,
+  weeksPlayed,
   onPresent,
 }: HostControlsProps): ReactElement {
   const [pending, setPending] = useState<Pending | null>(null)
@@ -322,7 +333,7 @@ export function HostControls({
       {pending === 'end_game' ? (
         <ConfirmDialog
           title="End the game now?"
-          body={endGameWarning(week)}
+          body={endGameWarning(week, weeksPlayed)}
           confirmLabel="End the game now"
           onConfirm={confirmEndGame}
           onCancel={cancel}

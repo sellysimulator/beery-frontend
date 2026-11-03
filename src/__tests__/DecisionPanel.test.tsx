@@ -151,6 +151,7 @@ function settlementFor(role: Role): WeekSettlement {
     opening_inventory: 12,
     opening_backlog: 0,
     arrived: 4,
+    inventory_after_arrival: 16,
     incoming_order: 8,
     obligation: 8,
     shipped: 8,
@@ -179,8 +180,10 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     backlog: 0,
     supply_line: 103,
     supply_line_slots: [41, 62],
+    supply_line_slot_weeks: [1, 2],
     orders_in_flight: role === 'FACTORY' ? 0 : 40,
     orders_in_flight_slots: role === 'FACTORY' ? [] : [17, 23],
+    orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2],
     incoming_order: 55,
     last_order: 31,
     settlement: settlementFor(role),
@@ -193,6 +196,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
+    order_arrival_week: 6 + 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     ...over,
@@ -399,6 +403,24 @@ describe('CRITERION 4: the supply line renders slot by slot, plus the total', ()
     const text = panelText();
     expect(text).toMatch(/next week|week\s*7\b/i);
     expect(text).toMatch(/the week after|week\s*8\b/i);
+  });
+
+  it('says when each slot lands from the server’s weeks to go, never its position', () => {
+    // 2026-11-03: `supply_line_slot_weeks` and `orders_in_flight_slot_weeks`.
+    // Not 1 and 2, so a panel counting positions would say "next week".
+    renderPanel(
+      viewFor('WHOLESALER', {
+        supply_line_slot_weeks: [3, 6],
+        orders_in_flight_slot_weeks: [2, 5],
+      }),
+    );
+
+    const text = panelText();
+    expect(text).toMatch(/41 units arriving in 3 weeks/i);
+    expect(text).toMatch(/62 units arriving in 6 weeks/i);
+    expect(text).toMatch(/17 units reaching your supplier the week after/i);
+    expect(text).toMatch(/23 units reaching your supplier in 5 weeks/i);
+    expect(text).not.toMatch(/next week/i);
   });
 
   it('renders the slots front first, so the nearest arrival reads first', () => {

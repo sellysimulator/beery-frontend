@@ -92,7 +92,7 @@ src/
 
 Conventions: components are `PascalCase.tsx` with a **named export and a default export** of
 the same symbol; non-component helpers are `camelCase.ts` (`roleCopy.ts`, `configPatch.ts`,
-`demandSeries.ts`). Wire fields are `snake_case` (they mirror the Python models); local
+`useConfigPreview.ts`). Wire fields are `snake_case` (they mirror the Python models); local
 TypeScript identifiers are `camelCase`. Comments are prose explaining *why*, and are load-
 bearing documentation — match that style.
 
@@ -121,7 +121,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-02 (after the review fixes: server-sourced limits, two week-cost figures, no negative orders): **1237 tests / 39 files passed**, `eslint .` clean, `tsc -b`
+Verified green on 2026-11-03 (after moving every remaining figure to the server: preview, lead times, preset copy, arrival week, stock after arrival, slot weeks, weeks played): **1252 tests / 39 files passed**, `eslint .` clean, `tsc -b`
 clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
@@ -181,7 +181,15 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
    read. There is no game arithmetic in the client: inventory, cost, eligibility, even
    whether the host's Start button may be pressed and the sentence explaining why not, all
    arrive from the server. Client-derived state is the failure mode `game_stack.md`
-   invariant 7 exists to prevent.
+   invariant 7 exists to prevent. **Every figure a rule defines is the server's** (2026-11-03,
+   `00-decisions.md` §5): no demand generator, delay sum, default, preset number, cost, ratio
+   or running total is worked out here. The fields that replaced the last client sums:
+   `your_state.order_arrival_week` (was `week + order_arrival_lead_weeks`),
+   `settlement.inventory_after_arrival` (was `opening_inventory + arrived`),
+   `supply_line_slot_weeks` / `orders_in_flight_slot_weeks` (was a slot's `index + 1`) and
+   `host_state.weeks_played` (was `host_state.week`). If a screen needs a new figure, add it to
+   the backend payload or route — never a formula here. Allowed: formatting, layout, chart
+   scales and axes, sorting, filtering.
 2. **Socket listeners are registered once, at module load,** in `api/socketHandlers.ts`,
    imported by `main.tsx` before `createRoot`. Never `socket.on(...)` inside a component:
    StrictMode double-registers it and a reconnect leaves it stale. Handlers call
@@ -237,6 +245,19 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     `PUT /rooms/{code}/config` when not (that REST reply has no `seq`, so it goes through
     `setConfig`, never `applyConfigUpdated`). Tests that mount the panel must serve
     `/rooms/limits` (`src/__tests__/limitsFixture.ts`).
+    **The preview is the server's too** (2026-11-03): `useConfigPreview(draft)` posts the
+    stored config (with the just-picked generator or the unsaved `CUSTOM` paste in place of
+    its demand) to `POST /rooms/preview`, debounced 300ms, answers shared by draft, so
+    `DemandPreview` and the starting grid's `LeadTimeRow` make one request. Until the answer
+    for that exact draft arrives they show a placeholder (`DemandPreview` carries no
+    `data-series` until then); a refused draft shows the server's 422 text. There is no
+    `demandSeries.ts`, no `demandDefaults.ts` and no placeholder config: a kind change sends
+    `{demand: {kind}}` and the server fills the defaults (the block says it is loading them);
+    choosing `CUSTOM` sends nothing until a series is pasted, which goes as
+    `{kind: 'CUSTOM', values}`. Preset cards print the server's `label`/`description`
+    verbatim. Tests that mount the panel serve `/rooms/preview` too and call
+    `resetPreviewCacheForTests()` in `beforeEach`. The bot slider must not call β=1
+    "steady" — it is milder, not steady (`08 §3.1`).
 13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal (each chart module
     registers what it uses; `ChartJS.register` is idempotent). `components/charts/chartSetup.ts`
     owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
@@ -279,7 +300,9 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     field behind any of it. **A figure on screen that cannot be traced to a `PlayerView`
     field is a bug**, including a plausible one: a settlement whose
     `holding_cost ≠ closing_inventory × rate` renders the server's figure, never the product
-    (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat.
+    (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat. Since
+    2026-11-03 the scene does no arithmetic at all: the ledger prints
+    `inventory_after_arrival` and the lane/order placards read the server's slot weeks.
 15. **No screen says "Week cost".** Wherever a week's cost appears (recap, decision panel,
     3D ledger and cost corner) it is two figures: "Holding & backlog"
     (`settlement.carrying_cost` / `week_holding_backlog_cost`) and "Order cost"

@@ -13,6 +13,10 @@ import type { RouteDescriptor } from '../routes/registry'
  *     and the control that extended the countdown are all gone.
  *   - **D3**: hosting needs no account, so Step 1 no longer asks for one.
  *   - **D14**: `clone_room` is phase 2, so Step 5 says to create a new room.
+ *   - 2026-11-03: no preset figure is restated here. The manual is public and
+ *     calls no API (`17 §2.5`), so it cannot read `/rooms/presets`; it names
+ *     each preset's idea and sends the host to the preset card, whose figures
+ *     the server writes from the preset's own config.
  *
  * Presented as a page-turning book (`ManualBook`, the same `react-pageflip`
  * treatment Selly's two manuals use), so the steps below are leaves. Step 3
@@ -43,8 +47,8 @@ const BODY: ManualPageSpec[] = [
     content: (
       <p>
         You need four players (or fewer, with bots filling the gaps), a way to send them a link,
-        and a rough idea of what you want them to learn. Thirty-six weeks of play runs a little
-        over half an hour, plus debrief.
+        and a rough idea of what you want them to learn. A Classic MIT game runs a little over
+        half an hour, plus debrief.
       </p>
     ),
   },
@@ -86,18 +90,22 @@ const BODY: ManualPageSpec[] = [
         <p>This is the part that matters. Presets get you running fast:</p>
         <ul className="flex list-disc flex-col gap-2 pl-6">
           <li>
-            <strong>Classic MIT</strong> — 36 weeks, 12 units starting inventory, 2-week delays,
-            demand of 4 stepping to 8 at week 5, $0.50 holding and $1.00 backlog. This is the
+            <strong>Classic MIT</strong> — one permanent step up in customer demand. This is the
             standard scenario and the one that produces the textbook result.
           </li>
           <li>
-            <strong>Fast Game</strong> — around 20 weeks, for a tight schedule.
+            <strong>Fast Game</strong> — the same scenario, shorter, for a tight schedule.
           </li>
           <li>
             <strong>Chaos</strong> — long delays, random demand. Expect spectacular failure,
             which is the point.
           </li>
         </ul>
+        <p>
+          Each preset&apos;s card in the settings lists its exact figures — weeks, starting
+          stock, delays, demand and costs — read from the preset itself, and the starting
+          conditions show every role&apos;s lead time for whatever you choose.
+        </p>
       </>
     ),
   },

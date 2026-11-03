@@ -256,6 +256,7 @@ function hostView(roleOver: Partial<Record<Role, Partial<HostRoleView>>> = {}): 
   return {
     week: WEEK,
     duration_weeks: DURATION,
+    weeks_played: WEEK - 1,
     phase: 'DECISION',
     currency_symbol: '$',
     demand_series: [...DEMAND_SERIES],

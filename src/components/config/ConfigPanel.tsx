@@ -17,9 +17,9 @@ import RoleGrid from './RoleGrid'
 import VisibilitySection from './VisibilitySection'
 import { ConfigFormContext, type ConfigFormContextValue } from './configFormContext'
 import type { ConfigPatch } from './configPatch'
-import { defaultDemand } from './demandDefaults'
 import { TextField } from './fields'
-import { PLACEHOLDER_FORM_VALUES, toFormValues } from './formValues'
+import { toFormValues } from './formValues'
+import LeadTimeRow from './LeadTimeRow'
 import { useConfigSave } from './useConfigSave'
 import { useLimits } from './useLimits'
 
@@ -44,6 +44,10 @@ import { useLimits } from './useLimits'
  *   is refused with a message beside the field and is not sent; the server
  *   refuses one that arrives anyway. Nothing is clamped (2026-11-02). Until the
  *   ranges have arrived the panel shows a loading line, never a guessed range.
+ *   The demand preview and the lead times are the server's too
+ *   (`POST /rooms/preview`, `useConfigPreview`), and so are a new generator's
+ *   defaults: the panel holds no generator, no delay arithmetic and no default
+ *   (2026-11-03).
  * - **Authority is `host_secret`.** Every save carries it, over the socket when
  *   connected and over `PUT /rooms/{code}/config` when not. A client-side "I am
  *   the host" boolean is never sent (**D3**).
@@ -60,8 +64,8 @@ export function ConfigPanel(): ReactElement {
   /**
    * The demand generator the host has just picked, before the server has
    * acknowledged it. It is the one value the panel shows ahead of the store,
-   * and it can only ever show that kind's *declared defaults* — which is
-   * exactly what went out in the payload beside it — so it cannot mask a clamp.
+   * and it shows only the kind: the parameters are the server's defaults and
+   * appear when the stored config does, with a placeholder until then.
    * `toFormValues` ignores it as soon as the stored config agrees, so it
    * expires on its own rather than being cleared by an effect a render later.
    */
@@ -71,10 +75,14 @@ export function ConfigPanel(): ReactElement {
   const saveApi = useConfigSave(roomCode, hostSecret, locked)
   const { limits, error: limitsError } = useLimits()
 
+  // No config, no values: nothing is rendered until the stored config is here,
+  // so the form needs no placeholder (and the panel no copy of the defaults).
   const values = useMemo(
-    () => (config ? toFormValues(config, pendingKind) : PLACEHOLDER_FORM_VALUES),
+    () => (config ? toFormValues(config, pendingKind) : undefined),
     [config, pendingKind],
   )
+  const activePendingKind =
+    config && pendingKind !== null && pendingKind !== config.demand.kind ? pendingKind : null
 
   const schema = useMemo(() => (limits ? buildConfigFormSchema(limits) : null), [limits])
 
@@ -144,8 +152,13 @@ export function ConfigPanel(): ReactElement {
 
   function handleKindChange(kind: DemandKind): void {
     setPendingKind(kind)
-    // The whole demand object, and no field of the previous kind (AC 7, FM 2).
-    saveApi.save({ demand: defaultDemand(kind) as unknown as ConfigPatch }, true)
+    // A `CUSTOM` series has no default: nothing is saved until one is pasted,
+    // because an empty series is refused (`03 §3.1`).
+    if (kind === 'CUSTOM') return
+    // The kind and no field of the previous kind (AC 7, FM 2). A changed kind
+    // replaces the stored demand object, and the server fills every field
+    // the patch leaves out with that kind's own default (`10 §3.3`).
+    saveApi.save({ demand: { kind } }, true)
   }
 
   function handleApplyPreset(patch: ConfigPatch): void {
@@ -203,7 +216,12 @@ export function ConfigPanel(): ReactElement {
           title="Starting conditions"
           description="Where every role begins. Asymmetry here is a teaching tool — one role starting short is a whole lesson on its own."
         >
-          <RoleGrid group="starting" roles={config.roles} onApplyToAll={(p) => saveApi.save(p, true)} />
+          <RoleGrid
+            group="starting"
+            roles={config.roles}
+            onApplyToAll={(p) => saveApi.save(p, true)}
+            leadTimes={<LeadTimeRow config={config} />}
+          />
         </ConfigSection>
 
         <ConfigSection
@@ -230,8 +248,8 @@ export function ConfigPanel(): ReactElement {
           description="What the Retailer's customers ask for each week. Only the Retailer sees it, unless you turn that off below."
         >
           <DemandEditor
-            demand={values.demand}
-            durationWeeks={config.duration_weeks}
+            config={config}
+            pendingKind={activePendingKind}
             onKindChange={handleKindChange}
           />
         </ConfigSection>

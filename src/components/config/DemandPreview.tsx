@@ -9,10 +9,9 @@ import {
   Tooltip,
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
-import type { DemandConfig } from '../../types/game'
 import { BRAND_SOFT_COLOUR, DEMAND_COLOUR } from '../charts/chartTheme'
-import { EXAMPLE_DRAW_NOTE } from './copy'
-import { demandSeries, isExampleDraw, seriesAttribute } from './demandSeries'
+import { EXAMPLE_DRAW_NOTE, PREVIEW_LOADING } from './copy'
+import type { ConfigPreviewState } from './useConfigPreview'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler)
 
@@ -77,34 +76,37 @@ function Sparkline({ series }: { series: number[] }): ReactElement {
 }
 
 export interface DemandPreviewProps {
-  demand: DemandConfig
-  durationWeeks: number
+  /** The server's preview of the draft (`useConfigPreview`). */
+  state: ConfigPreviewState
 }
 
 /**
  * The customer demand a host is about to run, drawn for every week of the game.
  *
- * It is computed client-side and is **display only** — the series that is
- * played is generated server-side at start. For `STOCHASTIC` the seed decides,
- * so the preview is explicitly labelled an example draw rather than quietly
- * showing numbers nobody will see (`18 section 2`).
+ * Every number on it is the server's (`POST /rooms/preview`, 2026-11-03): the
+ * series is what the engine's own generator produced for the draft, so the
+ * preview and the game cannot disagree, and this component does no demand
+ * arithmetic at all. While the server is working it says so instead of
+ * drawing anything; when the server refuses the draft it shows the server's
+ * reason. For `STOCHASTIC` with no seed yet the server flags the series as an
+ * example draw, and the caption says so rather than quietly showing numbers
+ * nobody will see (`18 section 2`).
  *
  * The series it drew is also published as `data-series` on this element, as
- * comma-separated integers. A canvas is not assertable under jsdom, and the
- * one property worth asserting about a preview is that it agrees with the game
- * that gets played — so the numbers, not the pixels, are the frozen surface
- * (`18 section 2.6`).
+ * comma-separated integers, and only once the server has answered. A canvas is
+ * not assertable under jsdom, so the numbers, not the pixels, are the frozen
+ * surface (`18 section 2.6`).
  */
-export function DemandPreview({ demand, durationWeeks }: DemandPreviewProps): ReactElement {
-  const series = useMemo(() => demandSeries(demand, durationWeeks), [demand, durationWeeks])
+export function DemandPreview({ state }: DemandPreviewProps): ReactElement {
+  const series = state.preview?.demand_series ?? null
 
   const chartData = useMemo(
     () => ({
-      labels: series.map((_unused, index) => String(index + 1)),
+      labels: (series ?? []).map((_unused, index) => String(index + 1)),
       datasets: [
         {
           label: 'Customer demand',
-          data: series,
+          data: series ?? [],
           borderColor: cssVar('--color-demand', DEMAND_COLOUR),
           backgroundColor: cssVar('--color-brand-soft', BRAND_SOFT_COLOUR),
           borderWidth: 3,
@@ -117,38 +119,52 @@ export function DemandPreview({ demand, durationWeeks }: DemandPreviewProps): Re
     [series],
   )
 
+  let body: ReactElement
+  if (state.error !== null) {
+    body = (
+      <p role="alert" className="text-sm text-danger">
+        {state.error}
+      </p>
+    )
+  } else if (series === null) {
+    body = <p className="text-sm text-ink-muted">{PREVIEW_LOADING}</p>
+  } else if (series.length === 0) {
+    body = <p className="text-sm text-ink-muted">Nothing to draw yet.</p>
+  } else if (supportsCanvas()) {
+    body = (
+      <Line
+        data={chartData}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { title: { display: true, text: 'Week' } },
+            y: { beginAtZero: true, title: { display: true, text: 'Units' } },
+          },
+        }}
+      />
+    )
+  } else {
+    body = <Sparkline series={series} />
+  }
+
+  let caption = ''
+  if (state.preview !== null) {
+    caption = state.preview.demand_is_example
+      ? EXAMPLE_DRAW_NOTE
+      : `Weeks 1 to ${state.preview.demand_series.length} of customer demand, exactly as the game will run them.`
+  }
+
   return (
     <figure
       data-testid="demand-preview"
-      data-series={seriesAttribute(series)}
+      data-series={series === null ? undefined : series.join(',')}
+      aria-busy={state.loading || undefined}
       className="m-0 flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-4"
     >
-      <div className="h-48 w-full">
-        {series.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nothing to draw yet.</p>
-        ) : supportsCanvas() ? (
-          <Line
-            data={chartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { title: { display: true, text: 'Week' } },
-                y: { beginAtZero: true, title: { display: true, text: 'Units' } },
-              },
-            }}
-          />
-        ) : (
-          <Sparkline series={series} />
-        )}
-      </div>
-
-      <figcaption className="text-sm text-ink-muted">
-        {isExampleDraw(demand)
-          ? EXAMPLE_DRAW_NOTE
-          : `Weeks 1 to ${series.length} of customer demand, exactly as the game will run them.`}
-      </figcaption>
+      <div className="h-48 w-full">{body}</div>
+      {caption ? <figcaption className="text-sm text-ink-muted">{caption}</figcaption> : null}
     </figure>
   )
 }

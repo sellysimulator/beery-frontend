@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 1237 passed, 39 files
+npm run test:run        # vitest run — 1252 passed, 39 files (2026-11-03)
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -140,7 +140,9 @@ src/
 │   │                           AuthGuard, BackendGuard
 │   ├── lobby/                  the two lobbies, participant list, role cards, invite panel,
 │   │                           and a self-contained QR encoder
-│   ├── config/                 the host configuration panel and its react-hook-form pieces
+│   ├── config/                 the host configuration panel and its react-hook-form pieces;
+│   │                           useLimits (GET /rooms/limits) and useConfigPreview
+│   │                           (POST /rooms/preview) — no generator, default or range here
 │   ├── game/                   the player's week: decision panel, supply line, recap
 │   │   └── views/              Board2D and Board3D (lazy) — the two registered board
 │   │                           views — plus the 2D/3D toggle and the pure resolver
@@ -162,7 +164,12 @@ src/
 read. No component subscribes to the socket directly — a second interpreter of the wire gets
 double-registered under StrictMode and left stale by a reconnect. There is no game arithmetic in
 the client either: inventory, cost and eligibility all arrive from the server, including whether
-the host's Start button may be pressed and the sentence explaining why not.
+the host's Start button may be pressed and the sentence explaining why not. Since 2026-11-03 that
+covers every figure a rule defines: the host form's demand preview and lead times come from
+`POST /rooms/preview`, the preset cards' figures from `/rooms/presets`, a new demand kind's
+defaults from the server's merge, and the arrival week, the stock after arrival, each pipeline
+slot's weeks to go and the weeks played from `your_state` / `host_state`. What stays here is
+formatting, layout, chart scales, sorting and filtering.
 
 **Handlers are registered once, as a module side effect, before React renders.** `main.tsx`
 imports `./api/socketHandlers` ahead of `createRoot`. A component-mounted handler registers twice

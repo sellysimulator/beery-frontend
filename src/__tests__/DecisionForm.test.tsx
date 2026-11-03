@@ -153,6 +153,7 @@ function settlementFor(role: Role, week: number): WeekSettlement {
     opening_inventory: 12,
     opening_backlog: 0,
     arrived: 4,
+    inventory_after_arrival: 16,
     incoming_order: 55,
     obligation: 55,
     shipped: 55,
@@ -182,8 +183,10 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     backlog: 0,
     supply_line: 8,
     supply_line_slots: [3, 5],
+    supply_line_slot_weeks: [1, 2],
     orders_in_flight: role === 'FACTORY' ? 0 : 5,
     orders_in_flight_slots: role === 'FACTORY' ? [] : [1, 4],
+    orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2],
     incoming_order: 55,
     last_order: 31,
     settlement: settlementFor(role, week),
@@ -196,6 +199,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
+    order_arrival_week: week + 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     ...over,
@@ -392,10 +396,14 @@ describe('CRITERION 9: the minimum and the maximum are stated in text', () => {
 // Criteria 10 and 11, failure mode 12 — the arrival preview
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10: the preview names week + order_arrival_lead_weeks', () => {
+describe('CRITERION 10: the preview names the server’s order_arrival_week', () => {
+  // 2026-11-03: the form used to add `week + order_arrival_lead_weeks` itself.
+  // It now prints the server's `order_arrival_week`, and the lead in weeks.
   it('names week 10 for week 6 and a lead of 4', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 4 }));
+    renderForm(
+      viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 4, order_arrival_week: 10 }),
+    );
 
     await typeOrder(user, '7');
 
@@ -404,9 +412,11 @@ describe('CRITERION 10: the preview names week + order_arrival_lead_weeks', () =
     expect(text).toMatch(/\b4\s*weeks?\b/i);
   });
 
-  it('follows the lead field when it changes, not a remembered number', async () => {
+  it('follows the arrival field when it changes, not a remembered number', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 1 }));
+    renderForm(
+      viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 1, order_arrival_week: 7 }),
+    );
 
     await typeOrder(user, '12');
 
@@ -432,19 +442,30 @@ describe('CRITERION 11: the Factory produces rather than orders', () => {
 
 describe('FAILURE MODE 14: the preview is never reassembled from other numbers', () => {
   // `§3.8`: no per-role delay is sent at all, precisely so this cannot be
-  // attempted. Only `order_arrival_lead_weeks` is 2, so week + 2 = 8 is the
-  // single right answer for the Factory and for a downstream role alike.
+  // attempted, and since 2026-11-03 the week itself is the server's too.
   const roles: Role[] = ['FACTORY', 'WHOLESALER'];
 
   it.each(roles)('%s names week 8 for week 6 and a lead of 2', async (role) => {
     const user = userEvent.setup();
-    renderForm(viewFor(role, { week: 6, order_arrival_lead_weeks: 2 }));
+    renderForm(viewFor(role, { week: 6, order_arrival_lead_weeks: 2, order_arrival_week: 8 }));
 
     await typeOrder(user, '12');
 
     const text = formText();
     expect(text).toMatch(/week\s*8\b/i);
     expect(text).not.toMatch(/week\s*(7|9|10|11)\b/i);
+  });
+
+  it.each(roles)('%s prints the server’s arrival week even when it is not week + lead', async (role) => {
+    // 6 + 2 would be 8. The server says 13, and the server is the authority.
+    const user = userEvent.setup();
+    renderForm(viewFor(role, { week: 6, order_arrival_lead_weeks: 2, order_arrival_week: 13 }));
+
+    await typeOrder(user, '12');
+
+    const text = formText();
+    expect(text).toMatch(/week\s*13\b/i);
+    expect(text).not.toMatch(/week\s*8\b/i);
   });
 });
 

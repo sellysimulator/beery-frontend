@@ -6,9 +6,13 @@
  *
  * The preview is read the way `§2.6` prescribes: the element carrying
  * `data-testid="demand-preview"` also carries `data-series`, the comma-separated
- * integers it drew, because a canvas is not assertable under jsdom. The five
- * series asserted below are `§2.6`'s normative table, hard-coded as that chapter
- * permits.
+ * integers it drew, because a canvas is not assertable under jsdom.
+ *
+ * Since 2026-11-03 those integers are the server's (`POST /rooms/preview`,
+ * `10 §3.5b`): the panel keeps no generator, so these tests serve the answer
+ * and check that the panel sends the draft and draws exactly what comes back.
+ * `§2.6`'s normative table is asserted against the real generator in the
+ * backend's `tests/test_core/test_preview.py`.
  *
  * There is no separately importable `DemandEditor`: `18 §2` freezes
  * `src/components/config/ConfigPanel.tsx` as this section's only entry point and
@@ -21,6 +25,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 import { ConfigPanel } from '../components/config/ConfigPanel';
+import { resetPreviewCacheForTests } from '../components/config/useConfigPreview';
 import { useGameStore } from '../store/gameStore';
 import { setHostRoom, setHostSecret } from '../utils/storage';
 import type {
@@ -90,7 +95,11 @@ vi.mock('socket.io-client', () => {
   return { io, default: io, Socket: class {}, Manager: class {} };
 });
 
-const rest = vi.hoisted(() => ({ configResponse: null as unknown }));
+const rest = vi.hoisted(() => ({
+  configResponse: null as unknown,
+  /** `POST /rooms/preview`: a fixed answer, or one built from the request body. */
+  preview: null as unknown,
+}));
 
 const limitsFixture = await vi.hoisted(async () => await import('./limitsFixture'));
 
@@ -105,7 +114,14 @@ const httpRec = vi.hoisted(() => ({
     void args;
     return { data: rest.configResponse ?? {} };
   }),
-  post: vi.fn(async () => ({ data: {} })),
+  post: vi.fn(async (...args: unknown[]) => {
+    if (!/\/rooms\/preview$/.test(String(args[0]))) return { data: {} };
+    const answer =
+      typeof rest.preview === 'function'
+        ? (rest.preview as (body: unknown) => unknown)(args[1])
+        : rest.preview;
+    return { data: await Promise.resolve(answer) };
+  }),
   patch: vi.fn(async () => ({ data: {} })),
   delete: vi.fn(async () => ({ data: {} })),
   defaults: { baseURL: '/api/v1', headers: { common: {} } },
@@ -465,73 +481,112 @@ beforeEach(() => {
   rec.listeners.clear();
   if (rec.socket) rec.socket.connected = true;
   rest.configResponse = null;
+  rest.preview = echoPreview;
+  resetPreviewCacheForTests();
+  httpRec.post.mockClear();
   store().reset();
 });
 
 // ---------------------------------------------------------------------------
-// §2.6 — the preview (normative table)
+// §2.6 — the preview: the server's numbers, drawn as sent (2026-11-03)
 // ---------------------------------------------------------------------------
 
+type PreviewBody = { config: GameConfig };
+
+/** Every `POST /rooms/preview` body the panel sent, oldest first. */
+function previewRequests(): PreviewBody[] {
+  return httpRec.post.mock.calls
+    .filter((call) => /\/rooms\/preview$/.test(String(call[0])))
+    .map((call) => call[1] as PreviewBody);
+}
+
+/**
+ * A stand-in server that answers with a series no client formula would
+ * produce: the week number times 100, plus the draft's duration. It proves
+ * the panel draws what it is sent, for the draft it sent.
+ */
+function echoPreview(body: unknown): unknown {
+  const draft = (body as PreviewBody).config;
+  return {
+    demand_series: Array.from({ length: draft.duration_weeks }, (_unused, index) => (index + 1) * 100),
+    demand_is_example: draft.demand.kind === 'STOCHASTIC',
+    lead_times: { RETAILER: 4, WHOLESALER: 4, DISTRIBUTOR: 4, FACTORY: 2 },
+  };
+}
+
+function hundreds(weeks: number): string {
+  return Array.from({ length: weeks }, (_unused, index) => (index + 1) * 100).join(',');
+}
+
 describe('demand preview (§2.6)', () => {
-  it('plots CONSTANT value=4 over 5 weeks as 4,4,4,4,4 [AC 10]', async () => {
-    await mountPanel(config(5, { kind: 'CONSTANT', value: 4 }));
-    expect(previewSeries()).toBe('4,4,4,4,4');
+  it('draws exactly the series the server sends for the stored config [AC 10]', async () => {
+    const demand: DemandConfig = { kind: 'RAMP', initial_value: 4, slope_per_week: 2, start_week: 3, cap: 12 };
+    await mountPanel(config(8, demand));
+
+    await waitFor(() => expect(previewSeries()).toBe(hundreds(8)));
+    const sent = previewRequests().at(-1)?.config;
+    expect(sent?.duration_weeks).toBe(8);
+    expect(sent?.demand).toEqual(demand);
   });
 
-  it('plots STEP 4 → 8 at week 5 over 12 weeks [AC 10]', async () => {
-    await mountPanel(config(12, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }));
-    expect(previewSeries()).toBe('4,4,4,4,8,8,8,8,8,8,8,8');
+  it('shows a placeholder and no series until the server answers', async () => {
+    rest.preview = new Promise(() => {});
+    await mountPanel(config(8, { kind: 'CONSTANT', value: 4 }));
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const preview = screen.getByTestId('demand-preview');
+    expect(preview.getAttribute('data-series')).toBeNull();
+    expect(textOf(preview)).toMatch(/working out the preview/i);
   });
 
-  it('plots a capped RAMP over 8 weeks [AC 10]', async () => {
-    await mountPanel(
-      config(8, { kind: 'RAMP', initial_value: 4, slope_per_week: 2, start_week: 3, cap: 12 }),
+  it('shows the server’s refusal of the draft instead of a chart', async () => {
+    rest.preview = () =>
+      Promise.reject({
+        response: { status: 422, data: { detail: 'demand.step_week: step_week must be between 2 and 8.' } },
+      });
+    await mountPanel(config(8, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }));
+
+    await waitFor(() =>
+      expect(textOf(screen.getByTestId('demand-preview'))).toMatch(/step_week must be between 2 and 8/),
     );
-    // The `+ 1` of §2.6: the first ramped week already carries one slope step.
-    expect(previewSeries()).toBe('4,4,6,8,10,12,12,12');
-  });
-
-  it('rounds a fractional RAMP slope half-up [AC 10, FM 10]', async () => {
-    await mountPanel(
-      config(6, { kind: 'RAMP', initial_value: 4, slope_per_week: 0.5, start_week: 1, cap: null }),
-    );
-    // `Math.floor(x + 0.5)`, never `Math.round` — the one place the preview can
-    // silently disagree with the game that gets played (§2.6).
-    expect(previewSeries()).toBe('5,5,6,6,7,7');
-  });
-
-  it('rounds an exact half up even when float noise lands it just below [FM 10]', async () => {
-    await mountPanel(
-      config(50, { kind: 'RAMP', initial_value: 0, slope_per_week: 0.29, start_week: 1, cap: null }),
-    );
-    // 0.29 * 50 is 14.5 on paper and 14.499999999999998 in binary. The server
-    // rounds week 50 to 15, so the preview has to as well.
-    expect(previewSeries().split(',').at(-1)).toBe('15');
-  });
-
-  it('plots SEASONAL base=8 amplitude=4 period=4 over 8 weeks [AC 10]', async () => {
-    await mountPanel(
-      config(8, { kind: 'SEASONAL', base: 8, amplitude: 4, period_weeks: 4, phase: 0 }),
-    );
-    expect(previewSeries()).toBe('8,12,8,4,8,12,8,4');
+    expect(screen.getByTestId('demand-preview').getAttribute('data-series')).toBeNull();
   });
 
   it('follows duration_weeks when it changes [AC 10]', async () => {
-    await mountPanel(config(5, { kind: 'CONSTANT', value: 4 }));
-    expect(previewSeries()).toBe('4,4,4,4,4');
+    await mountPanel(config(8, { kind: 'CONSTANT', value: 4 }));
+    await waitFor(() => expect(previewSeries()).toBe(hundreds(8)));
 
-    applyConfig(config(8, { kind: 'CONSTANT', value: 4 }));
-    await waitFor(() => expect(previewSeries()).toBe('4,4,4,4,4,4,4,4'));
+    applyConfig(config(12, { kind: 'CONSTANT', value: 4 }));
+    await waitFor(() => expect(previewSeries()).toBe(hundreds(12)));
+    expect(previewRequests().at(-1)?.config.duration_weeks).toBe(12);
   });
 
-  it('labels the STOCHASTIC preview as an example draw [AC 11]', async () => {
+  it('debounces: a burst of changes sends one request, for the last draft', async () => {
+    await mountPanel(config(8, { kind: 'CONSTANT', value: 4 }));
+    await waitFor(() => expect(previewSeries()).toBe(hundreds(8)));
+    httpRec.post.mockClear();
+
+    for (const weeks of [9, 10, 11, 12]) applyConfig(config(weeks, { kind: 'CONSTANT', value: 4 }));
+    await waitFor(() => expect(previewSeries()).toBe(hundreds(12)));
+
+    expect(previewRequests().map((body) => body.config.duration_weeks)).toEqual([12]);
+  });
+
+  it('labels the series an example draw when the server says so [AC 11]', async () => {
     await mountPanel(
       config(8, { kind: 'STOCHASTIC', distribution: 'NORMAL', mean: 8, stdev: 2, min: 0, max: 20 }),
     );
 
-    expect(bodyText()).toMatch(
-      /Example draw[;,]? the real series is generated at start\./i,
+    await waitFor(() =>
+      expect(bodyText()).toMatch(/Example draw[;,]? the real series is generated at start\./i),
     );
+  });
+
+  it('says the series is the one the game will run when the server says it is', async () => {
+    await mountPanel(config(8, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }));
+
+    await waitFor(() => expect(bodyText()).toMatch(/exactly as the game will run them/i));
+    expect(bodyText()).not.toMatch(/example draw/i);
   });
 });
 
@@ -540,7 +595,7 @@ describe('demand preview (§2.6)', () => {
 // ---------------------------------------------------------------------------
 
 describe('switching the generator (§2)', () => {
-  it('replaces the parameter block with the new kind\'s defaults [AC 7]', async () => {
+  it('waits for the server’s defaults, then shows the new kind’s block [AC 7]', async () => {
     const user = await mountPanel(
       config(12, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }),
     );
@@ -550,14 +605,25 @@ describe('switching the generator (§2)', () => {
     await chooseKind(user, 'SEASONAL');
     await waitForDemandSave();
 
-    const demand = lastSavedDemand();
-    expect(demand.kind).toBe('SEASONAL');
-    // 03 §2's declared SeasonalDemand defaults.
-    expect(demand).toMatchObject({ base: 8, amplitude: 4, period_weeks: 12, phase: 0 });
+    expect(lastSavedDemand()).toEqual({ kind: 'SEASONAL' });
+    // No copy of the defaults: until the stored config arrives, the block waits.
+    expect(bodyText()).toMatch(/loading the seasonal settings/i);
+    expect(demandField('base')).toBeNull();
 
     applyConfig(config(12, { kind: 'SEASONAL', base: 8, amplitude: 4, period_weeks: 12, phase: 0 }));
     await waitFor(() => expect(demandField('base')).not.toBeNull());
     expect(demandField('step_week'), 'the STEP parameter block must be gone').toBeNull();
+  });
+
+  it('previews the new kind straight away, with the server filling its defaults', async () => {
+    const user = await mountPanel(
+      config(12, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }),
+    );
+    await waitFor(() => expect(previewSeries()).toBe(hundreds(12)));
+
+    await chooseKind(user, 'SEASONAL');
+
+    await waitFor(() => expect(previewRequests().at(-1)?.config.demand).toEqual({ kind: 'SEASONAL' }));
   });
 
   it('carries no field of the previous kind in the payload [FM 2]', async () => {
@@ -575,22 +641,36 @@ describe('switching the generator (§2)', () => {
     expect(Object.keys(demand)).not.toContain('initial_value');
   });
 
-  it('sends the complete new demand object, not a partial one [§3.1a]', async () => {
+  it('sends the kind alone, and the server fills the defaults [§3.1a]', async () => {
     const user = await mountPanel(config(12, { kind: 'CONSTANT', value: 4 }));
     clearWire();
 
     await chooseKind(user, 'RAMP');
     await waitForDemandSave();
 
-    const demand = lastSavedDemand();
-    // 03 §2's declared RampDemand defaults, complete.
-    expect(demand).toEqual({
-      kind: 'RAMP',
-      initial_value: 4,
-      slope_per_week: 1.0,
-      start_week: 5,
-      cap: null,
-    });
+    // 2026-11-03: the panel used to send its own copy of 03 §2's RampDemand
+    // defaults. A changed kind replaces the stored demand, and
+    // `GameConfig.from_host_input` fills every field the patch leaves out.
+    expect(lastSavedDemand()).toEqual({ kind: 'RAMP' });
+  });
+
+  it('saves a pasted series with its kind, so switching from another generator sticks', async () => {
+    const EIGHT = [4, 4, 8, 4, 4, 8, 4, 8];
+    const user = await mountPanel(
+      config(8, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }),
+    );
+    clearWire();
+
+    await chooseKind(user, 'CUSTOM');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(saveCount(), 'an empty series is refused, so choosing CUSTOM sends nothing').toBe(0);
+
+    await pasteCustom(user, EIGHT.join(','));
+    await waitForDemandSave();
+
+    // Without the kind, the server merged `values` into the STEP object,
+    // which ignored them: the game never became CUSTOM.
+    expect(lastSavedDemand()).toEqual({ kind: 'CUSTOM', values: EIGHT });
   });
 });
 

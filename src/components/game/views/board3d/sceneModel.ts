@@ -575,17 +575,19 @@ function foldRows(
 }
 
 /**
- * When the slot at `index` lands, in words, upper-cased for a warehouse sign.
+ * When a slot lands, in words, upper-cased for a warehouse sign.
  *
  * 24 §4.2 says the lane placards reuse `SupplyLine.tsx`'s own wording, and
- * these are those words: *next week*, *the week after*, *in N weeks*. Never a
- * computed week number — the only place `week + lead` appears is inside
- * `DecisionForm`, which already computes it (24 §4.2, `19 §3.1`).
+ * these are those words: *next week*, *the week after*, *in N weeks*. `weeks`
+ * is the server's figure for that slot (`supply_line_slot_weeks` /
+ * `orders_in_flight_slot_weeks`); the scene used to count it from the slot's
+ * position, a copy of how a pipeline moves (2026-11-03). Never a week number —
+ * the arrival week appears only inside `DecisionForm` (24 §4.2, `19 §3.1`).
  */
-function whenLabel(index: number): string {
-  if (index === 0) return 'NEXT WEEK'
-  if (index === 1) return 'THE WEEK AFTER'
-  return `IN ${index + 1} WEEKS`
+function whenLabel(weeks: number): string {
+  if (weeks === 1) return 'NEXT WEEK'
+  if (weeks === 2) return 'THE WEEK AFTER'
+  return `IN ${weeks} WEEKS`
 }
 
 /* ─── The prompts of 24 §5.2 ─── */
@@ -835,7 +837,7 @@ function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
       signs: [
         sign(
           `supply-lane-${index}-placard`,
-          `${slots[index]} UNITS ARRIVING ${whenLabel(index)}`,
+          `${slots[index]} UNITS ARRIVING ${whenLabel(view.supply_line_slot_weeks[index])}`,
           at(stand, 0, SIGN_HEIGHT.placard, 0),
           SIGN_SIZE.lane,
           TEXT_HEX.ink,
@@ -1049,7 +1051,7 @@ function buildNorthEnd(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
       signs: [
         sign(
           `${id}-placard`,
-          `${slots[index]} REACHING YOUR SUPPLIER ${whenLabel(index)}`,
+          `${slots[index]} REACHING YOUR SUPPLIER ${whenLabel(view.orders_in_flight_slot_weeks[index])}`,
           at(stand, 0, SIGN_HEIGHT.placard, 0),
           SIGN_SIZE.caption,
           TEXT_HEX.ink,
@@ -1324,8 +1326,8 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
     ),
     sign(
       'canopy-lead',
-      // The role's verb, and never the arrival week: `week + lead` appears only
-      // inside `DecisionForm`, which already computes it (24 §4.2).
+      // The role's verb, and never the arrival week: the server's
+      // `order_arrival_week` appears only inside `DecisionForm` (24 §4.2).
       roleSet.hasProductionBay
         ? `ANYTHING YOU START NOW FINISHES IN ${view.order_arrival_lead_weeks} WEEKS`
         : `ANYTHING YOU ORDER NOW REACHES YOU IN ${view.order_arrival_lead_weeks} WEEKS`,
@@ -1405,9 +1407,9 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
  *
  * Money goes through that file's `formatMoney`, and the rate lines are text
  * beside the server's money figure — the multiplication is never performed
- * here (`19` FM 4, AC 6). The display pair `opening_inventory + arrived` is
- * computed once, exactly as 2D computes it, and is the only arithmetic in this
- * function.
+ * here (`19` FM 4, AC 6). The stock after receiving is the server's
+ * `inventory_after_arrival`, exactly as 2D prints it: this function does no
+ * arithmetic at all (2026-11-03; it used to add `opening_inventory + arrived`).
  */
 function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
   const base = ZONES.ledgerBoard
@@ -1418,7 +1420,9 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
   if (!settlement) {
     lines.push('Nothing has settled yet')
   } else {
-    const afterArrival = settlement.opening_inventory + settlement.arrived
+    // The server's stock after receiving, never `opening_inventory + arrived`
+    // added here (2026-11-03), exactly as the 2D recap prints it.
+    const afterArrival = settlement.inventory_after_arrival
     lines.push(`Week ${settlement.week} settlement`)
     lines.push(
       `${RECEIPT_LABEL[settlement.role]} +${settlement.arrived} — inventory ${
@@ -1437,7 +1441,7 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
     )
     lines.push(
       `Unfulfilled ${settlement.unfulfilled} — backlog ${
-        settlement.unfulfilled === 0 ? 'stays' : 'now'
+        settlement.closing_backlog === settlement.opening_backlog ? 'stays' : 'now'
       } ${settlement.closing_backlog}`,
     )
     lines.push(

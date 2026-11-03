@@ -42,6 +42,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { ConfigPanel } from '../components/config/ConfigPanel';
 import { resetLimitsCacheForTests } from '../components/config/useLimits';
+import { resetPreviewCacheForTests } from '../components/config/useConfigPreview';
 import { useGameStore } from '../store/gameStore';
 import { setHostRoom, setHostSecret } from '../utils/storage';
 import type {
@@ -115,6 +116,8 @@ const rest = vi.hoisted(() => ({
   presets: null as unknown,
   configResponse: null as unknown,
   putRejection: null as unknown,
+  /** `POST /rooms/preview`'s answer; a promise that never settles holds it back. */
+  preview: null as unknown,
 }));
 
 const limitsFixture = await vi.hoisted(async () => await import('./limitsFixture'));
@@ -132,7 +135,9 @@ const httpRec = vi.hoisted(() => {
     return { data: rest.configResponse ?? {} };
   };
   const post = async (...args: unknown[]) => {
-    void args;
+    if (/\/rooms\/preview$/.test(String(args[0]))) {
+      return { data: await Promise.resolve(rest.preview) };
+    }
     return { data: {} };
   };
   return {
@@ -256,6 +261,17 @@ const PRESETS = {
       }),
     },
   ],
+};
+
+/**
+ * `POST /rooms/preview`'s answer (`10 §3.5b`). Test data, not a second source:
+ * the lead times are deliberately not what any sum of the fixture's delays
+ * gives, so a row that added up its own columns would show different numbers.
+ */
+const SERVER_PREVIEW = {
+  demand_series: [4, 4, 4, 4, 8, 8, 8, 8],
+  demand_is_example: false,
+  lead_times: { RETAILER: 9, WHOLESALER: 11, DISTRIBUTOR: 13, FACTORY: 7 },
 };
 
 const EMPTY_ROLE_TO_ALIAS: Record<Role, string | null> = {
@@ -428,7 +444,7 @@ const WORDS: Record<string, RegExp> = {
   show_running_cost_to_players: /running cost/i,
   show_leaderboard_during_game: /leaderboard/i,
   max_order_quantity: /max(imum)? order/i,
-  beta: /supply line|already ordered/i,
+  beta: /supply line|already shipped/i,
   theta: /(theta|smooth)/i,
   alpha: /(alpha|stock adjust)/i,
   target_stock_multiplier: /target stock/i,
@@ -607,6 +623,9 @@ beforeEach(() => {
   rest.presets = PRESETS;
   rest.configResponse = null;
   rest.putRejection = null;
+  rest.preview = SERVER_PREVIEW;
+  resetPreviewCacheForTests();
+  httpRec.post.mockClear();
   store().reset();
 });
 
@@ -662,6 +681,23 @@ describe('preset cards (§2)', () => {
     // The whole form follows the preset once the server has echoed it back.
     applyConfig(baseConfig({ preset_name: 'FAST_GAME', duration_weeks: 20 }));
     await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('20'));
+  });
+
+  it('renders the server’s label and description verbatim, with no copy of its own (2026-11-03)', async () => {
+    // The figures are written by the server from each preset's config. A card
+    // that kept its own text would still say "36 weeks" here.
+    rest.presets = {
+      presets: [
+        {
+          ...(PRESETS.presets[0] as Json),
+          label: 'Classic MIT',
+          description: '41 weeks, 7 units on hand, written by the server.',
+        },
+      ],
+    };
+    await mountPanel();
+    await waitFor(() => expect(bodyText()).toMatch(/41 weeks, 7 units on hand, written by the server\./));
+    expect(bodyText()).not.toMatch(/36 weeks/);
   });
 
   it('renders each preset card with the copy the API supplies [AC 2]', async () => {
@@ -1068,17 +1104,31 @@ describe('bot difficulty (§2)', () => {
     await mountPanel({ config: baseConfig({ bot_fill_empty_roles: true }) });
 
     const slider = screen.getByRole('slider', {
-      name: /How much do bots account for what they.?ve already ordered\?/i,
+      name: /How much do bots count the beer already shipped to them\?/i,
     });
     expect(slider.getAttribute('min') ?? slider.getAttribute('aria-valuemin')).toBe('0');
     expect(slider.getAttribute('max') ?? slider.getAttribute('aria-valuemax')).toBe('1');
+  });
+
+  it('describes what beta changes and never promises a steady bot (08 §3.1, 2026-11-03)', async () => {
+    // At beta 1 the bot still orders 9 to 14 on flat demand of 4: it aims for
+    // 3x its starting stock and cannot see orders its supplier has not
+    // shipped. The copy says so instead of calling it "steady".
+    await mountPanel({ config: baseConfig({ bot_fill_empty_roles: true }) });
+
+    const section = document.getElementById('config-bots-panel') ?? document.body;
+    const text = (section.textContent ?? '').replace(/\s+/g, ' ');
+    expect(text).not.toMatch(/steady|stabl/i);
+    expect(text).toMatch(/counts all of it/i);
+    expect(text).toMatch(/still over-orders at first/i);
+    expect(text).toMatch(/orders its supplier has not shipped yet are invisible to it/i);
   });
 
   it('hides the bot section when bot fill is off and no bot is seated [§2]', async () => {
     await mountPanel({ config: baseConfig({ bot_fill_empty_roles: false }) });
 
     expect(
-      screen.queryByRole('slider', { name: /How much do bots account for/i }),
+      screen.queryByRole('slider', { name: /How much do bots count/i }),
       'the bot section is conditional on bot_fill_empty_roles (§2)',
     ).toBeNull();
   });
@@ -1098,7 +1148,7 @@ describe('keyboard operation (§3.4)', () => {
       ['a visibility switch', field('visibility.show_all_inventories')],
       [
         'the bot slider',
-        screen.getByRole('slider', { name: /How much do bots account for what they.?ve already ordered\?/i }),
+        screen.getByRole('slider', { name: /How much do bots count the beer already shipped to them\?/i }),
       ],
     ]);
 
@@ -1151,6 +1201,52 @@ describe('mouse wheel over a focused number field', () => {
       expect(document.activeElement).toBe(input);
       fireEvent.wheel(input, { deltaY: 100 });
       expect(document.activeElement, `the wheel left ${input.id} focused`).not.toBe(input);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2026-11-03 — the lead times are the server's (`POST /rooms/preview`)
+// ---------------------------------------------------------------------------
+
+describe('lead times (10 §3.5b, 18 §2.6)', () => {
+  function leadCell(role: Role): HTMLElement {
+    const row = screen.getByTestId('lead-time-row');
+    const cell = row.querySelector<HTMLElement>(`[data-role="${role}"]`);
+    if (!cell) throw new Error(`No lead-time cell for ${role}.`);
+    return cell;
+  }
+
+  it('shows each role’s lead time exactly as the server sent it, never a sum of the delays', async () => {
+    await mountPanel();
+
+    await waitFor(() => expect(textOf(leadCell('RETAILER'))).toMatch(/9 weeks/));
+    expect(textOf(leadCell('WHOLESALER'))).toMatch(/11 weeks/);
+    expect(textOf(leadCell('DISTRIBUTOR'))).toMatch(/13 weeks/);
+    expect(textOf(leadCell('FACTORY'))).toMatch(/7 weeks/);
+    // 2 + 2 is what a grid adding its own columns would print.
+    expect(textOf(screen.getByTestId('lead-time-row'))).not.toMatch(/\b4 weeks/);
+  });
+
+  it('asks the server with the stored config as the draft, once for the row and the chart', async () => {
+    const config = baseConfig({ duration_weeks: 30 });
+    await mountPanel({ config });
+
+    await waitFor(() => expect(textOf(leadCell('FACTORY'))).toMatch(/7 weeks/));
+    const calls = httpRec.post.mock.calls.filter((call) => /\/rooms\/preview$/.test(String(call[0])));
+    expect(calls).toHaveLength(1);
+    const body = calls[0][1] as { config: GameConfig };
+    expect(body.config.duration_weeks).toBe(30);
+    expect(body.config.roles.WHOLESALER).toEqual(config.roles.WHOLESALER);
+  });
+
+  it('shows a placeholder, not a number, until the server answers', async () => {
+    rest.preview = new Promise(() => {});
+    await mountPanel();
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    for (const role of ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as Role[]) {
+      expect(textOf(leadCell(role))).not.toMatch(/\d/);
     }
   });
 });
