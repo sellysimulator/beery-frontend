@@ -44,8 +44,9 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
 
   /**
    * Eligibility arrives from the server (`00-conventions.md` section 4).
-   * `RoomService.can_start` already knows about empty seats, bot fill and a
-   * config that will not build; a second implementation here would be a second
+   * `RoomService.can_start` already knows about empty seats, bot fill, a person
+   * left without a role and a config that will not build; a second
+   * implementation here would be a second
    * set of rules to keep in step, silently wrong the first time the two
    * disagree. The reason is rendered exactly as it was sent.
    */
@@ -72,6 +73,10 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
   }
 
   const seated = ROLE_ORDER.filter((role) => roleToAlias[role] !== null).length
+  // The host can seat people in both modes the server accepts `assign_role` in
+  // (`11 §3.5`). In PLAYER_CHOOSES that is how a host gets past a person who has
+  // not picked a seat: nobody may start without one (`11 §2.2`).
+  const canAssign = roleAssignmentMode === 'HOST_ASSIGNS' || roleAssignmentMode === 'PLAYER_CHOOSES'
 
   return (
     <div className="min-h-screen px-6 py-10 pb-24">
@@ -98,7 +103,7 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
           <ParticipantList
             participants={participants}
             myAlias={myAlias}
-            onAssign={roleAssignmentMode === 'HOST_ASSIGNS' ? handleAssign : undefined}
+            onAssign={canAssign ? handleAssign : undefined}
             assignDisabled={hostSecret === null}
           />
           {roleAssignmentMode === 'HOST_ASSIGNS' ? (

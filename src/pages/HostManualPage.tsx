@@ -204,7 +204,8 @@ const BODY: ManualPageSpec[] = [
         <p>
           If you have fewer than four people, enable <strong>bot fill</strong>. Empty roles are
           played by an automated agent and are clearly marked so everyone knows which links in
-          the chain are human.
+          the chain are human. Bots only take seats nobody holds, so the game will not start while
+          anyone in the room is still without a role: give everyone a seat first.
         </p>
       </>
     ),

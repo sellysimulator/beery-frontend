@@ -13,7 +13,9 @@ Factory`; orders flow upstream, shipments flow downstream, both with delays. Eac
 *week* every role receives a shipment, fills its downstream order, pays holding/backlog cost
 and decides a new order. A fifth participant, the **host**, configures and runs the session
 but does not play and sees everything. The pedagogical payload is the **bullwhip effect**.
-Missing roles can be filled by bots (Sterman anchor-and-adjust).
+Missing roles can be filled by bots (Sterman anchor-and-adjust), but only roles nobody holds:
+the server refuses to start while a person in the room has no role, and the host lobby shows
+its reason naming them (the host can seat people in Host assigns and Players choose).
 
 This repo is the **client only**:
 
@@ -285,7 +287,10 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     watch the projector, and mid-game order quantities on it would leak exactly what the game
     hides. Under `presenting` the demand curve also stops at the current week
     (`revealedDemand`), so no future demand reaches the projector; the console's own curve
-    keeps the whole series.
+    keeps the whole series. A lane chip shows what travels along *that* link: beer is the
+    downstream role's `supply_line`, orders the **upstream** role's `orders_in_flight` (on
+    `host_state` that is a role's own incoming-order pipeline, so reading the downstream
+    role's put every count one link too high until 2026-11-03).
 14. **The 3D board computes nothing and emits nothing.** `board3d/sceneModel.ts`'s
     `buildSceneModel(props)` returns a plain object — every pile count, sign string, fixture
     id, model placement, light, accent and prompt — and `WarehouseScene` walks it and emits

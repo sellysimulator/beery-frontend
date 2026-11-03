@@ -91,6 +91,15 @@ export function PlayerLobby({ roomCode }: PlayerLobbyProps): ReactElement {
                   ? 'Seats are dealt at random when the game starts.'
                   : `You have no seat yet. ${host} decides who plays which link in the chain.`}
           </p>
+          {/* The server will not start while anyone in the room has no role
+              (`11 §2.2`): bots fill only the seats nobody holds. Static copy,
+              not an eligibility check — RANDOM deals everyone a seat at start. */}
+          {myRole === null &&
+          (roleAssignmentMode === 'HOST_ASSIGNS' || roleAssignmentMode === 'PLAYER_CHOOSES') ? (
+            <p className="text-sm text-ink-muted">
+              The game cannot start while you have no seat, so you will not be left out.
+            </p>
+          ) : null}
         </section>
 
         {roleAssignmentMode === 'PLAYER_CHOOSES' ? (

@@ -1469,23 +1469,26 @@ describe('BE-5 acceptance 2: the console’s lanes carry count chips', () => {
     expect(be5Chips('orders')).toHaveLength(3);
   });
 
-  it('lane i+1 shows the upstream-of-it role’s supply_line and orders_in_flight', () => {
+  it('each lane pairs the downstream role’s supply_line with the upstream role’s orders_in_flight', () => {
     renderRunning();
 
     const pairs = be5LanePairs();
     const expected: Array<[number, number]> = (['RETAILER', 'WHOLESALER', 'DISTRIBUTOR'] as Role[]).map((role) => [
       ROLE_NUMBERS[role].supply_line,
-      ROLE_NUMBERS[role].orders_in_flight,
+      ROLE_NUMBERS[ROLE_ORDER[ROLE_ORDER.indexOf(role) + 1]].orders_in_flight,
     ]);
     expect([...pairs].sort((a, b) => a[0] - b[0])).toEqual(expected);
   });
 
-  it('never shows the Factory’s figures in a chip', () => {
+  it('never shows the Factory’s production or the Retailer’s order pipeline in a chip', () => {
+    // The Factory's supply_line is its production line, which stays on its
+    // card; the Retailer takes customer demand directly and has no order
+    // pipeline, so its orders_in_flight belongs on no link.
     renderRunning();
 
     const text = [...be5Chips('beer'), ...be5Chips('orders')].map((c) => textOf(c)).join(' ');
     expect(hasNumber(text, ROLE_NUMBERS.FACTORY.supply_line)).toBe(false);
-    expect(hasNumber(text, ROLE_NUMBERS.FACTORY.orders_in_flight)).toBe(false);
+    expect(hasNumber(text, ROLE_NUMBERS.RETAILER.orders_in_flight)).toBe(false);
   });
 
   it('labels each chip for assistive tech, shows the number as visible text, outside any aria-hidden', () => {
@@ -1505,7 +1508,9 @@ describe('BE-5 acceptance 2: the console’s lanes carry count chips', () => {
 
   it('shows a zero count rather than hiding the chip', () => {
     const zero = { supply_line: 0, orders_in_flight: 0 };
-    renderRunning(hostView({}, { RETAILER: zero, WHOLESALER: zero, DISTRIBUTOR: zero }));
+    renderRunning(
+      hostView({}, { RETAILER: zero, WHOLESALER: zero, DISTRIBUTOR: zero, FACTORY: { orders_in_flight: 0 } }),
+    );
 
     expect(be5Chips('beer')).toHaveLength(3);
     for (const chip of be5Chips('beer')) expect(chip.getAttribute('aria-label')).toBe('Beer on the way: 0');
@@ -1514,9 +1519,59 @@ describe('BE-5 acceptance 2: the console’s lanes carry count chips', () => {
 
   it('follows a later host_state', () => {
     renderRunning();
-    deliverHostState(hostView({}, { WHOLESALER: { supply_line: 777, orders_in_flight: 778 } }));
+    deliverHostState(hostView({}, { WHOLESALER: { supply_line: 777 }, DISTRIBUTOR: { orders_in_flight: 778 } }));
 
     expect(be5LanePairs()).toContainEqual([777, 778]);
+  });
+});
+
+/** The (beer, orders) chips on the lane drawn after `role`'s card: the role–supplier link. */
+function laneAfter(role: Role): { beer: string | null; orders: string | null } {
+  // Scoped to the diagram: the role cards carry `data-role` too.
+  const chain = document.querySelector<HTMLElement>('section[aria-label="The supply chain"]');
+  const stop = chain?.querySelector<HTMLElement>(`li[data-role="${role}"]`);
+  if (!stop) throw new Error(`no chain stop for ${role}`);
+  return {
+    beer: stop.querySelector('[data-chip="beer"]')?.getAttribute('aria-label') ?? null,
+    orders: stop.querySelector('[data-chip="orders"]')?.getAttribute('aria-label') ?? null,
+  };
+}
+
+describe('the chain’s order counts sit on the link the orders are travelling along', () => {
+  // host_state.roles[R].orders_in_flight is R's OWN order pipeline: orders its
+  // downstream customer placed that are still on their way TO R (07 §3.8). So
+  // it belongs on the link between R and its customer, one lane below R — not
+  // on the lane between R and its supplier, where the diagram used to draw it.
+  // Every figure below is distinct, so a count on the wrong lane cannot pass.
+  const IN_TRANSIT: Record<Role, { supply_line: number; orders_in_flight: number }> = {
+    RETAILER: { supply_line: 301, orders_in_flight: 0 },
+    WHOLESALER: { supply_line: 302, orders_in_flight: 312 },
+    DISTRIBUTOR: { supply_line: 303, orders_in_flight: 313 },
+    FACTORY: { supply_line: 304, orders_in_flight: 314 },
+  };
+
+  it.each([
+    ['RETAILER', 'WHOLESALER'],
+    ['WHOLESALER', 'DISTRIBUTOR'],
+    ['DISTRIBUTOR', 'FACTORY'],
+  ] as Array<[Role, Role]>)('%s–%s: beer is the customer’s supply_line, orders the supplier’s own pipeline', (customer, supplier) => {
+    renderRunning(hostView({}, IN_TRANSIT));
+
+    expect(laneAfter(customer)).toEqual({
+      beer: `Beer on the way: ${IN_TRANSIT[customer].supply_line}`,
+      orders: `Orders in flight: ${IN_TRANSIT[supplier].orders_in_flight}`,
+    });
+  });
+
+  it('the Factory has no lane after it, and the Customer–Retailer lane carries no counts', () => {
+    renderRunning(hostView({}, IN_TRANSIT));
+
+    expect(laneAfter('FACTORY')).toEqual({ beer: null, orders: null });
+    expect(be5Chips('orders').map((chip) => chip.getAttribute('aria-label'))).toEqual([
+      'Orders in flight: 312',
+      'Orders in flight: 313',
+      'Orders in flight: 314',
+    ]);
   });
 });
 

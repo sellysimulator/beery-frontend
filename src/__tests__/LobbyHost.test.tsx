@@ -901,6 +901,76 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
 });
 
 // ---------------------------------------------------------------------------
+// 11 §2.2: nobody may be left in the room without a role, bot fill or not
+// ---------------------------------------------------------------------------
+
+describe('a person without a role blocks Start, and the host can seat them', () => {
+  const ROLELESS =
+    'Cal has no role yet. Give everyone in the room a role first; bots fill only the seats nobody holds.';
+
+  function renderWithRolelessCal(mode: 'HOST_ASSIGNS' | 'PLAYER_CHOOSES') {
+    armedTab();
+    renderHostRoom();
+    // Bot fill is on, so the three empty roles are not the problem: Cal is.
+    settleClaim(
+      lobbyUpdate({
+        role_assignment_mode: mode,
+        participants: [
+          participant({ alias: 'P1', display_name: 'Bea', role: 'RETAILER' }),
+          participant({ alias: 'P2', display_name: 'Cal' }),
+        ],
+        role_to_alias: { ...EMPTY_ROLES, RETAILER: 'P1' },
+        can_start: false,
+        start_blocked_reason: ROLELESS,
+      }),
+    );
+  }
+
+  it.each(['HOST_ASSIGNS', 'PLAYER_CHOOSES'] as const)(
+    '%s: Start stays disabled and the reason names the person',
+    async (mode) => {
+      const user = userEvent.setup();
+      renderWithRolelessCal(mode);
+
+      expect(isDisabled(startButton())).toBe(true);
+      expect(bodyText()).toContain(ROLELESS);
+      await user.click(startButton()).catch(() => undefined);
+      expect(emitsOf('start_game')).toHaveLength(0);
+    },
+  );
+
+  it.each(['HOST_ASSIGNS', 'PLAYER_CHOOSES'] as const)(
+    '%s: the host can give them a seat from the lobby',
+    async (mode) => {
+      const user = userEvent.setup();
+      renderWithRolelessCal(mode);
+
+      await placeInRole(user, 'Cal', 'FACTORY');
+
+      const payloads = emitsOf('assign_role');
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]).toMatchObject({ host_secret: 'hs-from-server', alias: 'P2', role: 'FACTORY' });
+    },
+  );
+
+  it('RANDOM offers no seat picker: the server deals every seat at start', () => {
+    armedTab();
+    renderHostRoom();
+    settleClaim(
+      lobbyUpdate({
+        role_assignment_mode: 'RANDOM',
+        participants: [participant({ alias: 'P1', display_name: 'Bea' })],
+        can_start: true,
+        start_blocked_reason: null,
+      }),
+    );
+
+    expect(() => assignControl('Bea')).toThrow();
+    expect(isDisabled(startButton())).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Criterion 20 — the invite link
 // ---------------------------------------------------------------------------
 
