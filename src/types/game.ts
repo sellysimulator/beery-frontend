@@ -581,6 +581,15 @@ export interface EndGameEarlyEmit {
   host_secret: string
 }
 
+/**
+ * A player takes back the seat the host swapped to a bot. No role and no
+ * secret: the server finds the seat from the connection, so nobody can name
+ * somebody else's.
+ */
+export interface ReclaimSeatEmit {
+  room_id: string
+}
+
 export interface RequestStateEmit {
   room_id: string
 }
@@ -740,6 +749,14 @@ export interface ParticipantEventPayload {
 export interface BotSubstitutedPayload {
   seq: number
   role: Role
+  display_name: string
+}
+
+/** The player swapped out for a bot has taken the seat back. */
+export interface SeatReclaimedPayload {
+  seq: number
+  role: Role
+  alias: string
   display_name: string
 }
 

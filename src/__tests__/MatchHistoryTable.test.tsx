@@ -614,13 +614,16 @@ describe('CRITERION 6 and FAILURE MODE 3: a null ratio in the table is "—"', (
 // Criterion 9 — opening a row
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 9: a row opens /results/:roomCode', () => {
-  it('navigates to the public results screen for that room', async () => {
+describe('CRITERION 9: a row opens /profile/games/:gameId', () => {
+  // By game id, not room code (2026-11-03): room codes are recycled, so a
+  // code can name a later game the player never played. Lemony and Pulky
+  // link their history by game id too.
+  it('navigates to that game, by its id', async () => {
     await renderHistory();
 
     const match = PAGE_ONE[2];
     const row = rowFor(match);
-    const href = `/results/${match.room_code}`;
+    const href = `/profile/games/${match.game_id}`;
     const anchor = Array.from(row.querySelectorAll<HTMLAnchorElement>('a[href]')).find(
       (a) => (a.getAttribute('href') ?? '').split('?')[0] === href,
     );
@@ -635,20 +638,31 @@ describe('CRITERION 9: a row opens /results/:roomCode', () => {
     ).toBe(href);
   });
 
-  it('opens the room it names, not another one', async () => {
+  it('opens the game it names, not another one', async () => {
     await renderHistory();
 
     const match = PAGE_ONE[7];
     const row = rowFor(match);
     const anchor = Array.from(row.querySelectorAll<HTMLAnchorElement>('a[href]')).find((a) =>
-      (a.getAttribute('href') ?? '').startsWith('/results/'),
+      (a.getAttribute('href') ?? '').startsWith('/profile/games/'),
     );
 
     const user = userEvent.setup();
     await user.click(anchor ?? row);
     await flush();
 
-    expect(currentPath()).toBe(`/results/${match.room_code}`);
+    expect(currentPath()).toBe(`/profile/games/${match.game_id}`);
+  });
+
+  it('never links a row by its room code', async () => {
+    await renderHistory();
+
+    for (const match of PAGE_ONE) {
+      const hrefs = Array.from(rowFor(match).querySelectorAll<HTMLAnchorElement>('a[href]')).map(
+        (a) => a.getAttribute('href') ?? '',
+      );
+      expect(hrefs, match.room_code).toEqual([`/profile/games/${match.game_id}`]);
+    }
   });
 });
 

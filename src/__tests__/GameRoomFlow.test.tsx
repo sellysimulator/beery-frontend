@@ -1236,3 +1236,60 @@ describe('game over: the player can open the results', () => {
     expect(resultsLink()?.getAttribute('href')).toBe(`/results/g/${'a'.repeat(32)}`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A seat the host swapped to a bot can be taken back (2026-11-03)
+// ---------------------------------------------------------------------------
+
+describe('A player the host swapped for a bot can take the role back', () => {
+  function seatAsRetailer(): void {
+    act(() => {
+      useGameStore.setState({
+        myAlias: 'P1',
+        participants: ROLE_ORDER.map((role, index) => ({
+          alias: `P${index + 1}`,
+          display_name: role,
+          role,
+          is_bot: false,
+          connected: true,
+          is_host: false,
+        })),
+      });
+    });
+  }
+
+  it('replaces the order form with a notice and a "Take back my role" button', async () => {
+    renderPlaying('RETAILER');
+    seatAsRetailer();
+    expect(orderInput()).not.toBeNull();
+
+    dispatch('bot_substituted', { seq: nextSeq(), role: 'RETAILER', display_name: 'RETAILER' });
+
+    expect(bodyText()).toMatch(/handed your role to a bot/i);
+    expect(orderInput()).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(controlMatching(/take back my role/i, 'Take back my role'));
+    expect(emitsOf('reclaim_seat')).toEqual([{ room_id: ROOM }]);
+
+    dispatch('seat_reclaimed', {
+      seq: nextSeq(),
+      role: 'RETAILER',
+      alias: 'P1',
+      display_name: 'RETAILER',
+    });
+
+    expect(bodyText()).not.toMatch(/handed your role to a bot/i);
+    expect(orderInput()).not.toBeNull();
+  });
+
+  it('shows nothing when somebody else is swapped', () => {
+    renderPlaying('RETAILER');
+    seatAsRetailer();
+
+    dispatch('bot_substituted', { seq: nextSeq(), role: 'FACTORY', display_name: 'FACTORY' });
+
+    expect(bodyText()).not.toMatch(/handed your role to a bot/i);
+    expect(orderInput()).not.toBeNull();
+  });
+});

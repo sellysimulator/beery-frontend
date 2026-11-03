@@ -311,6 +311,7 @@ describe('socketHandlers registers the wire contract', () => {
       'host_disconnected',
       'host_reconnected',
       'bot_substituted',
+      'seat_reclaimed',
       'game_finished',
       'game_persisted',
       'error',

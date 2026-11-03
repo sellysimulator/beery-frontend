@@ -241,7 +241,8 @@ const BODY: ManualPageSpec[] = [
           </li>
           <li>
             <strong>Swap in a bot</strong> for a player who has dropped out — even while
-            paused; the bot plays as soon as you resume. The game still counts for that player.
+            paused; the bot plays as soon as you resume. The game still counts for that player,
+            and if they come back they can take their role back from the bot.
           </li>
           <li>
             <strong>End early</strong> if the session is running short — you still get full

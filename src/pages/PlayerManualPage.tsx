@@ -103,6 +103,10 @@ const BODY: ManualPageSpec[] = [
           find out your role either in the lobby or when the game starts, depending on how your
           host set it up.
         </p>
+        <p>
+          If you drop out mid-game, open the same link again to rejoin. If the host handed your
+          role to a bot meanwhile, press <strong>Take back my role</strong> to play it again.
+        </p>
       </>
     ),
   },

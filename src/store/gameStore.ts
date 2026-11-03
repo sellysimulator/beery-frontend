@@ -23,6 +23,7 @@ import type {
   RoleToAlias,
   RolesAssignedPayload,
   RoomState,
+  SeatReclaimedPayload,
   WeekClosedPayload,
   YourStatePayload,
   YourWeekClosedPayload,
@@ -148,6 +149,7 @@ export interface GameActions {
   applyHostDisconnected(p: HostEventPayload): void
   applyHostReconnected(p: HostEventPayload): void
   applyBotSubstituted(p: BotSubstitutedPayload): void
+  applySeatReclaimed(p: SeatReclaimedPayload): void
   applyGameFinished(p: GameFinishedPayload): void
   applyGamePersisted(p: GamePersistedPayload): void
 
@@ -463,6 +465,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         participants: state.participants.map((participant) =>
           participant.role === p.role
             ? { ...participant, is_bot: true, display_name: p.display_name }
+            : participant,
+        ),
+      })),
+
+    // The player swapped out for a bot is back in their seat. Matched by
+    // alias: the seat's person never changed, only who decides for it.
+    applySeatReclaimed: (p) =>
+      applySequenced(p.seq, (state) => ({
+        participants: state.participants.map((participant) =>
+          participant.alias === p.alias
+            ? { ...participant, is_bot: false, connected: true, display_name: p.display_name }
             : participant,
         ),
       })),

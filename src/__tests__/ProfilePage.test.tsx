@@ -1096,8 +1096,10 @@ describe('CRITERION 9b: a null best_game_id renders the empty treatment', () => 
   it('links nowhere and renders no null, and does not crash', async () => {
     await renderProfileReady();
 
-    const detailLinks = links().filter((a) =>
-      (a.getAttribute('href') ?? '').startsWith('/profile/games'),
+    // The match history's rows link to `/profile/games/:id` too (2026-11-03);
+    // what is asserted is that nothing outside it — the best game — does.
+    const detailLinks = links().filter(
+      (a) => (a.getAttribute('href') ?? '').startsWith('/profile/games') && !a.closest('table'),
     );
     expect(
       detailLinks.map((a) => a.getAttribute('href')),
