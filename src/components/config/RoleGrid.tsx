@@ -4,7 +4,7 @@ import { useConfigFormContext } from './configFormContext'
 import type { ConfigPatch } from './configPatch'
 import { ROLE_COLUMN_LABEL } from './copy'
 import { NumberField } from './fields'
-import { ROLE_ROW_GROUPS, showsRow } from './roleRows'
+import { ROLE_ROW_GROUPS, boundsFor, showsRow } from './roleRows'
 
 export interface RoleGridProps {
   group: keyof typeof ROLE_ROW_GROUPS
@@ -12,6 +12,8 @@ export interface RoleGridProps {
   roles: GameConfigRoles
   /** Sends a patch immediately; *Apply to all* is a finished decision. */
   onApplyToAll: (patch: ConfigPatch) => void
+  /** A read-only last row of server figures (`LeadTimeRow`), if any. */
+  leadTimes?: ReactElement
 }
 
 /**
@@ -24,8 +26,8 @@ export interface RoleGridProps {
  * `information_delay_weeks` on screen, so pressing the button cannot silently
  * push a value the host was never able to see.
  */
-export function RoleGrid({ group, roles, onApplyToAll }: RoleGridProps): ReactElement {
-  const { readOnly, saveApi } = useConfigFormContext()
+export function RoleGrid({ group, roles, onApplyToAll, leadTimes }: RoleGridProps): ReactElement {
+  const { readOnly, saveApi, limits } = useConfigFormContext()
   const rows = ROLE_ROW_GROUPS[group]
 
   function handleApplyToAll(): void {
@@ -87,9 +89,7 @@ export function RoleGrid({ group, roles, onApplyToAll }: RoleGridProps): ReactEl
                         name={`roles.${role}.${row.key}`}
                         label={`${ROLE_COLUMN_LABEL[role]} — ${row.label}`}
                         labelHidden
-                        min={row.min}
-                        max={row.max}
-                        step={row.step}
+                        {...boundsFor(row, limits)}
                         unit={row.unit}
                         nullable={row.nullable}
                         placeholder={row.placeholder}
@@ -103,6 +103,7 @@ export function RoleGrid({ group, roles, onApplyToAll }: RoleGridProps): ReactEl
                 ))}
               </tr>
             ))}
+            {leadTimes ?? null}
           </tbody>
         </table>
       </div>

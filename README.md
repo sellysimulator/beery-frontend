@@ -14,7 +14,7 @@ checklist. `CLAUDE.md` is the agent-facing map of the same codebase, in more det
 
 ## Prerequisites
 
-- **Node >= 20.19** (or 22.12+), pinned in `.nvmrc` and `engines.node`.
+- **Node 22.23.4+, 24.22.1+ or 26.12.1+**, the `engines.node` range (Vite 7 alone needs 20.19 / 22.12, but Node 20 is end of life). `.nvmrc` pins 24.22.1, which CI builds on.
 - The backend, for anything past the welcome screen and the manuals. See `../Beery_Backend/README.md`.
 
 The toolchain is pinned to the combination the shared Novus stack verifies — React `~19.2.0`
@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 760 passed, 26 files
+npm run test:run        # vitest run — 1252 passed, 39 files (2026-11-03)
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -126,7 +126,7 @@ src/
 ├── contexts/BackendStatusContext.tsx
 ├── store/gameStore.ts          the Zustand store — written only by socket handlers
 ├── types/game.ts               TypeScript mirrors of every wire payload
-├── schemas/configSchema.ts     Zod mirror of GameConfig — a form hint, not a gate
+├── schemas/configSchema.ts     the host form's checks, built from GET /rooms/limits (no copy)
 ├── utils/storage.ts            alias, guest id, session_token, host_secret, display name,
 │                               board_view
 ├── pages/                      one module per route, each exporting a `route` descriptor
@@ -140,7 +140,9 @@ src/
 │   │                           AuthGuard, BackendGuard
 │   ├── lobby/                  the two lobbies, participant list, role cards, invite panel,
 │   │                           and a self-contained QR encoder
-│   ├── config/                 the host configuration panel and its react-hook-form pieces
+│   ├── config/                 the host configuration panel and its react-hook-form pieces;
+│   │                           useLimits (GET /rooms/limits) and useConfigPreview
+│   │                           (POST /rooms/preview) — no generator, default or range here
 │   ├── game/                   the player's week: decision panel, supply line, recap
 │   │   └── views/              Board2D and Board3D (lazy) — the two registered board
 │   │                           views — plus the 2D/3D toggle and the pure resolver
@@ -149,7 +151,9 @@ src/
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export
 │   ├── profile/                match history, stats, role breakdown, guest-claim prompt
-│   ├── charts/chartSetup.ts    piecemeal Chart.js registration + the pure config builders
+│   ├── charts/                 chartSetup.ts (results view model + bullwhip builder),
+│   │                           chartTheme.ts (every canvas colour), ChartBox, Legend,
+│   │                           plugins/ (crosshair sync)
 │   └── manual/                 ManualBook — the react-pageflip book both manuals are read in
 └── __tests__/                  vitest, flat, one file per feature + setup.ts
 ```
@@ -160,7 +164,12 @@ src/
 read. No component subscribes to the socket directly — a second interpreter of the wire gets
 double-registered under StrictMode and left stale by a reconnect. There is no game arithmetic in
 the client either: inventory, cost and eligibility all arrive from the server, including whether
-the host's Start button may be pressed and the sentence explaining why not.
+the host's Start button may be pressed and the sentence explaining why not. Since 2026-11-03 that
+covers every figure a rule defines: the host form's demand preview and lead times come from
+`POST /rooms/preview`, the preset cards' figures from `/rooms/presets`, a new demand kind's
+defaults from the server's merge, and the arrival week, the stock after arrival, each pipeline
+slot's weeks to go and the weeks played from `your_state` / `host_state`. What stays here is
+formatting, layout, chart scales, sorting and filtering.
 
 **Handlers are registered once, as a module side effect, before React renders.** `main.tsx`
 imports `./api/socketHandlers` ahead of `createRoot`. A component-mounted handler registers twice

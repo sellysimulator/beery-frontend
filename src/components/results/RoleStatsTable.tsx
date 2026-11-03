@@ -10,7 +10,23 @@ export interface RoleStatsTableProps {
 export const NULL_RATIO_EXPLANATION =
   "Customer demand never varied, so there's nothing to amplify."
 
-/** Why a fill rate can be missing. */
+/**
+ * What the `fill_rate` column is called on screen.
+ *
+ * The figure is `sum(shipped) / sum(obligation)` over the weeks played (**D12**),
+ * and `obligation` counts the opening backlog again every week it is still
+ * owed. "Fill rate" reads as "the share of orders eventually filled", which
+ * this is not: a unit that waits three weeks is owed three times and shipped
+ * once. The name says what it measures instead, and the definition sits beside
+ * it so nobody has to guess (2026-11-02). The field keeps its wire name.
+ */
+export const SHIPPED_VS_WAITING_LABEL = 'Shipped vs waiting'
+
+/** The one-line definition printed under the table. */
+export const SHIPPED_VS_WAITING_DEFINITION =
+  "Units shipped ÷ units owed, counting each week's backlog again, so a backlog that waits several weeks lowers it even if every unit is eventually shipped."
+
+/** Why the shipped-vs-waiting figure can be missing: nothing was ever owed. */
 const NULL_FILL_RATE_EXPLANATION = 'Nothing was ever demanded of this role.'
 
 /**
@@ -33,6 +49,8 @@ const MISSING = '—'
 /** The ids the dashes point at, so the footnote explains the right one. */
 const RATIO_NOTE_ID = 'results-null-ratio-note'
 const FILL_RATE_NOTE_ID = 'results-null-fill-rate-note'
+/** The definition's id, which the column header points at. */
+const FILL_RATE_DEFINITION_ID = 'results-shipped-vs-waiting-definition'
 
 /**
  * A missing figure: the em dash, and nothing else in the cell.
@@ -55,6 +73,38 @@ function Missing({
   )
 }
 
+/*
+ * The inline bar's fixed log domain, 0.1x to 1000x, clamped at the ends. Its
+ * position is pure geometry from the server's ratio; it carries no text.
+ */
+const BAR_MIN = 0.1
+const BAR_MAX = 1000
+
+function logShare(value: number): number {
+  const clamped = Math.min(BAR_MAX, Math.max(BAR_MIN, value))
+  return (Math.log10(clamped) - Math.log10(BAR_MIN)) / (Math.log10(BAR_MAX) - Math.log10(BAR_MIN))
+}
+
+/** A decorative bar beside the ratio, with a tick where the ratio is 1x. */
+function InlineRatioBar({ ratio }: { ratio: number }): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      data-print="omit"
+      className="relative block h-2 w-24 shrink-0 rounded-sm bg-surface-sunken"
+    >
+      <span
+        className="absolute inset-y-0 left-0 rounded-sm bg-brand"
+        style={{ width: `${logShare(ratio) * 100}%` }}
+      />
+      <span
+        className="absolute -inset-y-0.5 w-px bg-ink-muted"
+        style={{ left: `${logShare(1) * 100}%` }}
+      />
+    </span>
+  )
+}
+
 function StatsRow({ role }: { role: RoleResultView }): ReactElement {
   return (
     <tr className="border-t border-border">
@@ -69,11 +119,16 @@ function StatsRow({ role }: { role: RoleResultView }): ReactElement {
         </span>
       </th>
       <td className="numeric bg-brand-soft px-3 py-3 text-2xl font-bold text-ink">
-        {role.bullwhip_ratio === null ? (
-          <Missing explanation={NULL_RATIO_EXPLANATION} noteId={RATIO_NOTE_ID} />
-        ) : (
-          figure(role.bullwhip_ratio)
-        )}
+        <span className="flex items-center gap-3">
+          {role.bullwhip_ratio === null ? (
+            <Missing explanation={NULL_RATIO_EXPLANATION} noteId={RATIO_NOTE_ID} />
+          ) : (
+            figure(role.bullwhip_ratio)
+          )}
+          {role.bullwhip_ratio !== null && role.bullwhip_ratio > 0 ? (
+            <InlineRatioBar ratio={role.bullwhip_ratio} />
+          ) : null}
+        </span>
       </td>
       <td className="numeric px-3 py-3">{figure(role.order_variance)}</td>
       <td className="numeric px-3 py-3">{role.peak_inventory}</td>
@@ -135,8 +190,8 @@ export function RoleStatsTable({ view }: RoleStatsTableProps): ReactElement {
             <th scope="col" className="px-3 py-3">
               Weeks in backlog
             </th>
-            <th scope="col" className="px-3 py-3">
-              Fill rate
+            <th scope="col" className="px-3 py-3" aria-describedby={FILL_RATE_DEFINITION_ID}>
+              {SHIPPED_VS_WAITING_LABEL}
             </th>
             <th scope="col" className="px-3 py-3">
               Average order
@@ -149,6 +204,10 @@ export function RoleStatsTable({ view }: RoleStatsTableProps): ReactElement {
           ))}
         </tbody>
       </table>
+      <p id={FILL_RATE_DEFINITION_ID} className="px-3 py-2 text-sm text-ink-muted">
+        <strong className="font-semibold text-ink">{SHIPPED_VS_WAITING_LABEL}:</strong>{' '}
+        {SHIPPED_VS_WAITING_DEFINITION}
+      </p>
       {missingRatio ? (
         <p id={RATIO_NOTE_ID} className="px-3 py-2 text-sm text-ink-muted">
           {MISSING} {NULL_RATIO_EXPLANATION}

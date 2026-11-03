@@ -10,8 +10,14 @@ export type PipelineKind = 'shipments' | 'orders'
 
 export interface SupplyLineProps {
   kind: PipelineKind
-  /** Front first: slot 0 lands next week. */
+  /** Front first. */
   slots: number[]
+  /**
+   * The server's weeks until each slot lands, aligned with `slots`
+   * (`supply_line_slot_weeks` / `orders_in_flight_slot_weeks`). A slot's label
+   * is read from here, never worked out from its position (2026-11-03).
+   */
+  slotWeeks: number[]
   /** The server's total. Never a sum of `slots` computed here. */
   total: number
   /**
@@ -22,11 +28,11 @@ export interface SupplyLineProps {
   prominent: boolean
 }
 
-/** When the slot at `index` lands, in words. Never a computed week number. */
-function whenLabel(index: number): string {
-  if (index === 0) return 'next week'
-  if (index === 1) return 'the week after'
-  return `in ${index + 1} weeks`
+/** When a slot lands, in words, from the server's weeks-to-go. Never a week number. */
+function whenLabel(weeks: number): string {
+  if (weeks === 1) return 'next week'
+  if (weeks === 2) return 'the week after'
+  return `in ${weeks} weeks`
 }
 
 const COPY: Record<PipelineKind, { title: string; verb: string; totalLabel: string; empty: string }> =
@@ -54,10 +60,17 @@ const COPY: Record<PipelineKind, { title: string; verb: string; totalLabel: stri
  * large, expanded and above the decision input; when the host turns it off, it
  * collapses to a bare total.
  *
- * It computes nothing: `total` is the server's figure, and the slots are the
- * server's list in the server's order.
+ * It computes nothing: `total` is the server's figure, the slots are the
+ * server's list in the server's order, and when each lands is the server's
+ * `slotWeeks`.
  */
-export function SupplyLine({ kind, slots, total, prominent }: SupplyLineProps): ReactElement {
+export function SupplyLine({
+  kind,
+  slots,
+  slotWeeks,
+  total,
+  prominent,
+}: SupplyLineProps): ReactElement {
   const copy = COPY[kind]
   const tone =
     kind === 'shipments'
@@ -83,7 +96,7 @@ export function SupplyLine({ kind, slots, total, prominent }: SupplyLineProps): 
                 key={`${copy.title}-${index}`}
                 className={index === 0 ? 'text-xl' : 'text-lg text-ink-muted'}
               >
-                {`${quantity} units ${copy.verb} ${whenLabel(index)}`}
+                {`${quantity} units ${copy.verb} ${whenLabel(slotWeeks[index])}`}
               </li>
             ))}
           </ul>

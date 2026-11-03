@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'vitest';
 
 import * as configSchemaModule from '../schemas/configSchema';
+import { TEST_LIMITS } from './limitsFixture';
 import type {
   BotConfig,
   FactoryConfig,
@@ -57,7 +58,6 @@ function visibilityDefaults(over: Partial<VisibilityConfig> = {}): VisibilityCon
     show_running_cost_to_players: true,
     show_leaderboard_during_game: false,
     max_order_quantity: null,
-    allow_negative_orders: false,
     ...over,
   };
 }
@@ -108,35 +108,17 @@ interface Parser {
   safeParse(value: unknown): { success: boolean };
 }
 
-function isParser(value: unknown): value is Parser {
-  return (
-    !!value &&
-    (typeof value === 'object' || typeof value === 'function') &&
-    typeof (value as Parser).safeParse === 'function'
-  );
-}
-
 let cached: Parser | null = null;
 
+/**
+ * The form's checks, built from the ranges the server serves. Amended
+ * 2026-11-02: the module exports a factory, `buildConfigFormSchema(limits)`,
+ * and keeps no table of its own; the test feeds it the backend's defaults.
+ */
 function schema(): Parser {
   if (cached) return cached;
-  const exported = configSchemaModule as unknown as Record<string, unknown>;
-  const candidates = Object.values(exported).filter(isParser);
-  if (candidates.length === 0) {
-    throw new Error(
-      'src/schemas/configSchema.ts exports nothing with `safeParse`. 18 §2 names the ' +
-        'module but not the export, so this test accepts any exported Zod schema.',
-    );
-  }
-  const whole = candidates.find((c) => c.safeParse(validConfig()).success);
-  if (!whole) {
-    throw new Error(
-      'No export of src/schemas/configSchema.ts accepts a complete, in-range GameConfig ' +
-        'built from 03 §2\'s declared defaults.',
-    );
-  }
-  cached = whole;
-  return whole;
+  cached = configSchemaModule.buildConfigFormSchema(TEST_LIMITS);
+  return cached;
 }
 
 function accepts(value: unknown): boolean {
@@ -334,14 +316,97 @@ describe('random_seed (D11)', () => {
     expect(accepts(validConfig({ random_seed: -17 }))).toBe(true);
   });
 
-  it('flags a seed past the server ceiling, which the server clamps', () => {
+  it('flags a seed past the server ceiling, which the server refuses', () => {
     // The largest integer a browser holds exactly, and the ceiling the server
-    // clamps `random_seed` to (`app/core/limits.py`).
+    // holds `random_seed` to (`app/core/limits.py`).
     const max = Number.MAX_SAFE_INTEGER;
-    expect(configSchemaModule.FORM_LIMITS.max_random_seed).toBe(max);
+    expect(TEST_LIMITS.max_random_seed).toBe(max);
     expect(accepts(validConfig({ random_seed: max }))).toBe(true);
     expect(accepts(validConfig({ random_seed: -max }))).toBe(true);
     expect(accepts(validConfig({ random_seed: 1e19 }))).toBe(false);
     expect(accepts(validConfig({ random_seed: -1e19 }))).toBe(false);
+  });
+});
+
+describe('the four ranges that drifted from the server (2026-11-02)', () => {
+  it('reads every bound from the limits it is given, not from a copy', () => {
+    const tight = configSchemaModule.buildConfigFormSchema({ ...TEST_LIMITS, max_weeks: 20 });
+    expect(tight.safeParse(validConfig({ duration_weeks: 20 })).success).toBe(true);
+    expect(tight.safeParse(validConfig({ duration_weeks: 21 })).success).toBe(false);
+  });
+
+  it('refuses a step in week 1, which the server refuses too', () => {
+    const step = (step_week: number): GameConfig['demand'] => ({
+      kind: 'STEP',
+      initial_value: 4,
+      step_week,
+      step_value: 8,
+    });
+    expect(accepts(validConfig({ demand: step(1) }))).toBe(false);
+    expect(accepts(validConfig({ demand: step(2) }))).toBe(true);
+  });
+
+  it('refuses a step or ramp start after the last week of the game', () => {
+    expect(
+      accepts(
+        validConfig({
+          duration_weeks: 20,
+          demand: { kind: 'STEP', initial_value: 4, step_week: 21, step_value: 8 },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      accepts(
+        validConfig({
+          duration_weeks: 20,
+          demand: { kind: 'RAMP', initial_value: 4, slope_per_week: 1, start_week: 21, cap: null },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('holds a seasonal period to 2 .. 104 weeks', () => {
+    const seasonal = (period_weeks: number): GameConfig['demand'] => ({
+      kind: 'SEASONAL',
+      base: 8,
+      amplitude: 4,
+      period_weeks,
+      phase: 0,
+    });
+    expect(accepts(validConfig({ demand: seasonal(104) }))).toBe(true);
+    expect(accepts(validConfig({ demand: seasonal(105) }))).toBe(false);
+    expect(accepts(validConfig({ demand: seasonal(1) }))).toBe(false);
+  });
+
+  it('holds a stochastic mean and spread to the order ceiling, not a million', () => {
+    const stochastic = (mean: number, stdev: number): GameConfig['demand'] => ({
+      kind: 'STOCHASTIC',
+      distribution: 'NORMAL',
+      mean,
+      stdev,
+      min: 0,
+      max: 20,
+    });
+    expect(accepts(validConfig({ demand: stochastic(9_999, 9_999) }))).toBe(true);
+    expect(accepts(validConfig({ demand: stochastic(10_000, 2) }))).toBe(false);
+    expect(accepts(validConfig({ demand: stochastic(8, 1_000_000) }))).toBe(false);
+  });
+
+  it('accepts 0 for both caps, which means "unlimited", and refuses a negative', () => {
+    expect(
+      accepts(validConfig({ visibility: visibilityDefaults({ max_order_quantity: 0 }) })),
+    ).toBe(true);
+    expect(accepts(withFactory({ production_capacity_per_week: 0 }))).toBe(true);
+    expect(
+      accepts(validConfig({ visibility: visibilityDefaults({ max_order_quantity: -1 }) })),
+    ).toBe(false);
+  });
+
+  it('has no allow_negative_orders field: the option was removed', () => {
+    const parsed = configSchemaModule
+      .buildConfigFormSchema(TEST_LIMITS)
+      .safeParse({ ...validConfig(), visibility: { ...visibilityDefaults(), allow_negative_orders: true } });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect('allow_negative_orders' in parsed.data.visibility).toBe(false);
   });
 });

@@ -139,7 +139,6 @@ function gameConfig(): GameConfig {
       show_running_cost_to_players: true,
       show_leaderboard_during_game: false,
       max_order_quantity: null,
-      allow_negative_orders: false,
     },
     bot: { theta: 0.36, alpha: 0.26, beta: 0.34, target_stock_multiplier: 1 },
   };
@@ -152,6 +151,7 @@ function settlementFor(role: Role): WeekSettlement {
     opening_inventory: 12,
     opening_backlog: 0,
     arrived: 4,
+    inventory_after_arrival: 16,
     incoming_order: 8,
     obligation: 8,
     shipped: 8,
@@ -165,7 +165,7 @@ function settlementFor(role: Role): WeekSettlement {
 }
 
 /**
- * The gated keys — `accumulated_cost`, `week_cost`, `balance`, `neighbours`,
+ * The gated keys — `accumulated_cost`, `week_holding_backlog_cost`, `balance`, `neighbours`,
  * `chain`, `leaderboard`, `customer_demand_series` — are all absent by
  * default, because their absence is exactly what criteria 6 and 23 turn on.
  */
@@ -180,20 +180,23 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     backlog: 0,
     supply_line: 103,
     supply_line_slots: [41, 62],
+    supply_line_slot_weeks: [1, 2],
     orders_in_flight: role === 'FACTORY' ? 0 : 40,
     orders_in_flight_slots: role === 'FACTORY' ? [] : [17, 23],
+    orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2],
     incoming_order: 55,
     last_order: 31,
     settlement: settlementFor(role),
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: [],
-    max_order_quantity: null,
-    allow_negative_orders: false,
+    min_order_quantity: 0,
+    max_order_quantity: 9999,
     show_supply_line_prominently: true,
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
+    order_arrival_week: 6 + 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     ...over,
@@ -346,7 +349,7 @@ beforeEach(() => {
 
 describe('CRITERION 3: the panel renders the §2.2 elements in the §2.2 order', () => {
   function fullPanel() {
-    return renderPanel(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_cost: 9.25 }));
+    return renderPanel(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
   }
 
   it('renders on hand, backlog, supply line, orders in flight, incoming order and costs', () => {
@@ -400,6 +403,24 @@ describe('CRITERION 4: the supply line renders slot by slot, plus the total', ()
     const text = panelText();
     expect(text).toMatch(/next week|week\s*7\b/i);
     expect(text).toMatch(/the week after|week\s*8\b/i);
+  });
+
+  it('says when each slot lands from the server’s weeks to go, never its position', () => {
+    // 2026-11-03: `supply_line_slot_weeks` and `orders_in_flight_slot_weeks`.
+    // Not 1 and 2, so a panel counting positions would say "next week".
+    renderPanel(
+      viewFor('WHOLESALER', {
+        supply_line_slot_weeks: [3, 6],
+        orders_in_flight_slot_weeks: [2, 5],
+      }),
+    );
+
+    const text = panelText();
+    expect(text).toMatch(/41 units arriving in 3 weeks/i);
+    expect(text).toMatch(/62 units arriving in 6 weeks/i);
+    expect(text).toMatch(/17 units reaching your supplier the week after/i);
+    expect(text).toMatch(/23 units reaching your supplier in 5 weeks/i);
+    expect(text).not.toMatch(/next week/i);
   });
 
   it('renders the slots front first, so the nearest arrival reads first', () => {
@@ -623,7 +644,7 @@ describe('CRITERION 23: each conditional block renders only when its flag is set
     expect(bodyText()).not.toMatch(/9\.25/);
     off.unmount();
 
-    freshRender(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_cost: 9.25 }));
+    freshRender(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
     expect(bodyText()).toMatch(/88\.75/);
     expect(bodyText()).toMatch(/9\.25/);
   });
@@ -704,5 +725,42 @@ describe('CRITERION 6: with show_running_cost_to_players off, no running total a
     expect(html).not.toContain('9.25');
     expect(bodyText()).not.toMatch(/total so far/i);
     expect(bodyText()).not.toMatch(/balance/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2026-11-02 — a week's cost is two figures, never one "week cost"
+// ---------------------------------------------------------------------------
+
+describe('the week’s cost is holding & backlog and an order cost, never "this week"', () => {
+  it('shows holding & backlog and an order cost that is not yet charged', () => {
+    // The example from the review: $10 fixed + $1/unit, a week-1 order of 4.
+    // The panel used to say "This week $6.00", and then the total jumped $26.
+    renderPanel(
+      viewFor('WHOLESALER', {
+        accumulated_cost: 6,
+        week_holding_backlog_cost: 6,
+        week_order_cost: null,
+      }),
+    );
+
+    const text = panelText();
+    expect(text).toMatch(/holding & backlog this week \$6\.00/i);
+    expect(text).toMatch(/order cost this week: not yet charged/i);
+    expect(text).not.toMatch(/week cost/i);
+    // The old single figure, "This week $6.00", is gone.
+    expect(text).not.toMatch(/This week \$/);
+  });
+
+  it('shows the order cost the server sends once it has been charged', () => {
+    renderPanel(
+      viewFor('WHOLESALER', {
+        accumulated_cost: 26,
+        week_holding_backlog_cost: 6,
+        week_order_cost: 14,
+      }),
+    );
+
+    expect(panelText()).toMatch(/order cost this week \$14\.00/i);
   });
 });

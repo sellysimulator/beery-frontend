@@ -1,6 +1,7 @@
 import type { ChangeEvent, FocusEvent, ReactElement } from 'react'
 import { errorAt, fieldId, fieldPath, useConfigFormContext } from './configFormContext'
 import { pathPatch } from './configPatch'
+import Select from '../shared/Select'
 
 /**
  * The input primitives the whole panel is built from.
@@ -10,11 +11,14 @@ import { pathPatch } from './configPatch'
  *
  * 1. It renders from React Hook Form, whose values are re-synced from
  *    `useGameStore().config` on every change the server acknowledges
- *    (`18 section 3.0`). Nothing here keeps its own copy of a value, so a clamp
- *    is visible the moment it comes back.
- * 2. It reports three kinds of message in one place: the Zod hint, the note
- *    left when the server stored something other than what was sent, and the
- *    field-level 422.
+ *    (`18 section 3.0`). Nothing here keeps its own copy of a value, so what the
+ *    server stored is visible the moment it comes back.
+ * 2. It reports three kinds of message in one place: the range check (built
+ *    from the server's own limits), the note left when the server stored
+ *    something other than what was sent (`0` saved as "unlimited", an
+ *    inverted stochastic range swapped), and the field-level 422. A value
+ *    outside its range is refused here and never sent: nothing is clamped
+ *    (2026-11-02).
  * 3. It picks the save timing its control deserves — a switch saves on the
  *    toggle, a number saves debounced and again on blur (`18 section 3.1`).
  */
@@ -30,9 +34,11 @@ interface MessagesProps {
 /**
  * The note shown when the server stored a different value from the one sent.
  *
- * Naming the limit rather than the value is what tells a host *why* their 500
- * became 104; "Adjusted to 104" reads like a glitch, "Maximum is 104 weeks"
- * reads like a rule.
+ * The server no longer clamps (2026-11-02), so the only differences left are
+ * its two documented repairs: a cap of `0` stored as "unlimited", and an
+ * inverted stochastic range stored the right way round. The bound-naming
+ * branches stay for a server that answers with a bound, so a host is told
+ * the rule rather than shown a number that changed under their hands.
  */
 function clampNote(stored: unknown, min?: number, max?: number, unit?: string): string {
   const suffix = unit ? ` ${unit}` : ''
@@ -40,8 +46,8 @@ function clampNote(stored: unknown, min?: number, max?: number, unit?: string): 
     if (max !== undefined && stored === max) return `Maximum is ${max}${suffix}.`
     if (min !== undefined && stored === min) return `Minimum is ${min}${suffix}.`
   }
-  if (stored === null) return 'The server cleared this value.'
-  return `Adjusted to ${String(stored)}${suffix}.`
+  if (stored === null) return 'Saved as unlimited: 0 means no limit.'
+  return `Saved as ${String(stored)}${suffix}.`
 }
 
 function useFieldMessages({ name, min, max, unit }: MessagesProps) {
@@ -168,6 +174,10 @@ export function NumberField({
 
     const parsed = Number(raw)
     if (!Number.isFinite(parsed)) return
+    // Refused, not sent: a value outside the server's range is never saved,
+    // and the range check beside the field (built from the same limits) says
+    // why. Sending it would only earn the same refusal from the server.
+    if ((min !== undefined && parsed < min) || (max !== undefined && parsed > max)) return
     saveApi.save(pathPatch(name, parsed))
   }
 
@@ -333,15 +343,18 @@ export function SelectField({
 }: SelectFieldProps): ReactElement {
   const { form, saveApi, readOnly } = useConfigFormContext()
   const { hintMessage, clampMessage, serverMessage } = useFieldMessages({ name })
-  const registration = form.register(fieldPath(name))
+  const current = form.watch(fieldPath(name))
 
-  function handleChange(event: ChangeEvent<HTMLSelectElement>): void {
-    void registration.onChange(event)
+  // The dropdown is not a native input, so there is nothing to `register`:
+  // the form value is read with `watch` and written with `setValue`, which is
+  // what keeps the re-sync from the store (point 1 above) working unchanged.
+  function handleChange(value: string): void {
+    form.setValue(fieldPath(name), value, { shouldDirty: true })
     if (onSelect) {
-      onSelect(event.target.value)
+      onSelect(value)
       return
     }
-    saveApi.save(pathPatch(name, event.target.value), true)
+    saveApi.save(pathPatch(name, value), true)
   }
 
   // A clamp is not a rejection: the value was accepted, it was just adjusted.
@@ -360,21 +373,16 @@ export function SelectField({
       clampMessage={clampMessage}
       serverMessage={serverMessage}
     >
-      <select
-        {...registration}
-        onChange={handleChange}
+      <Select
         id={fieldId(name)}
+        value={typeof current === 'string' ? current : null}
+        options={options}
+        onChange={handleChange}
         disabled={readOnly || !saveApi.canSave}
-        aria-invalid={rejected || undefined}
+        aria-invalid={rejected}
         aria-describedby={describedBy(name, Boolean(hint), described)}
-        className="w-full rounded-md border border-border bg-surface-raised px-2 py-2 text-ink"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        className="w-full"
+      />
     </FieldShell>
   )
 }

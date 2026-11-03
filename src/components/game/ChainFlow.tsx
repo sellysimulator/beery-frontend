@@ -94,6 +94,11 @@ export interface FlowLaneProps {
   dimmed?: boolean
   /** Projector sizing: bigger icons, thicker tracks. */
   large?: boolean
+  /**
+   * Counts to print on the link: beer on the way and orders in flight. Only
+   * the host console passes it; the player's `ChainFlow` never does.
+   */
+  inTransit?: { beer: number; orders: number }
 }
 
 /**
@@ -101,7 +106,12 @@ export interface FlowLaneProps {
  * with the host's `ChainDiagram`, which puts it between its live role cards,
  * so both screens tell the same story in the same picture.
  */
-export function FlowLane({ index, dimmed = false, large = false }: FlowLaneProps): ReactElement {
+export function FlowLane({
+  index,
+  dimmed = false,
+  large = false,
+  inTransit,
+}: FlowLaneProps): ReactElement {
   const lanes = ROLE_ORDER.length
   const orderDelay: CSSProperties = { animationDelay: `${index * LANE_STAGGER_S}s` }
   const beerDelay: CSSProperties = {
@@ -114,7 +124,7 @@ export function FlowLane({ index, dimmed = false, large = false }: FlowLaneProps
     : 'absolute -top-[9px] size-4'
   const rule = large ? 'border-t-4' : 'border-t-2'
 
-  return (
+  const decoration = (
     <div
       aria-hidden="true"
       className={`relative mx-1 flex flex-1 flex-col justify-center ${
@@ -126,6 +136,33 @@ export function FlowLane({ index, dimmed = false, large = false }: FlowLaneProps
       </div>
       <div className={`relative ${rule} border-dashed border-supply-line`}>
         <Beer className={`chain-flow-downstream ${icon} text-supply-line`} style={beerDelay} />
+      </div>
+    </div>
+  )
+  if (!inTransit) return decoration
+
+  // The chips are readable figures, so they sit outside the lane's aria-hidden
+  // decoration; the wrapper keeps the lane's flex share in the card row.
+  const chip =
+    'numeric rounded-full border bg-surface px-2 py-0.5 text-xs font-semibold whitespace-nowrap'
+  return (
+    <div className="flex flex-1 flex-col items-stretch justify-center">
+      {decoration}
+      <div className="flex flex-wrap items-center justify-center gap-1">
+        <span
+          data-chip="orders"
+          aria-label={`Orders in flight: ${inTransit.orders}`}
+          className={`${chip} border-order text-order`}
+        >
+          {inTransit.orders}
+        </span>
+        <span
+          data-chip="beer"
+          aria-label={`Beer on the way: ${inTransit.beer}`}
+          className={`${chip} border-supply-line text-supply-line`}
+        >
+          {inTransit.beer}
+        </span>
       </div>
     </div>
   )

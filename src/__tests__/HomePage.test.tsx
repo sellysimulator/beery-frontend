@@ -232,14 +232,19 @@ async function typeInto(user: ReturnType<typeof userEvent.setup>, input: HTMLInp
 
 /** Selects a preset from the `Preset` picker, whichever widget it is built as. */
 async function choosePreset(user: ReturnType<typeof userEvent.setup>, preset: { name: string; label: string }) {
-  const combo = screen.queryByRole('combobox', { name: NAMES.preset }) as HTMLSelectElement | null;
+  const combo = screen.queryByRole('combobox', { name: NAMES.preset });
   if (combo) {
-    const options = Array.from(combo.querySelectorAll('option'));
+    // The picker is the app's own dropdown, not a native select: open it,
+    // then pick the option the way a person would.
+    await user.click(combo);
+    const options = screen.getAllByRole('option');
     const match = options.find(
-      (o) => o.value === preset.name || (o.textContent ?? '').toLowerCase().includes(preset.label.toLowerCase()),
+      (o) =>
+        o.getAttribute('data-value') === preset.name ||
+        (o.textContent ?? '').toLowerCase().includes(preset.label.toLowerCase()),
     );
     if (!match) throw new Error(`The \`Preset\` picker offers no "${preset.label}" (17 §2.2, AC 4).`);
-    await user.selectOptions(combo, match.value);
+    await user.click(match);
     return;
   }
   for (const role of ['radio', 'option', 'button'] as const) {

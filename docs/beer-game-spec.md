@@ -211,16 +211,16 @@ Configured **per role** (Retailer / Wholesaler / Distributor / Factory), with a 
 | `initial_inventory` | int | 12 | Units on hand at week 1 |
 | `initial_backlog` | int | 0 | Unfulfilled units carried in |
 | `shipping_delay_weeks` | int | 2 | Weeks a shipment spends in transit from the upstream neighbour |
-| `information_delay_weeks` | int | 2 | Weeks an order takes to reach the upstream neighbour |
+| `information_delay_weeks` | int | 2 | Weeks an order from this role's **downstream customer** takes to reach **this role** (the role's own incoming-order pipeline). It is set on the role the order travels *to*: the Wholesaler's value is how long the Retailer's orders take, and it is part of the Retailer's lead time; a Distributor delay of 4 makes the Wholesaler's lead time 6 with 2-week shipping. Unused for the Retailer, whose customers' orders arrive at once |
 | `initial_pipeline_quantity` | int | 4 | Units pre-loaded into **each** in-transit slot |
-| `initial_order_in_pipeline` | int | 4 | Order quantity pre-loaded into **each** information slot |
+| `initial_order_in_pipeline` | int | 4 | Order quantity pre-loaded into **each** slot of this role's incoming-order pipeline: the customer's orders already on their way at week 1. The customer sees them as "Orders you've placed" (so the Retailer's screen shows the **Wholesaler's** value). The Retailer has no incoming-order pipeline: its value only seeds a Retailer bot's first demand estimate |
 
 The Factory has no upstream supplier; its `shipping_delay_weeks` is replaced by:
 
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
 | `production_delay_weeks` | int | 2 | Weeks between a production order and finished goods arriving |
-| `production_capacity_per_week` | int \| null | null (unlimited) | Max units the factory can start per week |
+| `production_capacity_per_week` | int \| null | null (unlimited) | Max units the factory can start per week. `0` (or blank) also means unlimited; the excess over capacity is queued, never lost |
 
 ### 6.3 Costs
 
@@ -263,17 +263,21 @@ These are the levers that let a host teach a specific lesson.
 | `show_supply_line_prominently` | bool | true | Highlights in-transit units in the decision panel — the single biggest driver of good play |
 | `show_running_cost_to_players` | bool | true | Players see their own accumulated cost |
 | `show_leaderboard_during_game` | bool | false | Compare costs across roles mid-game |
-| `max_order_quantity` | int \| null | null | Caps a single order |
-| `allow_negative_orders` | bool | false | Returns/cancellations; keep false unless teaching that specifically |
+| `max_order_quantity` | int \| null | null | Caps a single order. `0` (or blank) means no per-game cap; the global ceiling (9 999) still applies. An order above the cap is refused, not cut down |
+
+`allow_negative_orders` was **removed** on 2026-11-02: orders have a floor of 0. The option never worked (a negative order raised inside the pipeline and froze the week; the promised conversion into cancellations was never built). A stored config, room or export that still carries the key loads and ignores it.
 
 ### 6.6 Validation rules (server-side, before `READY`)
 
+Every range below lives once, in the backend (`app/core/limits.py`), and is served at `GET /api/v1/rooms/limits`; the host form builds its checks from that response and keeps no copy. **A value outside its range is refused with a message naming the range — never silently clamped** (2026-11-02). The only repairs left change nothing a host chose: a cap of `0` means unlimited, and an inverted stochastic `min`/`max` is swapped.
+
 - All integers ≥ 0; costs ≥ 0.
-- `duration_weeks` within range.
+- `duration_weeks` within range (8..104).
+- `STEP` `step_week` in 2..`duration_weeks`; `SEASONAL` `period_weeks` in 2..104; stochastic `mean` and `stdev` in 0..9 999 (the order ceiling).
 - `CUSTOM` demand array length ≥ `duration_weeks`.
 - Delay weeks ≥ 1 (a zero delay collapses the pipeline and removes the phenomenon; if a host genuinely wants it, require an explicit confirmation).
 - All four roles filled.
-- `step_week` < `duration_weeks`.
+- `step_week` ≤ `duration_weeks`.
 - Config is immutable once `RUNNING`. Editing requires ending the game and creating a new room — or `clone_room`, which copies the config into a fresh room (SHOULD be offered; hosts run the same setup repeatedly with different cohorts).
 
 ---
@@ -294,14 +298,15 @@ Executed for all four roles, in one atomic transaction:
 4. **Ship.** `shipped = min(inventory, obligation)`; `inventory -= shipped`; `backlog = obligation - shipped`.
 5. **Deliver.** Push `shipped` into the downstream neighbour's shipment pipeline.
    *Retailer:* units leave the system to the customer.
-6. **Charge.** `week_cost = holding_cost × inventory + backlog_cost × backlog` (+ `fixed_order_cost` and `unit_purchase_cost × order` from the previous week's decision, if configured). Accumulate.
+6. **Charge.** Holding and backlog: `holding_cost × inventory + backlog_cost × backlog`, on the closing values. Accumulate. The order cost — `fixed_order_cost` (for an order above 0) + `unit_purchase_cost × order` — is charged when the week **closes** (Phase C, D10), not here. The stored record's `total_week_cost` is the sum of both; **no screen shows a single "week cost"**: players see "Holding & backlog" and "Order cost" separately, the latter as "not yet charged" while the week is open (2026-11-02).
 
 Phase A produces the **settlement recap** (§9.3) and opens the decision window.
 
 ### Phase B — Decision (players)
 
 - Every player sees their post-settlement state and submits **one integer: the order quantity**.
-- Decisions are **simultaneous and hidden**. No player sees another's order before the week closes.
+- Decisions are **simultaneous and hidden**. No player ever sees another player's order — not during the week and not after it closes; they see only who has decided. (The host sees every order.)
+- An order is a whole number from 0 to the game's ceiling (`max_order_quantity`, or 9 999). One outside that is **refused** with `INVALID_ORDER` and a message naming the bounds — never clamped — and the order form checks the same two numbers, which it reads from `your_state` (`min_order_quantity`, `max_order_quantity`). There are no negative orders.
 - Submissions are idempotent by `(game_id, week, role)`; a resubmission before the window closes replaces the previous value and is logged.
 - A player MAY change their order until the window closes or they confirm-lock it.
 - If the timer expires, the server applies `timeout_policy` and marks the decision as auto-submitted (visible in that player's history and to the host).
@@ -388,7 +393,7 @@ Room lifecycle, invite codes, join/leave, seat claiming, role assignment modes, 
 Per-room fan-out of events to subscribed clients, with per-participant redaction applied **server-side** before send. A player's stream MUST NOT contain data that player is not entitled to see — redaction in the client is not acceptable.
 
 ### 8.9 `StatsService`
-Post-game computation: total and per-role cost, bullwhip ratio, peak backlog, order variance, fill rate. Writes to user stats for registered players.
+Post-game computation: total and per-role cost, bullwhip ratio, peak backlog, order variance, shipped vs waiting (units shipped ÷ units owed, each week's backlog counted again). Writes to user stats for registered players — including a player whose seat the host swapped to a bot mid-game: the game still counts for them, bot weeks included.
 
 ---
 
@@ -407,14 +412,14 @@ Always visible, always in the same place:
 - **Incoming shipments** — the supply line, shown **slot by slot** ("4 units arriving next week, 6 the week after"), with the total. This must be prominent; underweighting it is the single most common losing mistake.
 - **Orders you've placed** that haven't reached your supplier yet.
 - **This week's incoming order** — the quantity demanded of you.
-- **Your costs**: this week, and accumulated.
+- **Your costs**: this week's holding & backlog, this week's order cost ("not yet charged" until the week closes), and accumulated. Never a single "week cost".
 
 ### 9.2 The decision itself — "what you can do"
 
 - A single numeric input: **how many units to order from your supplier**.
 - Live preview: "Ordering N units. It will reach you in `shipping_delay` weeks, around week X."
 - Quick-fill buttons: *match incoming order*, *repeat last order*, *order zero*.
-- Explicit statement of the only constraints that apply: minimum 0, maximum `max_order_quantity` if set.
+- Explicit statement of the only constraints that apply: minimum 0, maximum the game's ceiling (`max_order_quantity`, or 9 999), both read from `your_state`. A number outside them is refused, with the server's own message.
 - A confirm action, then a locked state showing *"Order submitted — waiting for the other players"* with a live tick-list of who has and hasn't submitted (names only, never quantities).
 
 ### 9.3 Settlement recap — "what just happened"
@@ -430,11 +435,18 @@ Week 6 settlement
   Holding cost   8 units × $0.50    $4.00
   Backlog cost   0 units × $1.00    $0.00
   ────────────────────────────────────────
-  Week cost                         $4.00
+  Holding & backlog                 $4.00
+  Order cost   charged when the week closes   Not yet charged
   Total so far                     $21.50
 ```
 
-Plus a running chart of the player's own inventory, backlog and orders across weeks so far.
+Plus a running chart of the player's own history across weeks so far, in two panels:
+
+- **Stock:** on hand above zero, with what is on the way stacked on top of it, and backlog
+  (owed) drawn below zero.
+- **Orders:** the orders the player received against the orders they placed, on one axis.
+
+Every plotted figure is one of the player's own week records; nothing is summed or derived.
 
 ### 9.4 Waiting states
 Every wait MUST say what is being waited for and who is holding it up: *"Waiting for the Distributor to submit"*, *"Host has paused the game"*.
@@ -443,14 +455,16 @@ Every wait MUST say what is being waited for and who is holding it up: *"Waiting
 - Final cost per role and chain total.
 - The big reveal: **true customer demand plotted against all four order streams** on one chart. This is the moment the lesson lands.
 - Bullwhip ratio per role: `Var(orders) / Var(customer demand)`.
-- Peak inventory, peak backlog, weeks in backlog, fill rate.
-- Host-only: CSV/JSON export of the full week-by-week record.
+- Peak inventory, peak backlog, weeks in backlog, shipped vs waiting.
+- Host-only: CSV/JSON export of the full week-by-week record. Two of its columns are easy to misread, so they say what they hold: `incoming_orders_in_flight_after` is the orders travelling **to** the role (its customer's orders not yet arrived) — not the player's on-screen "orders in flight", which are the player's **own** orders going upstream — and `total_week_cost` is holding + backlog + fixed order + purchase cost for the week.
 
 ### 9.6 Host console
 - All four roles side by side, live: inventory, backlog, last order, accumulated cost, submission status.
 - The demand curve with the current week marked.
 - Controls: pause, resume, extend the current timer, force-close the decision window, substitute a bot for a disconnected player, end the game early.
-- A projector/presentation mode showing the live chain diagram, suitable for a classroom screen.
+  - A bot swapped in while the game is paused plays the moment the host resumes; the displaced player keeps the game in their history and statistics.
+  - Ending early drops the open week: its holding and backlog cost is rolled back out of every live total, so the console and the results agree.
+- A projector/presentation mode showing the live chain diagram, suitable for a classroom screen. Its demand curve shows only the weeks already revealed in play, never future demand.
 
 ---
 
@@ -467,11 +481,11 @@ Field lists are indicative; Document 2 owns the final schema. All tables managed
 | `role_configs` | Per-role parameters | id, game_id, role, initial_inventory, delays, costs… |
 | `participants` | Who is in the room | id, game_id, user_id (nullable), session_id, display_name, participant_type (HOST/PLAYER/SPECTATOR), role (nullable), is_bot, connection_state |
 | `demand_series` | Generated customer demand | id, game_id, week, quantity |
-| `weeks` | Per-week, per-role snapshot | id, game_id, week, role, opening_inventory, opening_backlog, arrived, incoming_order, shipped, closing_inventory, closing_backlog, week_cost, cumulative_cost |
+| `weeks` | Per-week, per-role snapshot | id, game_id, week, role, opening_inventory, opening_backlog, arrived, incoming_order, shipped, closing_inventory, closing_backlog, total_week_cost (was `week_cost`, renamed by Alembic 0005), cumulative_cost |
 | `orders` | Decisions | id, game_id, week, role, quantity, submitted_at, was_auto_submitted, submitted_by_participant_id |
 | `pipeline_slots` | In-flight goods and orders | id, game_id, week, role, pipeline_type, slot_index, quantity |
 | `events` | Append-only event log for SSE replay and audit | id, game_id, seq, type, payload, created_at |
-| `user_stats` | Aggregated results | user_id, games_played, roles_played, avg_cost_per_week, best_game_id, bullwhip_avg |
+| `user_stats` | Aggregated results | user_id, games_played, roles_played, avg_cost_per_week, best_game_id, bullwhip_avg. Games of every length and setting are pooled: the best game is the lowest cost per week across all of them, and the averages mix them all. The profile says so beside the figures |
 
 `weeks` is the source of truth for the results screen. `events` enables SSE reconnection via `Last-Event-ID`.
 

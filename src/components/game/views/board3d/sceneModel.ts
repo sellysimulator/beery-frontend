@@ -575,17 +575,19 @@ function foldRows(
 }
 
 /**
- * When the slot at `index` lands, in words, upper-cased for a warehouse sign.
+ * When a slot lands, in words, upper-cased for a warehouse sign.
  *
  * 24 §4.2 says the lane placards reuse `SupplyLine.tsx`'s own wording, and
- * these are those words: *next week*, *the week after*, *in N weeks*. Never a
- * computed week number — the only place `week + lead` appears is inside
- * `DecisionForm`, which already computes it (24 §4.2, `19 §3.1`).
+ * these are those words: *next week*, *the week after*, *in N weeks*. `weeks`
+ * is the server's figure for that slot (`supply_line_slot_weeks` /
+ * `orders_in_flight_slot_weeks`); the scene used to count it from the slot's
+ * position, a copy of how a pipeline moves (2026-11-03). Never a week number —
+ * the arrival week appears only inside `DecisionForm` (24 §4.2, `19 §3.1`).
  */
-function whenLabel(index: number): string {
-  if (index === 0) return 'NEXT WEEK'
-  if (index === 1) return 'THE WEEK AFTER'
-  return `IN ${index + 1} WEEKS`
+function whenLabel(weeks: number): string {
+  if (weeks === 1) return 'NEXT WEEK'
+  if (weeks === 2) return 'THE WEEK AFTER'
+  return `IN ${weeks} WEEKS`
 }
 
 /* ─── The prompts of 24 §5.2 ─── */
@@ -835,7 +837,7 @@ function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
       signs: [
         sign(
           `supply-lane-${index}-placard`,
-          `${slots[index]} UNITS ARRIVING ${whenLabel(index)}`,
+          `${slots[index]} UNITS ARRIVING ${whenLabel(view.supply_line_slot_weeks[index])}`,
           at(stand, 0, SIGN_HEIGHT.placard, 0),
           SIGN_SIZE.lane,
           TEXT_HEX.ink,
@@ -1049,7 +1051,7 @@ function buildNorthEnd(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
       signs: [
         sign(
           `${id}-placard`,
-          `${slots[index]} REACHING YOUR SUPPLIER ${whenLabel(index)}`,
+          `${slots[index]} REACHING YOUR SUPPLIER ${whenLabel(view.orders_in_flight_slot_weeks[index])}`,
           at(stand, 0, SIGN_HEIGHT.placard, 0),
           SIGN_SIZE.caption,
           TEXT_HEX.ink,
@@ -1324,8 +1326,8 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
     ),
     sign(
       'canopy-lead',
-      // The role's verb, and never the arrival week: `week + lead` appears only
-      // inside `DecisionForm`, which already computes it (24 §4.2).
+      // The role's verb, and never the arrival week: the server's
+      // `order_arrival_week` appears only inside `DecisionForm` (24 §4.2).
       roleSet.hasProductionBay
         ? `ANYTHING YOU START NOW FINISHES IN ${view.order_arrival_lead_weeks} WEEKS`
         : `ANYTHING YOU ORDER NOW REACHES YOU IN ${view.order_arrival_lead_weeks} WEEKS`,
@@ -1405,9 +1407,9 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
  *
  * Money goes through that file's `formatMoney`, and the rate lines are text
  * beside the server's money figure — the multiplication is never performed
- * here (`19` FM 4, AC 6). The display pair `opening_inventory + arrived` is
- * computed once, exactly as 2D computes it, and is the only arithmetic in this
- * function.
+ * here (`19` FM 4, AC 6). The stock after receiving is the server's
+ * `inventory_after_arrival`, exactly as 2D prints it: this function does no
+ * arithmetic at all (2026-11-03; it used to add `opening_inventory + arrived`).
  */
 function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
   const base = ZONES.ledgerBoard
@@ -1418,7 +1420,9 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
   if (!settlement) {
     lines.push('Nothing has settled yet')
   } else {
-    const afterArrival = settlement.opening_inventory + settlement.arrived
+    // The server's stock after receiving, never `opening_inventory + arrived`
+    // added here (2026-11-03), exactly as the 2D recap prints it.
+    const afterArrival = settlement.inventory_after_arrival
     lines.push(`Week ${settlement.week} settlement`)
     lines.push(
       `${RECEIPT_LABEL[settlement.role]} +${settlement.arrived} — inventory ${
@@ -1437,7 +1441,7 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
     )
     lines.push(
       `Unfulfilled ${settlement.unfulfilled} — backlog ${
-        settlement.unfulfilled === 0 ? 'stays' : 'now'
+        settlement.closing_backlog === settlement.opening_backlog ? 'stays' : 'now'
       } ${settlement.closing_backlog}`,
     )
     lines.push(
@@ -1450,7 +1454,14 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
         view.backlog_cost_per_unit_week,
       )} ${money(settlement.backlog_cost)}`,
     )
-    lines.push(`Week cost ${money(settlement.carrying_cost)}`)
+    // Two lines, never one "week cost": the order cost is charged only when
+    // the week closes, so while it is open it is still to come (2026-11-02).
+    lines.push(`Holding & backlog ${money(settlement.carrying_cost)}`)
+    lines.push(
+      typeof view.week_order_cost === 'number'
+        ? `Order cost ${money(view.week_order_cost)}`
+        : 'Order cost not yet charged',
+    )
 
     // The one line `show_running_cost_to_players` gates. With the flag off the
     // server sends neither field and the row is absent entirely.
@@ -1498,14 +1509,14 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
 /**
  * The cost corner: absent, entirely, when the host is not showing running cost.
  *
- * All three of `week_cost`, `balance` and `accumulated_cost` missing means no
+ * All three of `week_holding_backlog_cost`, `balance` and `accumulated_cost` missing means no
  * plinth, no plate, no bills and nothing about running cost anywhere in the
  * scene (`19` AC 6). The precedence between `balance` and `accumulated_cost`
  * is `DecisionPanel`'s, unchanged.
  */
 function buildCostCorner(view: PlayerView): SceneFixture[] {
   const present =
-    view.week_cost !== undefined ||
+    view.week_holding_backlog_cost !== undefined ||
     view.balance !== undefined ||
     view.accumulated_cost !== undefined
   if (!present) return []
@@ -1514,11 +1525,13 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
   const money = (value: number): string => formatMoney(view.currency_symbol, value)
   const signs: SceneSign[] = []
 
-  if (view.week_cost !== undefined) {
+  // "Holding & backlog", never "this week": the order cost is a figure of its
+  // own and is not charged until the week closes (2026-11-02).
+  if (view.week_holding_backlog_cost !== undefined) {
     signs.push(
       sign(
         'cost-week',
-        `THIS WEEK ${money(view.week_cost)}`,
+        `HOLDING & BACKLOG ${money(view.week_holding_backlog_cost)}`,
         at(base, 0, 2.6, 0),
         SIGN_SIZE.label,
         TEXT_HEX.ink,
@@ -1564,7 +1577,7 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
 
   // The bills stand for the figure beside them and are scaled like any other
   // pile: `÷10` currency units, capped at 20 (24 §4.2).
-  const billed = view.balance ?? view.accumulated_cost ?? view.week_cost ?? 0
+  const billed = view.balance ?? view.accumulated_cost ?? view.week_holding_backlog_cost ?? 0
   return [
     {
       id: 'cost-corner',

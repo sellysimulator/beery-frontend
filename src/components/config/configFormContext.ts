@@ -9,6 +9,7 @@
 import { createContext, use } from 'react'
 import type { FieldErrors, Path, UseFormReturn } from 'react-hook-form'
 import type { ConfigFormValues } from '../../schemas/configSchema'
+import type { Limits } from '../../types/game'
 import type { ConfigSaveApi } from './useConfigSave'
 
 export interface ConfigFormContextValue {
@@ -16,6 +17,8 @@ export interface ConfigFormContextValue {
   saveApi: ConfigSaveApi
   /** True once the game has started: the panel renders a summary instead. */
   readOnly: boolean
+  /** The server's ranges (`GET /rooms/limits`); every field's bounds come from here. */
+  limits: Limits
 }
 
 export const ConfigFormContext = createContext<ConfigFormContextValue | null>(null)

@@ -13,7 +13,9 @@ Factory`; orders flow upstream, shipments flow downstream, both with delays. Eac
 *week* every role receives a shipment, fills its downstream order, pays holding/backlog cost
 and decides a new order. A fifth participant, the **host**, configures and runs the session
 but does not play and sees everything. The pedagogical payload is the **bullwhip effect**.
-Missing roles can be filled by bots (Sterman anchor-and-adjust).
+Missing roles can be filled by bots (Sterman anchor-and-adjust), but only roles nobody holds:
+the server refuses to start while a person in the room has no role, and the host lobby shows
+its reason naming them (the host can seat people in Host assigns and Players choose).
 
 This repo is the **client only**:
 
@@ -70,12 +72,18 @@ src/
   contexts/BackendStatusContext.tsx   health poll, 'checking' | 'ok' | 'down'
   store/gameStore.ts     the one Zustand store
   types/game.ts          TS mirrors of every wire payload (647 lines)
-  schemas/configSchema.ts  Zod mirrors of GameConfig — a UI hint, not a gate
+  schemas/configSchema.ts  buildConfigFormSchema(limits): the host form's checks, built
+                         from the server's ranges (GET /rooms/limits) — no copy here
   utils/storage.ts       the only module that touches localStorage/sessionStorage
   pages/                 one module per route; each exports `route`
   components/
-    shared/  lobby/  config/  game/  host/  results/  profile/
-    manual/  charts/chartSetup.ts
+    shared/  lobby/  config/  game/  host/  results/  profile/  manual/
+    charts/              chartSetup.ts (results view model + bullwhip builder),
+                         chartTheme.ts (every canvas colour), ChartBox.tsx, Legend.tsx,
+                         plugins/crosshairSync.ts + plugins/CrosshairGroup.tsx
+    results/resultsChartsConfig.ts, game/ownHistoryConfig.ts,
+    host/demandCurveConfig.ts, profile/bullwhipTrendConfig.ts
+                         the other charts' pure builders, one module beside each chart
     game/views/          Board2D.tsx, Board3D.tsx (lazy), BoardViewToggle.tsx,
                          boardViewChoice.ts — the two registered boards and the seam
     game/views/board3d/  the 3D scene. sceneModel.ts is the pure heart (see §6.14);
@@ -86,7 +94,7 @@ src/
 
 Conventions: components are `PascalCase.tsx` with a **named export and a default export** of
 the same symbol; non-component helpers are `camelCase.ts` (`roleCopy.ts`, `configPatch.ts`,
-`demandSeries.ts`). Wire fields are `snake_case` (they mirror the Python models); local
+`useConfigPreview.ts`). Wire fields are `snake_case` (they mirror the Python models); local
 TypeScript identifiers are `camelCase`. Comments are prose explaining *why*, and are load-
 bearing documentation — match that style.
 
@@ -104,7 +112,7 @@ bearing documentation — match that style.
 ## 4. Commands
 
 ```bash
-npm ci                 # install (Node >= 20.19; .nvmrc pins 20.19.0)
+npm ci                 # install (engines ^22.23.4 || ^24.22.1 || >=26.12.1; .nvmrc pins 24.22.1)
 npm run dev            # vite, http://localhost:5173, proxies /api + /socket.io to :8080
 npm run build          # tsc -b (all three TS projects) && vite build -> dist/
 npm run preview        # serve the built bundle
@@ -115,7 +123,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-09-21: **760 tests / 26 files passed**, `eslint .` clean, `tsc -b`
+Verified green on 2026-11-03 (after moving every remaining figure to the server: preview, lead times, preset copy, arrival week, stock after arrival, slot weeks, weeks played): **1252 tests / 39 files passed**, `eslint .` clean, `tsc -b`
 clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
@@ -175,7 +183,15 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
    read. There is no game arithmetic in the client: inventory, cost, eligibility, even
    whether the host's Start button may be pressed and the sentence explaining why not, all
    arrive from the server. Client-derived state is the failure mode `game_stack.md`
-   invariant 7 exists to prevent.
+   invariant 7 exists to prevent. **Every figure a rule defines is the server's** (2026-11-03,
+   `00-decisions.md` §5): no demand generator, delay sum, default, preset number, cost, ratio
+   or running total is worked out here. The fields that replaced the last client sums:
+   `your_state.order_arrival_week` (was `week + order_arrival_lead_weeks`),
+   `settlement.inventory_after_arrival` (was `opening_inventory + arrived`),
+   `supply_line_slot_weeks` / `orders_in_flight_slot_weeks` (was a slot's `index + 1`) and
+   `host_state.weeks_played` (was `host_state.week`). If a screen needs a new figure, add it to
+   the backend payload or route — never a formula here. Allowed: formatting, layout, chart
+   scales and axes, sorting, filtering.
 2. **Socket listeners are registered once, at module load,** in `api/socketHandlers.ts`,
    imported by `main.tsx` before `createRoot`. Never `socket.on(...)` inside a component:
    StrictMode double-registers it and a reconnect leaves it stale. Handlers call
@@ -218,16 +234,63 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.
     Palette is Okabe-Ito for colour-blind safety, and **colour is never the only signal** —
     backlog and alerts always carry an icon and a label too.
-12. **Forms**: react-hook-form + Zod, only in the host config panel.
-    `schemas/configSchema.ts` is a *hint* — a value it rejects is still sent, because the
-    server clamps and the panel renders the clamped value back. `useConfigSave` debounces
-    400ms, sends over the socket when connected and falls back to
+12. **Forms**: react-hook-form + Zod, only in the host config panel. **The ranges are the
+    server's, never ours** (2026-11-02): `useLimits()` fetches `GET /rooms/limits` once and
+    `buildConfigFormSchema(limits)` builds every check, `min`/`max` and hint from it (sections
+    read `ConfigFormContext.limits`); there is no `FORM_LIMITS` and must never be one — add a
+    bound to the backend's `core/limits.py`. Until the ranges arrive the panel shows its
+    loading line. **A value outside its range is refused, never clamped**: `NumberField` does
+    not send it and the Zod message shows beside it; the server refuses one that arrives
+    anyway (422 / `join_error` naming the field and the range). The order form does the same
+    with `your_state.min_order_quantity`/`max_order_quantity`. There are no negative orders.
+    `useConfigSave` debounces 400ms, sends over the socket when connected and falls back to
     `PUT /rooms/{code}/config` when not (that REST reply has no `seq`, so it goes through
-    `setConfig`, never `applyConfigUpdated`).
-13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal in
-    `components/charts/chartSetup.ts`, which also owns the `ResultsView` view model and the
-    pure `buildBullwhipConfig` builder — a canvas is opaque to jsdom, so the *config object*
-    is what tests assert.
+    `setConfig`, never `applyConfigUpdated`). Tests that mount the panel must serve
+    `/rooms/limits` (`src/__tests__/limitsFixture.ts`).
+    **The preview is the server's too** (2026-11-03): `useConfigPreview(draft)` posts the
+    stored config (with the just-picked generator or the unsaved `CUSTOM` paste in place of
+    its demand) to `POST /rooms/preview`, debounced 300ms, answers shared by draft, so
+    `DemandPreview` and the starting grid's `LeadTimeRow` make one request. Until the answer
+    for that exact draft arrives they show a placeholder (`DemandPreview` carries no
+    `data-series` until then); a refused draft shows the server's 422 text. There is no
+    `demandSeries.ts`, no `demandDefaults.ts` and no placeholder config: a kind change sends
+    `{demand: {kind}}` and the server fills the defaults (the block says it is loading them);
+    choosing `CUSTOM` sends nothing until a series is pasted, which goes as
+    `{kind: 'CUSTOM', values}`. Preset cards print the server's `label`/`description`
+    verbatim. Tests that mount the panel serve `/rooms/preview` too and call
+    `resetPreviewCacheForTests()` in `beforeEach`. The bot slider must not call β=1
+    "steady" — it is milder, not steady (`08 §3.1`).
+13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal (each chart module
+    registers what it uses; `ChartJS.register` is idempotent). `components/charts/chartSetup.ts`
+    owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
+    builder** whose output the component passes straight through: a canvas is opaque to
+    jsdom, so the *config object* is what tests assert, and tests never mock `chart.js` or
+    `react-chartjs-2`. The kit (2026-11-02, `../CHARTS-PLAN.md` BE-1):
+    - **`charts/chartTheme.ts`** is the only place a canvas colour literal may live
+      (`CHART_TOKENS`, keyed by the `--color-*` token it mirrors, plus `roleStyle(role)` and
+      `withAlpha`). `chartTheme.test.ts` fails when a literal drifts from `src/index.css`. A
+      new hex anywhere else in `src/` is a bug, except in `board3d/`'s own frozen palette.
+    - **`charts/ChartBox.tsx`** holds every new chart: an HTML title, the canvas in a
+      `role="img"` wrapper inside an `ErrorBoundary`, and a "Show table" toggle that unhides
+      the *same* screen-reader table, never a second copy.
+    - **`charts/Legend.tsx`** is the DOM legend. Its switches are `role="switch"` +
+      `aria-checked` + `data-series`, named exactly by the series label. The canvas legend
+      stays off.
+    - **`charts/plugins/crosshairSync.ts`** syncs the hovered week across charts that opt
+      in with `plugins.crosshairSync.group`. Wrap them in `plugins/CrosshairGroup.tsx` and
+      import `CrosshairGroup`/`useCrosshairGroup` from there.
+
+    Plot **server fields only**: a combination of two values is shown with geometry
+    (stacking, a sign flip below the axis), never as a computed series (rule 14's principle).
+    **B5 and B6, the host's live order streams on `DemandCurve` and the lane chips on
+    `ChainDiagram`, render on the host console only, never under `presenting`**: players
+    watch the projector, and mid-game order quantities on it would leak exactly what the game
+    hides. Under `presenting` the demand curve also stops at the current week
+    (`revealedDemand`), so no future demand reaches the projector; the console's own curve
+    keeps the whole series. A lane chip shows what travels along *that* link: beer is the
+    downstream role's `supply_line`, orders the **upstream** role's `orders_in_flight` (on
+    `host_state` that is a role's own incoming-order pipeline, so reading the downstream
+    role's put every count one link too high until 2026-11-03).
 14. **The 3D board computes nothing and emits nothing.** `board3d/sceneModel.ts`'s
     `buildSceneModel(props)` returns a plain object — every pile count, sign string, fixture
     id, model placement, light, accent and prompt — and `WarehouseScene` walks it and emits
@@ -242,7 +305,14 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     field behind any of it. **A figure on screen that cannot be traced to a `PlayerView`
     field is a bug**, including a plausible one: a settlement whose
     `holding_cost ≠ closing_inventory × rate` renders the server's figure, never the product
-    (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat.
+    (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat. Since
+    2026-11-03 the scene does no arithmetic at all: the ledger prints
+    `inventory_after_arrival` and the lane/order placards read the server's slot weeks.
+15. **No screen says "Week cost".** Wherever a week's cost appears (recap, decision panel,
+    3D ledger and cost corner) it is two figures: "Holding & backlog"
+    (`settlement.carrying_cost` / `week_holding_backlog_cost`) and "Order cost"
+    (`week_order_cost`, *"not yet charged"* while it is `null`). The stored sum is
+    `WeekRecord.total_week_cost` and is never shown as a single figure (2026-11-02).
 
 ## 7. Storage scopes — not interchangeable
 
@@ -267,6 +337,11 @@ permanently paused game, not an error.
 ## 8. Gotchas
 
 - **Don't add a `tailwind.config.js`** — v4 is CSS-first and the theme is in `index.css`.
+- **No native `<select>`.** Dropdowns are `components/shared/Select.tsx` (a WAI-ARIA
+  select-only combobox drawn in the theme's tokens; disabled options carry a `detail` reason).
+  Name it with `<label htmlFor>` / `aria-labelledby` / `aria-label` — **never wrap it in a
+  `<label>`**, or an option click bubbles to the label and reopens the list. Tests drive it by
+  clicking the `combobox`, then the `option` (`Select.test.tsx`).
 - **Don't put `firebase.ts` in `.gitignore`** and don't move it into `src/`. `DEPLOY.md`'s
   checklist and `envSurface.test.ts` both assert it stays tracked at the root.
 - **Don't point `VITE_SOCKET_URL` at `beersim.web.app`** or any `*.web.app` /

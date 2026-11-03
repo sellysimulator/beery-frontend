@@ -1026,6 +1026,20 @@ describe('CRITERION 4: every figure carries its explanatory line', () => {
   });
 });
 
+describe('2026-11-02: the summary says its figures pool games of every length and setting', () => {
+  it('renders the pooled-games note beside the averages and the best game', async () => {
+    await renderProfileReady();
+
+    expect(
+      rendersCopy(
+        'Every game you finished counts here, whatever its length, preset or cost settings.',
+      ),
+      'the profile must say that games of every length and setting are compared together',
+    ).toBe(true);
+    expect(rendersCopy('your best game is simply your lowest cost per week among them')).toBe(true);
+  });
+});
+
 describe('CRITERION 6 and FAILURE MODE 3: a null average ratio is a dash', () => {
   beforeEach(() => {
     httpRec.get.mockImplementation(async (url: string, config?: { params?: Record<string, unknown> }) => {
@@ -1082,8 +1096,10 @@ describe('CRITERION 9b: a null best_game_id renders the empty treatment', () => 
   it('links nowhere and renders no null, and does not crash', async () => {
     await renderProfileReady();
 
-    const detailLinks = links().filter((a) =>
-      (a.getAttribute('href') ?? '').startsWith('/profile/games'),
+    // The match history's rows link to `/profile/games/:id` too (2026-11-03);
+    // what is asserted is that nothing outside it — the best game — does.
+    const detailLinks = links().filter(
+      (a) => (a.getAttribute('href') ?? '').startsWith('/profile/games') && !a.closest('table'),
     );
     expect(
       detailLinks.map((a) => a.getAttribute('href')),

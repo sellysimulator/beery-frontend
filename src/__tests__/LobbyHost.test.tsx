@@ -346,6 +346,17 @@ function assignControl(displayName: string): HTMLElement {
   throw new Error(`No control carries the frozen accessible name "${label}" (17 §2.4b, AC 26).`);
 }
 
+/** The option for `role` in a combobox seat picker's list, open or not. */
+function seatOption(control: HTMLElement, role: Role): HTMLElement | null {
+  const list = document.getElementById(control.getAttribute('aria-controls') ?? '');
+  return (
+    Array.from(list?.querySelectorAll<HTMLElement>('[role="option"]') ?? []).find(
+      (candidate) =>
+        candidate.getAttribute('data-value') === role || new RegExp(role, 'i').test(candidate.textContent ?? ''),
+    ) ?? null
+  );
+}
+
 /** Places a participant into a role through that control. */
 async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName: string, role: Role) {
   const control = assignControl(displayName);
@@ -358,6 +369,16 @@ async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName
       throw new Error(`"Assign role for ${displayName}" offers no ${role} option (AC 26).`);
     }
     await user.selectOptions(control, option.value);
+    return;
+  }
+
+  if (control.getAttribute('role') === 'combobox') {
+    await user.click(control);
+    const option = seatOption(control, role);
+    if (!option) {
+      throw new Error(`"Assign role for ${displayName}" offers no ${role} option (AC 26).`);
+    }
+    await user.click(option);
     return;
   }
 
@@ -788,12 +809,13 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
     renderHostRoom();
     settleClaim();
 
-    const selector = screen.getByRole('combobox', { name: NAMES.roleAssignment }) as HTMLSelectElement;
-    const option = Array.from(selector.options).find(
-      (o) => o.value === 'PLAYER_CHOOSES' || /player.?chooses/i.test(o.textContent ?? ''),
-    );
+    const selector = screen.getByRole('combobox', { name: NAMES.roleAssignment });
+    await user.click(selector);
+    const option = screen
+      .getAllByRole('option')
+      .find((o) => o.getAttribute('data-value') === 'PLAYER_CHOOSES' || /player.?chooses/i.test(o.textContent ?? ''));
     expect(option).toBeDefined();
-    await user.selectOptions(selector, option!.value);
+    await user.click(option!);
 
     const payloads = emitsOf('set_role_mode');
     expect(payloads).toHaveLength(1);
@@ -840,6 +862,111 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
     const keys = emitsOf('assign_role').flatMap((p) => Object.keys(p));
     expect(keys).not.toContain('identity');
     expect(keys).not.toContain('display_name');
+  });
+
+  it('lists a role someone else holds as taken by them, and does not let the host pick it', async () => {
+    // Picking a held role used to move it silently, leaving its holder
+    // roleless. The server now refuses it (11 §3.5), so the picker must not
+    // offer it: it is listed, disabled, with who holds it.
+    const user = userEvent.setup();
+    armedTab();
+    renderHostRoom();
+    settleClaim(
+      lobbyUpdate({
+        role_assignment_mode: 'HOST_ASSIGNS',
+        participants: [
+          participant({ alias: 'P1', display_name: 'Bea', role: 'FACTORY' }),
+          participant({ alias: 'P2', display_name: 'Cal' }),
+        ],
+        role_to_alias: { RETAILER: null, WHOLESALER: null, DISTRIBUTOR: null, FACTORY: 'P1' },
+      }),
+    );
+
+    const calsPicker = assignControl('Cal');
+    await user.click(calsPicker);
+    const factory = seatOption(calsPicker, 'FACTORY');
+    expect(factory).not.toBeNull();
+    expect(factory).toHaveAttribute('aria-disabled', 'true');
+    expect(factory).toHaveTextContent(/taken by bea/i);
+    await user.click(factory!);
+    expect(emitsOf('assign_role')).toHaveLength(0);
+
+    // The holder's own picker still offers the role they hold, as chosen.
+    const beasPicker = assignControl('Bea');
+    await user.click(beasPicker);
+    const own = seatOption(beasPicker, 'FACTORY');
+    expect(own).not.toHaveAttribute('aria-disabled');
+    expect(own).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11 §2.2: nobody may be left in the room without a role, bot fill or not
+// ---------------------------------------------------------------------------
+
+describe('a person without a role blocks Start, and the host can seat them', () => {
+  const ROLELESS =
+    'Cal has no role yet. Give everyone in the room a role first; bots fill only the seats nobody holds.';
+
+  function renderWithRolelessCal(mode: 'HOST_ASSIGNS' | 'PLAYER_CHOOSES') {
+    armedTab();
+    renderHostRoom();
+    // Bot fill is on, so the three empty roles are not the problem: Cal is.
+    settleClaim(
+      lobbyUpdate({
+        role_assignment_mode: mode,
+        participants: [
+          participant({ alias: 'P1', display_name: 'Bea', role: 'RETAILER' }),
+          participant({ alias: 'P2', display_name: 'Cal' }),
+        ],
+        role_to_alias: { ...EMPTY_ROLES, RETAILER: 'P1' },
+        can_start: false,
+        start_blocked_reason: ROLELESS,
+      }),
+    );
+  }
+
+  it.each(['HOST_ASSIGNS', 'PLAYER_CHOOSES'] as const)(
+    '%s: Start stays disabled and the reason names the person',
+    async (mode) => {
+      const user = userEvent.setup();
+      renderWithRolelessCal(mode);
+
+      expect(isDisabled(startButton())).toBe(true);
+      expect(bodyText()).toContain(ROLELESS);
+      await user.click(startButton()).catch(() => undefined);
+      expect(emitsOf('start_game')).toHaveLength(0);
+    },
+  );
+
+  it.each(['HOST_ASSIGNS', 'PLAYER_CHOOSES'] as const)(
+    '%s: the host can give them a seat from the lobby',
+    async (mode) => {
+      const user = userEvent.setup();
+      renderWithRolelessCal(mode);
+
+      await placeInRole(user, 'Cal', 'FACTORY');
+
+      const payloads = emitsOf('assign_role');
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]).toMatchObject({ host_secret: 'hs-from-server', alias: 'P2', role: 'FACTORY' });
+    },
+  );
+
+  it('RANDOM offers no seat picker: the server deals every seat at start', () => {
+    armedTab();
+    renderHostRoom();
+    settleClaim(
+      lobbyUpdate({
+        role_assignment_mode: 'RANDOM',
+        participants: [participant({ alias: 'P1', display_name: 'Bea' })],
+        can_start: true,
+        start_blocked_reason: null,
+      }),
+    );
+
+    expect(() => assignControl('Bea')).toThrow();
+    expect(isDisabled(startButton())).toBe(false);
   });
 });
 

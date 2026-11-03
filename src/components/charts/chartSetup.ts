@@ -13,11 +13,14 @@
  * reads that one view model and nothing else (section 2.0).
  */
 import {
+  BarElement,
   CategoryScale,
   Chart as ChartJS,
+  Filler,
   Legend,
   LineElement,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   Tooltip,
   type ChartConfiguration,
@@ -25,9 +28,23 @@ import {
 } from 'chart.js'
 import { ROLE_ORDER, type Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
+import { AXIS_COLOUR, DEMAND_COLOUR, GRID_COLOUR, roleStyle, withAlpha } from './chartTheme'
 
-/** Only the controllers, elements, scales and plugins this chart uses. */
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
+/**
+ * Only the controllers, elements, scales and plugins the results charts use.
+ * Bars and the log axis serve the ratio bars, `Filler` the net-inventory areas.
+ */
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  LogarithmicScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Filler,
+  Tooltip,
+  Legend,
+)
 
 /* ─── The one view model (section 2.0) ─── */
 
@@ -187,40 +204,32 @@ export function resultsViewFromResponse(payload: ResultsResponse): ResultsView {
 
 /* ─── Series styling ─── */
 
-/**
- * The palette from `src/index.css`, written out as literals.
- *
- * Chart.js paints onto a canvas, where a CSS custom property is never
- * resolved for it, so these are the same hues the rest of the screen uses:
- * `--color-demand` for true customer demand and the four `--color-role-*`
- * values for the order streams.
- *
+/*
  * Colour is never the only channel. Each order series also carries its own
- * dash pattern and its own legend point style, so the chart survives a
- * projector, a photocopy and colour-blindness.
+ * dash pattern and its own legend point style (`roleStyle`), so the chart
+ * survives a projector, a photocopy and colour-blindness. The hues themselves
+ * live in `chartTheme.ts`, where a test keeps them in step with `index.css`.
  */
-const DEMAND_COLOUR = '#3f3a30'
-const AXIS_COLOUR = '#5c5547'
-const GRID_COLOUR = '#e2dac8'
-
-interface SeriesStyle {
-  colour: string
-  dash: number[]
-  point: 'triangle' | 'rect' | 'rectRot' | 'star'
-}
-
-const ORDER_SERIES: Record<Role, SeriesStyle> = {
-  RETAILER: { colour: '#1f6f9c', dash: [6, 3], point: 'triangle' },
-  WHOLESALER: { colour: '#04705a', dash: [14, 4], point: 'rect' },
-  DISTRIBUTOR: { colour: '#9c4f78', dash: [2, 3], point: 'rectRot' },
-  FACTORY: { colour: '#a8480a', dash: [10, 3, 2, 3], point: 'star' },
-}
 
 /** The label each series carries in the legend and in the hidden table. */
 export const DEMAND_SERIES_LABEL = 'True customer demand'
 
 export function orderSeriesLabel(role: Role): string {
   return `${ROLE_LABEL[role]} orders`
+}
+
+/**
+ * The dash a role's order line is drawn with, for the DOM legend's swatch.
+ * The legend is the only legend, so it has to carry the second channel too:
+ * a solid swatch would leave colour as the one thing telling roles apart.
+ */
+export function orderSeriesDash(role: Role): number[] {
+  return roleStyle(role).dash
+}
+
+export interface BullwhipConfigOptions {
+  /** The role drawn at full strength; the other role lines are faded. */
+  emphasis?: Role | null
 }
 
 /**
@@ -234,23 +243,32 @@ export function orderSeriesLabel(role: Role): string {
  *     variation in demand and understates the contrast;
  *   - true customer demand is the **last** dataset, so Chart.js draws it on
  *     top of the four order curves, and it carries no dash;
- *   - the legend is Chart.js's own, whose default click handler toggles one
- *     dataset at a time — the single most useful control in the debrief, as
- *     it lets a host bring the chain in one stage at a time.
+ *   - Chart.js's own legend is off. The legend is real DOM in
+ *     `BullwhipChart` (section 2.2a), one switch per series — the single most
+ *     useful control in the debrief, as it lets a host bring the chain in one
+ *     stage at a time. A canvas legend as well would be a second, unreachable
+ *     copy of it.
  *
  * Nothing here computes: every plotted number is a server field.
  */
-export function buildBullwhipConfig(view: ResultsView): ChartConfiguration<'line'> {
+export function buildBullwhipConfig(
+  view: ResultsView,
+  options: BullwhipConfigOptions = {},
+): ChartConfiguration<'line'> {
+  const emphasis = options.emphasis ?? null
   const weeks = view.weeks_played
   const labels = Array.from({ length: weeks }, (_, index) => String(index + 1))
 
   const orderDatasets: ChartDataset<'line'>[] = view.per_role.map((role) => {
-    const style = ORDER_SERIES[role.role]
+    const style = roleStyle(role.role)
+    // Emphasis only fades the other role lines; demand is never faded.
+    const colour =
+      emphasis === null || role.role === emphasis ? style.colour : withAlpha(style.colour, 0.35)
     return {
       label: orderSeriesLabel(role.role),
       data: role.orders.slice(0, weeks),
-      borderColor: style.colour,
-      backgroundColor: style.colour,
+      borderColor: colour,
+      backgroundColor: colour,
       borderDash: style.dash,
       borderWidth: 2,
       pointStyle: style.point,
@@ -289,11 +307,7 @@ export function buildBullwhipConfig(view: ResultsView): ChartConfiguration<'line
       animation: { duration: 300 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: { usePointStyle: true, color: AXIS_COLOUR, font: { size: 14 } },
-        },
+        legend: { display: false },
         tooltip: { enabled: true },
       },
       scales: {

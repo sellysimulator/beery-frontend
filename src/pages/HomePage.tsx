@@ -4,6 +4,7 @@ import { errorMessage } from '../api/http'
 import { createRoom, getRoomStatus, listPresets } from '../api/rooms'
 import { useAuth } from '../auth/AuthContext'
 import Avatar from '../components/shared/Avatar'
+import Select from '../components/shared/Select'
 import { ROOM_CODE_LENGTH, sanitiseRoomCode } from '../components/lobby/roomCode'
 import type { PresetSummary, RoomStatusResponse } from '../types/game'
 import {
@@ -200,21 +201,22 @@ export function HomePage(): ReactElement {
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-sm">
-              <span>Preset</span>
-              <select
+            <div className="flex flex-col gap-1 text-sm">
+              <span id="host-preset-label">Preset</span>
+              <Select
+                aria-labelledby="host-preset-label"
                 value={preset}
-                onChange={(event) => setPreset(event.target.value)}
-                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-              >
-                <option value="">Default settings</option>
-                {presets.map((candidate) => (
-                  <option key={candidate.name} value={candidate.name}>
-                    {candidate.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={setPreset}
+                options={[
+                  { value: '', label: 'Default settings' },
+                  ...presets.map((candidate) => ({
+                    value: candidate.name,
+                    label: candidate.label,
+                  })),
+                ]}
+                className="w-full"
+              />
+            </div>
             {selectedPreset ? (
               <p className="text-sm text-ink-muted">{selectedPreset.description}</p>
             ) : null}

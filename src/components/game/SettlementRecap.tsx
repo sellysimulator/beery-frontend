@@ -53,9 +53,11 @@ export function SettlementRecap({ view, highlight = false }: SettlementRecapProp
     )
   }
 
-  // The doc's display pair: opening inventory, then opening inventory plus
-  // what arrived (§2.5). Both numbers come from the settlement.
-  const afterArrival = settlement.opening_inventory + settlement.arrived
+  // The doc's display pair: opening inventory, then the stock after receiving
+  // (§2.5). Both are the server's figures: the recap used to add
+  // `opening_inventory + arrived` itself, a copy of the settlement's first
+  // step, and now prints `inventory_after_arrival` (2026-11-03).
+  const afterArrival = settlement.inventory_after_arrival
   const showRunningTotal =
     view.balance !== undefined || view.accumulated_cost !== undefined
 
@@ -108,7 +110,9 @@ export function SettlementRecap({ view, highlight = false }: SettlementRecapProp
             </th>
             <td className="numeric py-1 pr-4 text-right">{settlement.unfulfilled}</td>
             <td className="py-1 text-ink-muted">
-              {settlement.unfulfilled === 0
+              {/* "Stays" only when it did: a week that ships an old backlog
+                  in full has nothing unfulfilled, yet its backlog fell. */}
+              {settlement.closing_backlog === settlement.opening_backlog
                 ? `backlog stays ${settlement.closing_backlog}`
                 : `backlog now ${settlement.closing_backlog}`}
             </td>
@@ -138,13 +142,33 @@ export function SettlementRecap({ view, highlight = false }: SettlementRecapProp
             <td className="numeric py-1 text-right">{money(settlement.backlog_cost)}</td>
           </tr>
 
+          {/* Two lines, never one "week cost" (2026-11-02). Holding and backlog
+              are the settlement's own figure; the order cost (fixed + purchase)
+              is charged only when the week closes, so while it is open there is
+              no figure to show, only that it is still to come. */}
           <tr className="border-t border-border-strong">
             <th scope="row" className="py-1 pr-4 font-semibold">
-              Week cost
+              Holding &amp; backlog
             </th>
             <td className="py-1 pr-4" />
             <td className="numeric py-1 text-right font-semibold">
               {money(settlement.carrying_cost)}
+            </td>
+          </tr>
+
+          <tr>
+            <th scope="row" className="py-1 pr-4 font-semibold">
+              Order cost
+            </th>
+            <td className="py-1 pr-4 text-ink-muted">
+              {typeof view.week_order_cost === 'number'
+                ? 'fixed order cost + purchase cost'
+                : 'charged when the week closes'}
+            </td>
+            <td className="numeric py-1 text-right font-semibold">
+              {typeof view.week_order_cost === 'number'
+                ? money(view.week_order_cost)
+                : 'Not yet charged'}
             </td>
           </tr>
 

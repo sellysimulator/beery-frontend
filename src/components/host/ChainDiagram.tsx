@@ -69,6 +69,16 @@ function barWidth(value: number, peak: number): string {
  *
  * It shows no cost and no order quantity, in either mode, so that the same
  * component can face a room full of players (§2.4, FM 1 and 2).
+ *
+ * Off the projector each lane between two roles carries two counts, both for
+ * what is moving along *that* link (§2.1b). Beer on the way is the downstream
+ * role's `supply_line`: its supplier's shipments travelling to it. Orders in
+ * flight is the upstream role's `orders_in_flight`, which on the host view is
+ * that role's own order pipeline — the orders its downstream customer placed
+ * that are still travelling to it (`07 §3.8`). Reading the downstream role's
+ * `orders_in_flight` there instead would print every order count one link too
+ * high. The Customer–Retailer lane carries no counts: the Retailer takes
+ * customer demand directly and has no order pipeline.
  */
 export function ChainDiagram({ roles, presenting = false }: ChainDiagramProps): ReactElement {
   const peak = Math.max(
@@ -122,7 +132,8 @@ export function ChainDiagram({ roles, presenting = false }: ChainDiagramProps): 
 
         {ROLE_ORDER.map((role, index) => {
           const view = roles[role]
-          const last = index === ROLE_ORDER.length - 1
+          // The lane after this card links the role to its supplier.
+          const supplier: Role | undefined = ROLE_ORDER[index + 1]
           return (
             <li key={role} className="flex flex-1 items-center" data-role={role}>
               <div
@@ -192,7 +203,22 @@ export function ChainDiagram({ roles, presenting = false }: ChainDiagramProps): 
                   />
                 </span>
               </div>
-              {last ? null : <FlowLane index={index + 1} large={presenting} />}
+              {supplier === undefined ? null : (
+                <FlowLane
+                  index={index + 1}
+                  large={presenting}
+                  inTransit={
+                    presenting
+                      ? undefined
+                      : {
+                          // Beer from the supplier to this role, and this
+                          // role's orders on their way to the supplier.
+                          beer: view.supply_line,
+                          orders: roles[supplier].orders_in_flight,
+                        }
+                  }
+                />
+              )}
             </li>
           )
         })}

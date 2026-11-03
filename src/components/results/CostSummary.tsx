@@ -27,6 +27,16 @@ export interface CostSummaryProps {
 /** The placeholder a hidden figure leaves behind. */
 const HIDDEN = '•••'
 
+/**
+ * One role's card. Every card has the same three rows in the same heights —
+ * role, who played it, the figure — so the four figures sit on one line.
+ *
+ * The middle row is always there and always one line tall: a seat with no
+ * name keeps the row's height rather than collapsing it, a long name is
+ * truncated rather than wrapped, and a bot's seat carries the **Bot** tag
+ * beside its name (`beer-game-spec.md` section 8.5). A card that skipped the
+ * row pushed its figure up and read as a different kind of card.
+ */
 function RoleCostCard({
   role,
   symbol,
@@ -37,12 +47,22 @@ function RoleCostCard({
   revealed: boolean
 }): ReactElement {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface-raised px-5 py-4">
+    <div
+      data-role={role.role}
+      className="flex flex-col gap-1 rounded-lg border border-border bg-surface-raised px-5 py-4"
+    >
       <h3 className="text-lg font-semibold">{ROLE_LABEL[role.role]}</h3>
-      <p className="flex items-center gap-2 text-sm text-ink-muted">
-        {role.display_name ? <span>{role.display_name}</span> : null}
+      <p
+        data-field="played_by"
+        className="flex h-6 min-w-0 items-center gap-2 text-sm text-ink-muted"
+      >
+        {role.display_name ? (
+          <span className="truncate" title={role.display_name}>
+            {role.display_name}
+          </span>
+        ) : null}
         {role.is_bot ? (
-          <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-strong">
+          <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold leading-4 text-brand-strong">
             Bot
           </span>
         ) : null}

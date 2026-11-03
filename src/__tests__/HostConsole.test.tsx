@@ -295,6 +295,7 @@ function hostView(over: Partial<HostView> = {}, roleOver: Partial<Record<Role, P
   return {
     week: WEEK,
     duration_weeks: DURATION,
+    weeks_played: WEEK - 1,
     phase: 'DECISION',
     currency_symbol: '$',
     demand_series: [...DEMAND_SERIES],
@@ -1213,6 +1214,18 @@ describe('CRITERION 22: at FINISHED the console shows the final chain, the weeks
     expect(text).toMatch(new RegExp(`${WEEK}\\s*weeks played`, 'i'));
   });
 
+  it('before game_finished arrives, reads the count from host_state.weeks_played, never week', () => {
+    // 2026-11-03: the fallback was `host_state.week`, one too many after an
+    // early end (the open week is dropped). The server's count wins.
+    seatRoom('RUNNING');
+    deliverHostState(hostView({ phase: 'FINISHED', weeks_played: 11 }));
+    renderConsole();
+
+    const text = bodyText();
+    expect(text).toMatch(/11\s*weeks played/i);
+    expect(text).not.toMatch(new RegExp(`${WEEK}\\s*weeks played`, 'i'));
+  });
+
   it('links to the results screen for this room', () => {
     renderFinished();
 
@@ -1344,5 +1357,308 @@ describe('§2.0: the module’s shape', () => {
     expect((HostConsole as unknown as { length: number }).length).toBeLessThanOrEqual(1);
     renderRunning();
     expect(bodyText().length).toBeGreaterThan(0);
+  });
+});
+
+// ===========================================================================
+// BE-5 (CHARTS-PLAN.md): the live order streams in the curve's table, and the
+// lane chips (20 §2.1b). Appended; nothing above this line is changed.
+//
+// The file's `demandCurveConfig` wrapper forwards only (series, week), so the
+// builder's options are not visible here. Everything below is therefore read
+// from the DOM: the curve's hidden table and the chain's `data-chip` elements.
+// ===========================================================================
+
+/** Closed weeks are 1..WEEK-1. Values are unlike every other number in the view. */
+function be5Orders(role: Role): number[] {
+  const base = 5000 + ROLE_ORDER.indexOf(role) * 100;
+  return Array.from({ length: WEEK - 1 }, (_, i) => base + i);
+}
+
+function be5OrderHistory(): Record<Role, number[]> {
+  return {
+    RETAILER: be5Orders('RETAILER'),
+    WHOLESALER: be5Orders('WHOLESALER'),
+    DISTRIBUTOR: be5Orders('DISTRIBUTOR'),
+    FACTORY: be5Orders('FACTORY'),
+  };
+}
+
+function be5HeaderLabels(table: HTMLElement): string[] {
+  const row = table.querySelector<HTMLElement>('tr, [role="row"]');
+  return Array.from(row?.children ?? []).map((cell) => textOf(cell));
+}
+
+/** One text per data row for the column headed `label`, or null when there is no such column. */
+function be5Column(table: HTMLElement, label: string): string[] | null {
+  const index = be5HeaderLabels(table).indexOf(label);
+  if (index < 0) return null;
+  return dataRows(table).map((row) => textOf(row.children[index]));
+}
+
+async function be5Label(role: Role): Promise<string> {
+  const { orderSeriesLabel } = await import('../components/charts/chartSetup');
+  return orderSeriesLabel(role);
+}
+
+describe('BE-5 acceptance 2: with order_history, the curve’s table carries each role’s closed-week orders', () => {
+  it.each(ROLE_ORDER)('%s: a column headed with its series label, orders for closed weeks, empty for open ones', async (role) => {
+    renderRunning(hostView({ order_history: be5OrderHistory() }));
+
+    const column = be5Column(demandTable(), await be5Label(role));
+    expect(column).not.toBeNull();
+    expect(column).toHaveLength(DURATION);
+    be5Orders(role).forEach((value, i) => expect(numbersIn(column![i])).toEqual([value]));
+    for (let i = WEEK - 1; i < DURATION; i += 1) expect(column![i]).toBe('');
+  });
+
+  it('keeps the demand figures and the week-per-row shape', () => {
+    renderRunning(hostView({ order_history: be5OrderHistory() }));
+
+    const rows = dataRows(demandTable());
+    expect(rows).toHaveLength(DURATION);
+    rows.forEach((row, i) => expect(hasNumber(textOf(row), DEMAND_SERIES[i])).toBe(true));
+  });
+});
+
+describe('BE-5 failure mode: a missing order_history (older backend) renders as today', () => {
+  it('renders the console and the table with no order columns and no error', async () => {
+    renderRunning(hostView());
+
+    const table = demandTable();
+    expect(dataRows(table)).toHaveLength(DURATION);
+    for (const role of ROLE_ORDER) expect(be5Column(table, await be5Label(role))).toBeNull();
+  });
+
+  it('has exactly four fewer columns than with the overlay', () => {
+    const plain = renderRunning(hostView());
+    const without = be5HeaderLabels(demandTable()).length;
+    plain.unmount();
+    act(() => {
+      useGameStore.getState().reset();
+    });
+    seq = 0;
+    renderRunning(hostView({ order_history: be5OrderHistory() }));
+
+    expect(be5HeaderLabels(demandTable()).length).toBe(without + 4);
+  });
+});
+
+/** Every chip of a kind, in document order. */
+function be5Chips(kind: 'beer' | 'orders', root: ParentNode = document.body): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(`[data-chip="${kind}"]`));
+}
+
+/** The pair of numbers (beer, orders) of each lane that carries chips. */
+function be5LanePairs(root: ParentNode = document.body): Array<[number, number]> {
+  return be5Chips('beer', root).map((beer) => {
+    let node: HTMLElement | null = beer.parentElement;
+    while (node && node.querySelectorAll('[data-chip="orders"]').length === 0) node = node.parentElement;
+    if (!node || node.querySelectorAll('[data-chip="beer"]').length !== 1) {
+      throw new Error('a beer chip and an orders chip must share a lane, with no other lane’s chips');
+    }
+    return [Number(textOf(beer).match(/-?\d+/)?.[0]), Number(textOf(node.querySelector('[data-chip="orders"]')).match(/-?\d+/)?.[0])];
+  });
+}
+
+describe('BE-5 acceptance 2: the console’s lanes carry count chips', () => {
+  it('has three lanes with chips: none for Customer–Retailer, none for the Factory', () => {
+    renderRunning();
+
+    expect(be5Chips('beer')).toHaveLength(3);
+    expect(be5Chips('orders')).toHaveLength(3);
+  });
+
+  it('each lane pairs the downstream role’s supply_line with the upstream role’s orders_in_flight', () => {
+    renderRunning();
+
+    const pairs = be5LanePairs();
+    const expected: Array<[number, number]> = (['RETAILER', 'WHOLESALER', 'DISTRIBUTOR'] as Role[]).map((role) => [
+      ROLE_NUMBERS[role].supply_line,
+      ROLE_NUMBERS[ROLE_ORDER[ROLE_ORDER.indexOf(role) + 1]].orders_in_flight,
+    ]);
+    expect([...pairs].sort((a, b) => a[0] - b[0])).toEqual(expected);
+  });
+
+  it('never shows the Factory’s production or the Retailer’s order pipeline in a chip', () => {
+    // The Factory's supply_line is its production line, which stays on its
+    // card; the Retailer takes customer demand directly and has no order
+    // pipeline, so its orders_in_flight belongs on no link.
+    renderRunning();
+
+    const text = [...be5Chips('beer'), ...be5Chips('orders')].map((c) => textOf(c)).join(' ');
+    expect(hasNumber(text, ROLE_NUMBERS.FACTORY.supply_line)).toBe(false);
+    expect(hasNumber(text, ROLE_NUMBERS.RETAILER.orders_in_flight)).toBe(false);
+  });
+
+  it('labels each chip for assistive tech, shows the number as visible text, outside any aria-hidden', () => {
+    renderRunning();
+
+    for (const chip of be5Chips('beer')) {
+      const n = Number(textOf(chip).match(/-?\d+/)?.[0]);
+      expect(chip.getAttribute('aria-label')).toBe(`Beer on the way: ${n}`);
+      expect(chip.closest('[aria-hidden="true"]')).toBeNull();
+    }
+    for (const chip of be5Chips('orders')) {
+      const n = Number(textOf(chip).match(/-?\d+/)?.[0]);
+      expect(chip.getAttribute('aria-label')).toBe(`Orders in flight: ${n}`);
+      expect(chip.closest('[aria-hidden="true"]')).toBeNull();
+    }
+  });
+
+  it('shows a zero count rather than hiding the chip', () => {
+    const zero = { supply_line: 0, orders_in_flight: 0 };
+    renderRunning(
+      hostView({}, { RETAILER: zero, WHOLESALER: zero, DISTRIBUTOR: zero, FACTORY: { orders_in_flight: 0 } }),
+    );
+
+    expect(be5Chips('beer')).toHaveLength(3);
+    for (const chip of be5Chips('beer')) expect(chip.getAttribute('aria-label')).toBe('Beer on the way: 0');
+    for (const chip of be5Chips('orders')) expect(chip.getAttribute('aria-label')).toBe('Orders in flight: 0');
+  });
+
+  it('follows a later host_state', () => {
+    renderRunning();
+    deliverHostState(hostView({}, { WHOLESALER: { supply_line: 777 }, DISTRIBUTOR: { orders_in_flight: 778 } }));
+
+    expect(be5LanePairs()).toContainEqual([777, 778]);
+  });
+});
+
+/** The (beer, orders) chips on the lane drawn after `role`'s card: the role–supplier link. */
+function laneAfter(role: Role): { beer: string | null; orders: string | null } {
+  // Scoped to the diagram: the role cards carry `data-role` too.
+  const chain = document.querySelector<HTMLElement>('section[aria-label="The supply chain"]');
+  const stop = chain?.querySelector<HTMLElement>(`li[data-role="${role}"]`);
+  if (!stop) throw new Error(`no chain stop for ${role}`);
+  return {
+    beer: stop.querySelector('[data-chip="beer"]')?.getAttribute('aria-label') ?? null,
+    orders: stop.querySelector('[data-chip="orders"]')?.getAttribute('aria-label') ?? null,
+  };
+}
+
+describe('the chain’s order counts sit on the link the orders are travelling along', () => {
+  // host_state.roles[R].orders_in_flight is R's OWN order pipeline: orders its
+  // downstream customer placed that are still on their way TO R (07 §3.8). So
+  // it belongs on the link between R and its customer, one lane below R — not
+  // on the lane between R and its supplier, where the diagram used to draw it.
+  // Every figure below is distinct, so a count on the wrong lane cannot pass.
+  const IN_TRANSIT: Record<Role, { supply_line: number; orders_in_flight: number }> = {
+    RETAILER: { supply_line: 301, orders_in_flight: 0 },
+    WHOLESALER: { supply_line: 302, orders_in_flight: 312 },
+    DISTRIBUTOR: { supply_line: 303, orders_in_flight: 313 },
+    FACTORY: { supply_line: 304, orders_in_flight: 314 },
+  };
+
+  it.each([
+    ['RETAILER', 'WHOLESALER'],
+    ['WHOLESALER', 'DISTRIBUTOR'],
+    ['DISTRIBUTOR', 'FACTORY'],
+  ] as Array<[Role, Role]>)('%s–%s: beer is the customer’s supply_line, orders the supplier’s own pipeline', (customer, supplier) => {
+    renderRunning(hostView({}, IN_TRANSIT));
+
+    expect(laneAfter(customer)).toEqual({
+      beer: `Beer on the way: ${IN_TRANSIT[customer].supply_line}`,
+      orders: `Orders in flight: ${IN_TRANSIT[supplier].orders_in_flight}`,
+    });
+  });
+
+  it('the Factory has no lane after it, and the Customer–Retailer lane carries no counts', () => {
+    renderRunning(hostView({}, IN_TRANSIT));
+
+    expect(laneAfter('FACTORY')).toEqual({ beer: null, orders: null });
+    expect(be5Chips('orders').map((chip) => chip.getAttribute('aria-label'))).toEqual([
+      'Orders in flight: 312',
+      'Orders in flight: 313',
+      'Orders in flight: 314',
+    ]);
+  });
+});
+
+describe('BE-5 acceptance 3 / failure mode: no chips on the player chain', () => {
+  it('FlowLane without inTransit renders no chip at all', async () => {
+    const { FlowLane } = await import('../components/game/ChainFlow');
+    const { container } = render(<FlowLane index={1} />);
+
+    expect(container.querySelector('[data-chip]')).toBeNull();
+    expect(textOf(container)).not.toMatch(/beer on the way|orders in flight/i);
+  });
+
+  it('FlowLane with inTransit renders both chips, zero included', async () => {
+    const { FlowLane } = await import('../components/game/ChainFlow');
+    const { container } = render(<FlowLane index={1} inTransit={{ beer: 0, orders: 9 }} />);
+
+    expect(container.querySelector('[data-chip="beer"]')?.getAttribute('aria-label')).toBe('Beer on the way: 0');
+    expect(container.querySelector('[data-chip="orders"]')?.getAttribute('aria-label')).toBe('Orders in flight: 9');
+  });
+});
+
+describe('BE-5 acceptance 3 / failure mode: the player ChainFlow never renders chips', () => {
+  it.each(ROLE_ORDER)('%s: no [data-chip] and no chip aria-label', async (role) => {
+    const mod = (await import('../components/game/ChainFlow')) as unknown as Record<string, unknown>;
+    const ChainFlow = (mod.ChainFlow ?? mod.default) as ComponentType<{ role: Role }>;
+    const { container } = render(<ChainFlow role={role} />);
+
+    expect(container.firstChild).not.toBeNull();
+    expect(container.querySelector('[data-chip]')).toBeNull();
+    expect(container.querySelector('[aria-label^="Beer on the way"], [aria-label^="Orders in flight"]')).toBeNull();
+  });
+});
+
+/** A role card's tick state in words, without the glyph beside it. */
+function tickState(role: Role): string {
+  return textOf(roleCard(role).querySelector('[data-field="has_submitted"]')).replace(/^[^A-Za-z]+/, '');
+}
+
+describe('the final week: the last order to arrive ends the game decided, not "Still deciding"', () => {
+  // Two humans and two bots. The bots and one human are in; the other human's
+  // order closes the final week and finishes the game. The backend now sends a
+  // `host_state` for that submission too, but the console must not depend on
+  // it: `order_submitted` reaches the host as well, and the tracker has to end
+  // the game with all four seats decided either way.
+  it('ticks the last submitter from order_submitted, through week_closed and game_finished', () => {
+    const participants = participantsFor({
+      DISTRIBUTOR: { is_bot: true },
+      FACTORY: { is_bot: true },
+    });
+    renderRunning(
+      hostView(
+        { week: DURATION, awaiting_roles: ['WHOLESALER'] },
+        {
+          RETAILER: { has_submitted: true },
+          WHOLESALER: { has_submitted: false },
+          DISTRIBUTOR: { has_submitted: true, is_bot: true },
+          FACTORY: { has_submitted: true, is_bot: true },
+        },
+      ),
+      participants,
+    );
+
+    dispatch('order_submitted', {
+      seq: nextSeq(),
+      week: DURATION,
+      role: 'WHOLESALER',
+      display_name: NAMES.WHOLESALER,
+      is_bot: false,
+    });
+    dispatch('week_closed', { seq: nextSeq(), week: DURATION, next_week: null, awaiting_roles: [] });
+    dispatch('game_finished', { seq: nextSeq(), ...gameFinished(DURATION) });
+
+    expect(ROLE_ORDER.map((role) => tickState(role))).toEqual(ROLE_ORDER.map(() => 'Decided'));
+    expect(bodyText()).not.toMatch(/still deciding/i);
+  });
+
+  it('leaves another week’s host view alone: an order for week N never ticks week N + 1', () => {
+    renderRunning(hostView({ week: WEEK }, { DISTRIBUTOR: { has_submitted: false } }));
+
+    dispatch('order_submitted', {
+      seq: nextSeq(),
+      week: WEEK - 1,
+      role: 'DISTRIBUTOR',
+      display_name: NAMES.DISTRIBUTOR,
+      is_bot: false,
+    });
+
+    expect(tickState('DISTRIBUTOR')).toBe('Still deciding');
   });
 });

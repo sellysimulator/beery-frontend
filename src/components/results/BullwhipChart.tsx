@@ -3,12 +3,15 @@ import { Line } from 'react-chartjs-2'
 import {
   DEMAND_SERIES_LABEL,
   buildBullwhipConfig,
+  orderSeriesDash,
   orderSeriesLabel,
   type ResultsView,
 } from '../charts/chartSetup'
-import { ROLE_LABEL } from '../lobby/roleCopy'
+import { DEMAND_COLOUR, roleStyle } from '../charts/chartTheme'
+import Legend, { type LegendItem } from '../charts/Legend'
 import ErrorBoundary from '../shared/ErrorBoundary'
-import type { Role } from '../../types/game'
+import { ROLE_ORDER, type Role } from '../../types/game'
+import BullwhipRatioBars from './BullwhipRatioBars'
 
 export interface BullwhipChartProps {
   view: ResultsView
@@ -77,9 +80,21 @@ function WeekTable({ view }: { view: ResultsView }): ReactElement {
  * because bringing the chain in one stage at a time is the single most
  * useful control in the debrief and it has to work with a keyboard, with a
  * screen reader, and on a machine where the canvas never got a context.
+ *
+ * Every series has its own switch, and each one adds or removes **that
+ * series only**. This replaced a cumulative stepper whose "+ Factory" button
+ * showed all four stages at once, which is not what a button named after one
+ * stage reads as doing. The one control that touches every series is the
+ * Show all / Clear selection toggle beside them; the debrief's "bring the
+ * chain in" is Clear selection, then the switches one at a time.
+ *
+ * The role switched on last is drawn at full strength and the others fade,
+ * so the stage just added is the one the room looks at. Show all, Clear
+ * selection, or switching that role off again drops the emphasis.
  */
 export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
   const [hidden, setHidden] = useState<readonly SeriesKey[]>([])
+  const [newest, setNewest] = useState<Role | null>(null)
 
   const visible = useMemo<ResultsView>(() => {
     if (hidden.length === 0) return view
@@ -90,49 +105,71 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
     }
   }, [view, hidden])
 
-  const config = buildBullwhipConfig(visible)
+  const shownRoles = ROLE_ORDER.filter((role) => !hidden.includes(role))
+  // One role on its own has nothing to stand out from.
+  const emphasis = newest !== null && shownRoles.length > 1 ? newest : null
+  const config = buildBullwhipConfig(visible, { emphasis })
+
+  const allKeys: readonly SeriesKey[] = [DEMAND, ...view.per_role.map((role) => role.role)]
+  const allShown = allKeys.every((key) => !hidden.includes(key))
+  const nothingShown = allKeys.every((key) => hidden.includes(key))
 
   function toggle(key: SeriesKey): void {
+    const turningOn = hidden.includes(key)
     setHidden((current) =>
       current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
     )
+    if (key === DEMAND) return
+    if (turningOn) setNewest(key)
+    else if (newest === key) setNewest(null)
   }
 
-  function legendButton(key: SeriesKey, label: string, swatch: string): ReactElement {
-    const shown = !hidden.includes(key)
-    return (
-      <button
-        key={key}
-        type="button"
-        role="switch"
-        aria-checked={shown}
-        data-series={key}
-        onClick={() => toggle(key)}
-        className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-semibold transition ${
-          shown
-            ? 'border-border-strong bg-surface-raised text-ink'
-            : 'border-border bg-surface-sunken text-ink-subtle line-through'
-        }`}
-      >
-        <span aria-hidden="true" className={`h-1 w-6 rounded-full ${swatch}`} />
-        {label}
-      </button>
-    )
+  function toggleAll(): void {
+    setNewest(null)
+    setHidden(allShown ? allKeys : [])
   }
+
+  const legendItems: LegendItem[] = [
+    {
+      key: DEMAND,
+      label: DEMAND_SERIES_LABEL,
+      swatch: { kind: 'line', color: DEMAND_COLOUR, width: 4 },
+    },
+    ...view.per_role.map((role) => ({
+      key: role.role,
+      label: orderSeriesLabel(role.role),
+      swatch: {
+        kind: 'line' as const,
+        color: roleStyle(role.role).colour,
+        dash: orderSeriesDash(role.role),
+      },
+    })),
+  ]
 
   return (
     <div className="flex flex-col gap-3">
-      <div
-        data-print="omit"
-        role="group"
-        aria-label="Show or hide a series"
-        className="flex flex-wrap items-center gap-2"
-      >
-        {legendButton(DEMAND, DEMAND_SERIES_LABEL, 'bg-ink')}
-        {view.per_role.map((role) =>
-          legendButton(role.role, `${ROLE_LABEL[role.role]} orders`, SWATCH[role.role]),
-        )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Legend
+          items={legendItems}
+          hidden={new Set<string>(hidden)}
+          onToggle={(key) => toggle(key as SeriesKey)}
+          ariaLabel="Choose the series to show"
+        />
+        <button
+          type="button"
+          data-print="omit"
+          onClick={toggleAll}
+          className="rounded-md border border-brand px-3 py-1.5 text-sm font-semibold text-brand-strong transition hover:bg-brand-soft"
+        >
+          {allShown ? 'Clear selection' : 'Show all'}
+        </button>
       </div>
+
+      {nothingShown ? (
+        <p role="status" className="text-sm text-ink-muted">
+          Nothing is selected. Switch a series on to draw it.
+        </p>
+      ) : null}
 
       <ErrorBoundary
         fallback={
@@ -148,21 +185,17 @@ export function BullwhipChart({ view }: BullwhipChartProps): ReactElement {
       </ErrorBoundary>
 
       <p className="text-sm text-ink-muted">
-        Switch a series off to bring the chain in one stage at a time — Retailer first,
-        then upstream.
+        To bring the chain in one stage at a time, clear the selection, then switch
+        on customer demand and each stage in turn — Retailer first, then upstream.
       </p>
 
       <WeekTable view={visible} />
+
+      <div data-print="omit">
+        <BullwhipRatioBars view={view} shown={shownRoles} />
+      </div>
     </div>
   )
-}
-
-/** The legend swatches, in the role hues from `src/index.css`. */
-const SWATCH: Record<Role, string> = {
-  RETAILER: 'bg-role-retailer',
-  WHOLESALER: 'bg-role-wholesaler',
-  DISTRIBUTOR: 'bg-role-distributor',
-  FACTORY: 'bg-role-factory',
 }
 
 export default BullwhipChart

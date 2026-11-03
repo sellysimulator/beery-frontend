@@ -24,6 +24,7 @@ import type {
   JoinWaitingEmit,
   LeaveEmit,
   PauseGameEmit,
+  ReclaimSeatEmit,
   ReleaseRoleEmit,
   RequestStateEmit,
   ResumeGameEmit,
@@ -104,6 +105,11 @@ export function substituteBot(payload: SubstituteBotEmit): void {
 
 export function endGameEarly(payload: EndGameEarlyEmit): void {
   socket.emit('end_game_early', payload)
+}
+
+/** The swapped-out player takes their seat back from the bot. */
+export function reclaimSeat(payload: ReclaimSeatEmit): void {
+  socket.emit('reclaim_seat', payload)
 }
 
 export function requestState(payload: RequestStateEmit): void {

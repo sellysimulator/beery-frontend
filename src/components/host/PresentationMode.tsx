@@ -11,7 +11,10 @@ export interface PresentationModeProps {
   durationWeeks: number
   /** `host_state.roles`. */
   roles: Record<Role, HostRoleView>
-  /** `host_state.demand_series` — the full series. */
+  /**
+   * `host_state.demand_series` — the full series. `DemandCurve` renders only
+   * weeks 1 to `week` of it here, never the future.
+   */
   demandSeries: number[]
   /** One entry per role, in `ROLE_ORDER`. Names and tick state only. */
   entries: SubmissionEntry[]
@@ -30,11 +33,14 @@ export interface PresentationModeProps {
  * what a test reads. Escape exits either way, because in the fallback path
  * nothing will ever fire `fullscreenchange`.
  *
- * It shows **no cost and no order quantity**, anywhere. The whole room is
- * looking at this screen, and the players in it must not learn what their
- * neighbours ordered (§2.4, FM 1 and 2). What it does show is the chain
- * filling and draining while it happens, which is where the bullwhip effect
- * becomes visible *during* the game rather than in the debrief.
+ * It shows **no cost, no order quantity and no future demand**, anywhere. The
+ * whole room is looking at this screen, and the players in it must not learn
+ * what their neighbours ordered (§2.4, FM 1 and 2), nor where customer demand
+ * is going: the demand curve stops at the current week, the last one the
+ * Retailer has already seen (`revealedDemand`). The host console's own curve,
+ * underneath, keeps the whole series. What the projector does show is the
+ * chain filling and draining while it happens, which is where the bullwhip
+ * effect becomes visible *during* the game rather than in the debrief.
  *
  * It opens no socket of its own and keeps no second copy of state: every
  * figure is the same `store.hostState` the console beneath it is rendering

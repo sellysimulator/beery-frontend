@@ -32,15 +32,17 @@ They can't see your settings while they wait. They just see who else has joined 
 
 This is the part that matters. Presets get you running fast:
 
-- **Classic MIT** — 36 weeks, 12 units starting inventory, 2-week delays, demand of 4 stepping to 8 at week 5, $0.50 holding and $1.00 backlog. This is the standard scenario and the one that produces the textbook result.
-- **Fast Game** — around 20 weeks with a shorter timer, for a tight schedule.
+- **Classic MIT** — one permanent step up in customer demand. This is the standard scenario and the one that produces the textbook result.
+- **Fast Game** — the same scenario, shorter, for a tight schedule.
+
+*(2026-11-03: no preset figure is written here. Each preset card in the settings lists its exact weeks, starting stock, delays, demand and costs, written by the server from the preset itself, and the starting conditions show every role's lead time.)*
 - **Chaos** — long delays, random demand. Expect spectacular failure, which is the point.
 
 Or set everything yourself:
 
 **Length and pacing.** Number of weeks. Seconds per decision, or untimed. What happens if someone runs out of time — repeat their last order, order zero, or match the demand they just received.
 
-**Starting conditions**, per role or all at once. Opening inventory. Opening backlog. How many weeks shipments spend in transit. How many weeks orders take to reach the supplier. How much is already in the pipeline at week one. For the Factory, the production delay and any capacity limit.
+**Starting conditions**, per role or all at once. Opening inventory. Opening backlog. How many weeks shipments spend in transit. How many weeks a customer's orders take to reach each role — set on the role the orders travel to, so the Wholesaler's setting is how long the Retailer's orders take to reach the Wholesaler. How much is already in the pipeline at week one: units in transit, and the customer's orders already on the way (the Wholesaler's figure is what the Retailer sees as "Orders you've placed"; the Retailer's own figure only sets a Retailer bot's first guess at demand). For the Factory, the production delay and any capacity limit (0 means unlimited).
 
 **Costs.** Holding cost per unit per week. Backlog cost per unit per week. Backlog should cost more than holding — that asymmetry is what makes the game a real decision. You can set different costs per role if you want to model an expensive-to-store product at one stage.
 
@@ -76,8 +78,8 @@ You can:
 - **Pause** and **resume** — for questions, technical trouble, or a teaching moment.
 - **Extend the timer** for the current week if someone needs a moment.
 - **Force-close** a decision window if someone has walked away.
-- **Swap in a bot** for a player who has dropped out.
-- **End early** if you're running out of time — you still get full results for the weeks played.
+- **Swap in a bot** for a player who has dropped out. You can do it while the game is paused (a dropped player pauses it automatically); the bot plays as soon as you resume. The game still counts in that player's history and statistics.
+- **End early** if you're running out of time — you still get full results for the weeks played. The week in progress is dropped, cost and all, so the console's totals and the results agree.
 
 Use **presentation mode** if you're projecting for a room.
 
@@ -124,7 +126,7 @@ You only deal with your immediate neighbours. You cannot see past them.
 
 ## The one thing that makes this hard
 
-**Nothing happens immediately.** When you place an order, it takes a couple of weeks just to reach your supplier, and a couple more for the beer to arrive. So an order you place today shows up in your warehouse roughly four weeks from now.
+**Nothing happens immediately.** When you place an order, it takes weeks just to reach your supplier, and more weeks for the beer to arrive. Your order form tells you exactly how many, and the week it should land: the host sets the delays, and the game works the number out for your seat.
 
 This means you are always ordering for a situation you can't see yet — and it means the effect of a decision you've already made hasn't shown up yet either.
 
@@ -146,17 +148,17 @@ Then wait. The host is configuring the game. You'll see who else has joined. You
 
 **Incoming order** — how much your customer wants from you this week.
 
-**Your costs** — this week's, and your running total.
+**Your costs** — this week's holding and backlog cost, your order cost (charged when the week closes, so until then it reads "not yet charged"), and your running total. There is no single "week cost": the two are charged at different moments.
 
 ## Each week
 
 **1. See what happened.** The week settles automatically. You get a plain-language recap: what arrived, what your customer asked for, how much you shipped, what you couldn't ship, and what it cost you. Read it. It's the only feedback you get.
 
-**2. Decide.** Enter one number: how much to order from your supplier. The screen tells you when it will arrive.
+**2. Decide.** Enter one number: how much to order from your supplier — a whole number from 0 up to the game's maximum, which the screen shows. A number outside that is refused, never cut down to fit. The screen tells you when it will arrive.
 
 Shortcuts are available — match the order you just received, repeat your last order, or order nothing.
 
-**3. Confirm and wait.** Once you submit, you'll see who else still has to decide. Everyone's order is hidden until the week closes. If there's a timer and it runs out, the system places an order for you according to your host's rule — so decide before then.
+**3. Confirm and wait.** Once you submit, you'll see who else still has to decide. The other players never see your order — not now, and not after the week closes; they only see that you have decided. If there's a timer and it runs out, the system places an order for you according to your host's rule — so decide before then.
 
 Then the next week begins.
 
@@ -165,13 +167,13 @@ Then the next week begins.
 - **No talking about numbers.** You may not tell anyone what you ordered, what your inventory is, or what you're planning. No chat, no gestures, no showing your screen. This is the point of the exercise, not a formality.
 - **You cannot un-order.** Once an order is placed, it's coming.
 - **Backlog doesn't go away.** You ship it eventually, and you pay for it every week until you do.
-- **You cannot ship what you don't have.** If a customer wants 12 and you have 5, you ship 5 and owe 7.
+- **You cannot ship what you don't have.** If a customer wants more than you have, you ship everything on your shelf and owe them the rest.
 
 ## Advice, honestly given
 
 Order something close to what your customer is asking for, and adjust gently.
 
-**Before you increase an order, look at what's already on the way.** The most common mistake in this game — by a wide margin — is to see low inventory, order more, see inventory still low next week because nothing has arrived yet, and order more again. You end up with four weeks of panic orders landing at once, a warehouse you can't afford, and then you slam the brakes and order nothing, which starves everyone upstream of you.
+**Before you increase an order, look at what's already on the way.** The most common mistake in this game — by a wide margin — is to see low inventory, order more, see inventory still low next week because nothing has arrived yet, and order more again. You end up with weeks of panic orders landing at once, a warehouse you can't afford, and then you slam the brakes and order nothing, which starves everyone upstream of you.
 
 Resist the swing. Small, steady corrections beat big ones almost every time.
 

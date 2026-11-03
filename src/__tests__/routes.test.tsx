@@ -337,13 +337,16 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     expect(pkg.dependencies).not.toHaveProperty('vite');
   });
 
-  it('CRITERION 1: Node is pinned at the §2 floor in engines and .nvmrc', () => {
+  it('CRITERION 1: engines and .nvmrc name patched, supported Node lines', () => {
+    // §2's floor is Vite 7's (20.19 / 22.12), but Node 20 reached end of life on 30 April
+    // 2026 and gets no security fixes. engines names the patched release of each supported
+    // line, and .nvmrc, which CI builds and deploys on, pins one of them.
     expect(pkg.engines?.node).toBeDefined();
-    expect(pkg.engines?.node).toMatch(/20\.19|22\.12/);
+    expect(pkg.engines?.node).toMatch(/^\^22\.\d+\.\d+ \|\| \^24\.\d+\.\d+ \|\| >=26\.\d+\.\d+$/);
 
     const nvmrc = join(ROOT, '.nvmrc');
     expect(existsSync(nvmrc)).toBe(true);
-    expect(readFileSync(nvmrc, 'utf8').trim()).toMatch(/^v?(20\.19|20\.\d+|22\.\d+)/);
+    expect(readFileSync(nvmrc, 'utf8').trim()).toMatch(/^v?(22|24|26)\.\d+\.\d+$/);
   });
 
   it('CRITERION 1: a build script exists', () => {

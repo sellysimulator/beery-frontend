@@ -55,6 +55,18 @@ mechanism; this is the contract.
    and it is a rule this family has broken three times in one game's planning documents
    alone.
 
+**What invariant 7 does not forbid: display arithmetic in charts.** A chart may sum, average,
+take a running total of, or divide figures the server sent, purely to draw them: a cumulative
+profit line, a cost per unit, a market average, a share. The value never leaves the screen,
+never feeds a decision or the engine, and the chart's table view shows the server figures it
+came from. Anything with a game rule in it is still the server's: eligibility, capacity, a cost
+formula, a forecast for a live decision. That is why a "what if I charge $X today?" curve is a
+server preview, never the client re-running the demand model. (Explaining the model with
+example numbers in help and config screens, as Lemony's `configMath.ts` does, is not a
+forecast for a live decision.) A game may be stricter than this: Beery plots only
+server fields, and shows a combination with geometry (stacking, drawing below the axis)
+instead of a computed number. Decided 2026-11-02; see `chart-proposals-plan.md` §1.
+
 ---
 
 ## 1. Frontend
@@ -70,8 +82,12 @@ it current with `npm update`. Tequila Game is verified green on React 19.2 / Vit
 TypeScript 5.9 / Tailwind 4.3; a fresh scaffold today lands on Vite 8 / TypeScript 6, which has
 not been exercised against this stack.
 
-Node ≥ 20.19 (or 22.12+) — Vite 7's realistic floor, and higher for Vite 8. Pin it with
-`.nvmrc` / `engines.node`.
+Node ≥ 20.19 (or 22.12+) is Vite 7's realistic floor, and higher for Vite 8 — but Node 20
+reached end of life on 30 April 2026 and gets no security fixes, so neither `engines.node` nor
+`.nvmrc` should name it. Set `engines.node` to the patched release of each supported line
+(`^22.23.4 || ^24.22.1 || >=26.12.1` as of the 21 October 2026 security release) and pin
+`.nvmrc` to one of them. CI's `setup-node` reads `.nvmrc`, so a stale pin keeps every build on
+a vulnerable Node; raise both after each Node security release.
 
 > **A 3D dependency will pin your React version.** If a game adds `@react-three/fiber`, note
 > that it declares a narrow React peer range (`>=19 <19.3` as of r3f 9.7) and lags React
@@ -171,6 +187,20 @@ never compared.
 - **The host is not in the participant list.** They render the room; they do not appear in
   it, hold no alias and take no seat. A host counted as a player is an off-by-one that
   survives every test with four players in it.
+- **No native `<select>`.** The browser draws a native select's popup in the operating
+  system's chrome, the one part of every screen a game's theme cannot reach. Each game has
+  its own `components/shared/Select.tsx`, a WAI-ARIA select-only combobox (a
+  `button role="combobox"` that keeps focus, a `listbox` driven by
+  `aria-activedescendant`, Up/Down/Home/End/Enter/Space/Escape/Tab, typeahead,
+  outside-click close) styled in that game's own tokens. Name it with `<label htmlFor>`,
+  `aria-labelledby` or `aria-label` and **never nest it in a `<label>`**: a click on an
+  option bubbles to the label, which re-clicks the trigger and reopens the list. Beery's is
+  the reference (`Beery/Beery_Frontend/src/components/shared/Select.tsx`).
+- **A host's seat picker never offers a seat someone else holds.** List it, disabled, with
+  the holder's name ("Taken by Ana"), and have the server **refuse** an assignment to a held
+  seat rather than move it. Moving it silently unseats the holder, which the host reads as
+  two people sharing a seat until one of them vanishes from it. Reassigning is two
+  deliberate steps: unseat, then assign. (Found in Beery, 2026-11-02.)
 
 ### Socket handshake — `autoConnect: false` **[HARD-WON]**
 
@@ -758,6 +788,28 @@ Host-supplied config needs **upper** bounds and cross-field checks, not just flo
 Reject a second submission for the same round (`if player["last"] is not None: return`).
 Without it, each call appends another history entry *and* re-serialises the whole room through
 Redis — O(n²) work that one client can trigger in a loop.
+
+### The host's "who has submitted" tracker, through the last round
+
+A host console that ticks players off as they submit reads those ticks from the host's
+state, so the server sends the host a fresh state **on every submission — including the one
+that completes the round.** Do not skip it on the reasoning that the round close which
+follows sends a state for the next round anyway: the **final** round's close ends the game
+and sends no next round, so the host's last state is the one from before the last
+submission, and the console ends every game showing that player as still deciding. A host
+view built after the game finishes must not reset the per-player submitted flags either (an
+engine that clears its pending submissions on close reports everyone as undecided at
+FINISHED). A client store that also applies the room-wide "X submitted" event to the host's
+view is a cheap second line of defence, not a substitute. Test it end to end: humans plus
+bots, played to the last round, and assert the host's last state marks every seat
+submitted. (Beery and Pulky each shipped a variant of this; found 2026-11-02.)
+
+**Broadcast every participant the server creates.** Bots filled in at `start_game` are
+participants like any other, and a client only knows a participant from a participant-list
+event. If start emits only "game started" plus a role map, every client holds a list with
+no entry for the bot seats, and anything rendered from that list — names, a Bot badge, the
+live results' cost cards — comes out blank for exactly those seats. Emit the lobby /
+participant-list payload again after the seats are filled. (Found in Beery, 2026-11-02.)
 
 ### Redis — three distinct roles
 

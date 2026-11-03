@@ -101,7 +101,6 @@ export function Board2D({
                 // A new week, or a reopened order, starts a fresh input.
                 key={`${week}-${isChangingOrder ? 'change' : 'new'}`}
                 view={view}
-                week={week}
                 disabled={paused}
                 initialOrder={initialOrder}
                 isChange={isChangingOrder}

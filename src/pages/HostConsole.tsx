@@ -88,7 +88,9 @@ export function HostConsole(): ReactElement {
 
   const isFinished = roomState === 'FINISHED' || hostState.phase === 'FINISHED'
   const isPaused = !isFinished && (paused || roomState === 'PAUSED')
-  const weeksPlayed = finished?.weeks_played ?? hostState.week
+  // The server's count either way. The fallback was `hostState.week`, one
+  // too many after an early end, which drops the open week (2026-11-03).
+  const weeksPlayed = finished?.weeks_played ?? hostState.weeks_played
 
   const entries: SubmissionEntry[] = ROLE_ORDER.map((role) => ({
     role,
@@ -161,6 +163,7 @@ export function HostConsole(): ReactElement {
               paused={isPaused}
               awaitingRoles={hostState.awaiting_roles}
               week={hostState.week}
+              weeksPlayed={hostState.weeks_played}
               onPresent={present}
             />
           )}
@@ -210,6 +213,7 @@ export function HostConsole(): ReactElement {
         <DemandCurve
           demandSeries={hostState.demand_series}
           currentWeek={hostState.week}
+          orderHistory={hostState.order_history}
         />
       </div>
 

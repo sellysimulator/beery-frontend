@@ -41,6 +41,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 import { ConfigPanel } from '../components/config/ConfigPanel';
+import { resetLimitsCacheForTests } from '../components/config/useLimits';
+import { resetPreviewCacheForTests } from '../components/config/useConfigPreview';
 import { useGameStore } from '../store/gameStore';
 import { setHostRoom, setHostSecret } from '../utils/storage';
 import type {
@@ -114,11 +116,17 @@ const rest = vi.hoisted(() => ({
   presets: null as unknown,
   configResponse: null as unknown,
   putRejection: null as unknown,
+  /** `POST /rooms/preview`'s answer; a promise that never settles holds it back. */
+  preview: null as unknown,
 }));
+
+const limitsFixture = await vi.hoisted(async () => await import('./limitsFixture'));
 
 const httpRec = vi.hoisted(() => {
   const get = async (url: string) => {
     if (/presets/.test(url)) return { data: rest.presets ?? { presets: [] } };
+    // The server's ranges (`GET /rooms/limits`): the form has no copy of its own.
+    if (/\/rooms\/limits$/.test(url)) return { data: limitsFixture.TEST_LIMITS };
     return { data: rest.configResponse ?? {} };
   };
   const put = async (...args: unknown[]) => {
@@ -127,7 +135,9 @@ const httpRec = vi.hoisted(() => {
     return { data: rest.configResponse ?? {} };
   };
   const post = async (...args: unknown[]) => {
-    void args;
+    if (/\/rooms\/preview$/.test(String(args[0]))) {
+      return { data: await Promise.resolve(rest.preview) };
+    }
     return { data: {} };
   };
   return {
@@ -193,7 +203,6 @@ function visibilityDefaults(over: Partial<VisibilityConfig> = {}): VisibilityCon
     show_running_cost_to_players: true,
     show_leaderboard_during_game: false,
     max_order_quantity: null,
-    allow_negative_orders: false,
     ...over,
   };
 }
@@ -252,6 +261,17 @@ const PRESETS = {
       }),
     },
   ],
+};
+
+/**
+ * `POST /rooms/preview`'s answer (`10 §3.5b`). Test data, not a second source:
+ * the lead times are deliberately not what any sum of the fixture's delays
+ * gives, so a row that added up its own columns would show different numbers.
+ */
+const SERVER_PREVIEW = {
+  demand_series: [4, 4, 4, 4, 8, 8, 8, 8],
+  demand_is_example: false,
+  lead_times: { RETAILER: 9, WHOLESALER: 11, DISTRIBUTOR: 13, FACTORY: 7 },
 };
 
 const EMPTY_ROLE_TO_ALIAS: Record<Role, string | null> = {
@@ -407,9 +427,9 @@ const WORDS: Record<string, RegExp> = {
   initial_inventory: /initial inventory|starting inventory/i,
   initial_backlog: /initial backlog|starting backlog/i,
   shipping_delay_weeks: /shipping delay/i,
-  information_delay_weeks: /information delay/i,
+  information_delay_weeks: /order delay|information delay/i,
   initial_pipeline_quantity: /(pipeline quantity|in.transit)/i,
-  initial_order_in_pipeline: /order in pipeline|initial order/i,
+  initial_order_in_pipeline: /incoming orders|order in pipeline|initial order/i,
   holding_cost_per_unit_week: /holding cost/i,
   backlog_cost_per_unit_week: /backlog cost/i,
   fixed_order_cost: /fixed order cost/i,
@@ -424,8 +444,7 @@ const WORDS: Record<string, RegExp> = {
   show_running_cost_to_players: /running cost/i,
   show_leaderboard_during_game: /leaderboard/i,
   max_order_quantity: /max(imum)? order/i,
-  allow_negative_orders: /negative order/i,
-  beta: /supply line|already ordered/i,
+  beta: /supply line|already shipped/i,
   theta: /(theta|smooth)/i,
   alpha: /(alpha|stock adjust)/i,
   target_stock_multiplier: /target stock/i,
@@ -604,6 +623,9 @@ beforeEach(() => {
   rest.presets = PRESETS;
   rest.configResponse = null;
   rest.putRejection = null;
+  rest.preview = SERVER_PREVIEW;
+  resetPreviewCacheForTests();
+  httpRec.post.mockClear();
   store().reset();
 });
 
@@ -659,6 +681,23 @@ describe('preset cards (§2)', () => {
     // The whole form follows the preset once the server has echoed it back.
     applyConfig(baseConfig({ preset_name: 'FAST_GAME', duration_weeks: 20 }));
     await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('20'));
+  });
+
+  it('renders the server’s label and description verbatim, with no copy of its own (2026-11-03)', async () => {
+    // The figures are written by the server from each preset's config. A card
+    // that kept its own text would still say "36 weeks" here.
+    rest.presets = {
+      presets: [
+        {
+          ...(PRESETS.presets[0] as Json),
+          label: 'Classic MIT',
+          description: '41 weeks, 7 units on hand, written by the server.',
+        },
+      ],
+    };
+    await mountPanel();
+    await waitFor(() => expect(bodyText()).toMatch(/41 weeks, 7 units on hand, written by the server\./));
+    expect(bodyText()).not.toMatch(/36 weeks/);
   });
 
   it('renders each preset card with the copy the API supplies [AC 2]', async () => {
@@ -811,32 +850,32 @@ describe('per-role editors (§2)', () => {
 // ---------------------------------------------------------------------------
 
 describe('save path (§3.1)', () => {
-  it('shows 104 after saving 500 weeks [AC 12, FM 1]', async () => {
+  it('refuses 500 weeks beside the field and never sends it [AC 12, FM 1]', async () => {
+    // Amended 2026-11-02: nothing is clamped. The range comes from the
+    // server's own limits (`GET /rooms/limits`), the message says it, and the
+    // value never reaches the wire, where the server would refuse it too.
     const user = await mountPanel();
     clearWire();
 
     await setNumber(user, field('duration_weeks'), '500');
-    await waitForSave();
-    expect(lastSavedConfig().duration_weeks).toBe(500);
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
-    // The server clamps and answers with what it stored (§3.1a).
-    applyConfig(baseConfig({ duration_weeks: 104 }));
-
-    await waitFor(() =>
-      expect(
-        inputValue(field('duration_weeks')),
-        'the field must render from the stored config, not from local form state (§3.0)',
-      ).toBe('104'),
-    );
+    expect(savedConfigs().some((c) => c.duration_weeks === 500)).toBe(false);
+    await waitFor(() => expect(bodyText()).toMatch(/Maximum is 104 weeks\./i));
+    expect(field('duration_weeks').getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('notes the clamp inline [§3.1]', async () => {
-    const user = await mountPanel();
-    await setNumber(user, field('duration_weeks'), '500');
-    await waitForSave();
-    applyConfig(baseConfig({ duration_weeks: 104 }));
-
-    await waitFor(() => expect(bodyText()).toMatch(/Maximum is 104 weeks\./i));
+  it('reads every range from the server, not from a copy of its own', async () => {
+    // The ranges are fetched once and shared; forget them so this mount asks.
+    resetLimitsCacheForTests();
+    httpRec.get.mockClear();
+    await mountPanel();
+    expect(
+      httpRec.get.mock.calls.some((c) => /\/rooms\/limits$/.test(String(c[0]))),
+      'the form must ask the server for its ranges',
+    ).toBe(true);
+    expect(field('duration_weeks').getAttribute('max')).toBe('104');
+    expect(field('demand.step_week').getAttribute('min')).toBe('2');
   });
 
   it('emits config_update over the socket when connected [AC 14]', async () => {
@@ -868,18 +907,18 @@ describe('save path (§3.1)', () => {
     expect((calls[0][1] as Json).config).toMatchObject({ duration_weeks: 24 });
   });
 
-  it('renders the clamped value the REST response carries [AC 12, AC 14]', async () => {
+  it('renders the value the REST response carries [AC 12, AC 14]', async () => {
     rest.configResponse = {
       room_code: ROOM,
       state: 'CONFIGURING',
-      config: baseConfig({ duration_weeks: 104 }),
+      config: baseConfig({ duration_weeks: 24 }),
     };
     const user = await mountPanel({ connected: false });
 
-    await setNumber(user, field('duration_weeks'), '500');
+    await setNumber(user, field('duration_weeks'), '24');
     await waitForSave();
 
-    await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('104'), { timeout: 2000 });
+    await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('24'), { timeout: 2000 });
   });
 
   it('debounces typing into a numeric field [AC 15, FM 7]', async () => {
@@ -935,8 +974,10 @@ describe('server rejection (§3.2)', () => {
       },
     };
 
+    // A value the form's own range check accepts, so it is sent; the mocked
+    // server refuses it anyway. (A value outside the range is never sent.)
     const user = await mountPanel({ connected: false });
-    await setNumber(user, field('duration_weeks'), '2');
+    await setNumber(user, field('duration_weeks'), '24');
     await waitForSave();
 
     await waitFor(() => {
@@ -1024,22 +1065,70 @@ describe('visibility levers (§2)', () => {
   });
 });
 
+describe('labels that say what the engine does (2026-11-02)', () => {
+  it('has no negative-orders switch: the option was removed', async () => {
+    await mountPanel();
+    expect(findField('visibility.allow_negative_orders')).toBeNull();
+    expect(bodyText()).not.toMatch(/negative order/i);
+  });
+
+  it('says beside both caps that 0 means unlimited', async () => {
+    await mountPanel();
+    const text = bodyText();
+    expect(text).toMatch(/0 or blank = unlimited/i);
+    expect(text).toMatch(/0 or blank = no limit/i);
+  });
+
+  it('describes the order delay as orders arriving AT the role', async () => {
+    // A role's information delay is how long its customer's orders take to
+    // reach it (`config_models.order_delay_weeks`): the Wholesaler's sets the
+    // Retailer's lead time. The label said the opposite.
+    await mountPanel();
+    const text = bodyText();
+    expect(text).toMatch(/order delay to this role/i);
+    expect(text).toMatch(/takes to reach this role/i);
+    expect(text).not.toMatch(/the supplier seeing it/i);
+  });
+
+  it('says what the Retailer’s "orders already placed" really does', async () => {
+    await mountPanel();
+    const text = bodyText();
+    expect(text).toMatch(/incoming orders already on the way/i);
+    expect(text).toMatch(/Wholesaler.s value is what the Retailer sees/i);
+    expect(text).toMatch(/Retailer bot.s first guess at demand/i);
+  });
+});
+
 describe('bot difficulty (§2)', () => {
   it('renders bot.beta as a labelled slider from 0 to 1 [AC 18]', async () => {
     await mountPanel({ config: baseConfig({ bot_fill_empty_roles: true }) });
 
     const slider = screen.getByRole('slider', {
-      name: /How much do bots account for what they.?ve already ordered\?/i,
+      name: /How much do bots count the beer already shipped to them\?/i,
     });
     expect(slider.getAttribute('min') ?? slider.getAttribute('aria-valuemin')).toBe('0');
     expect(slider.getAttribute('max') ?? slider.getAttribute('aria-valuemax')).toBe('1');
+  });
+
+  it('describes what beta changes and never promises a steady bot (08 §3.1, 2026-11-03)', async () => {
+    // At beta 1 the bot still orders 9 to 14 on flat demand of 4: it aims for
+    // 3x its starting stock and cannot see orders its supplier has not
+    // shipped. The copy says so instead of calling it "steady".
+    await mountPanel({ config: baseConfig({ bot_fill_empty_roles: true }) });
+
+    const section = document.getElementById('config-bots-panel') ?? document.body;
+    const text = (section.textContent ?? '').replace(/\s+/g, ' ');
+    expect(text).not.toMatch(/steady|stabl/i);
+    expect(text).toMatch(/counts all of it/i);
+    expect(text).toMatch(/still over-orders at first/i);
+    expect(text).toMatch(/orders its supplier has not shipped yet are invisible to it/i);
   });
 
   it('hides the bot section when bot fill is off and no bot is seated [§2]', async () => {
     await mountPanel({ config: baseConfig({ bot_fill_empty_roles: false }) });
 
     expect(
-      screen.queryByRole('slider', { name: /How much do bots account for/i }),
+      screen.queryByRole('slider', { name: /How much do bots count/i }),
       'the bot section is conditional on bot_fill_empty_roles (§2)',
     ).toBeNull();
   });
@@ -1059,7 +1148,7 @@ describe('keyboard operation (§3.4)', () => {
       ['a visibility switch', field('visibility.show_all_inventories')],
       [
         'the bot slider',
-        screen.getByRole('slider', { name: /How much do bots account for what they.?ve already ordered\?/i }),
+        screen.getByRole('slider', { name: /How much do bots count the beer already shipped to them\?/i }),
       ],
     ]);
 
@@ -1112,6 +1201,52 @@ describe('mouse wheel over a focused number field', () => {
       expect(document.activeElement).toBe(input);
       fireEvent.wheel(input, { deltaY: 100 });
       expect(document.activeElement, `the wheel left ${input.id} focused`).not.toBe(input);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2026-11-03 — the lead times are the server's (`POST /rooms/preview`)
+// ---------------------------------------------------------------------------
+
+describe('lead times (10 §3.5b, 18 §2.6)', () => {
+  function leadCell(role: Role): HTMLElement {
+    const row = screen.getByTestId('lead-time-row');
+    const cell = row.querySelector<HTMLElement>(`[data-role="${role}"]`);
+    if (!cell) throw new Error(`No lead-time cell for ${role}.`);
+    return cell;
+  }
+
+  it('shows each role’s lead time exactly as the server sent it, never a sum of the delays', async () => {
+    await mountPanel();
+
+    await waitFor(() => expect(textOf(leadCell('RETAILER'))).toMatch(/9 weeks/));
+    expect(textOf(leadCell('WHOLESALER'))).toMatch(/11 weeks/);
+    expect(textOf(leadCell('DISTRIBUTOR'))).toMatch(/13 weeks/);
+    expect(textOf(leadCell('FACTORY'))).toMatch(/7 weeks/);
+    // 2 + 2 is what a grid adding its own columns would print.
+    expect(textOf(screen.getByTestId('lead-time-row'))).not.toMatch(/\b4 weeks/);
+  });
+
+  it('asks the server with the stored config as the draft, once for the row and the chart', async () => {
+    const config = baseConfig({ duration_weeks: 30 });
+    await mountPanel({ config });
+
+    await waitFor(() => expect(textOf(leadCell('FACTORY'))).toMatch(/7 weeks/));
+    const calls = httpRec.post.mock.calls.filter((call) => /\/rooms\/preview$/.test(String(call[0])));
+    expect(calls).toHaveLength(1);
+    const body = calls[0][1] as { config: GameConfig };
+    expect(body.config.duration_weeks).toBe(30);
+    expect(body.config.roles.WHOLESALER).toEqual(config.roles.WHOLESALER);
+  });
+
+  it('shows a placeholder, not a number, until the server answers', async () => {
+    rest.preview = new Promise(() => {});
+    await mountPanel();
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    for (const role of ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as Role[]) {
+      expect(textOf(leadCell(role))).not.toMatch(/\d/);
     }
   });
 });

@@ -2,7 +2,9 @@ import type { ReactElement } from 'react'
 import { ROLE_ORDER, type GameConfig, type Role } from '../../types/game'
 import { BOT_BETA_LABEL, DEMAND_KIND_LABEL, LOCKED_BANNER, ROLE_COLUMN_LABEL, VISIBILITY_COPY } from './copy'
 import DemandPreview from './DemandPreview'
+import LeadTimeRow from './LeadTimeRow'
 import { ROLE_ROW_GROUPS } from './roleRows'
+import { useConfigPreview } from './useConfigPreview'
 
 function Row({ label, value }: { label: string; value: string }): ReactElement {
   return (
@@ -13,10 +15,10 @@ function Row({ label, value }: { label: string; value: string }): ReactElement {
   )
 }
 
-function readRole(config: GameConfig, role: Role, key: string): string {
+function readRole(config: GameConfig, role: Role, key: string, unset = '—'): string {
   const source = config.roles[role] as unknown as Record<string, unknown>
   const value = source[key]
-  if (value === null || value === undefined) return '—'
+  if (value === null || value === undefined) return unset
   return String(value)
 }
 
@@ -54,6 +56,8 @@ export interface ConfigSummaryProps {
  * sections render as prose and figures, with the banner saying why.
  */
 export function ConfigSummary({ config }: ConfigSummaryProps): ReactElement {
+  // The server's preview of the frozen config; the lead-time row shares it.
+  const preview = useConfigPreview(config)
   return (
     <div className="flex flex-col gap-5">
       <p role="status" className="rounded-lg border border-warning bg-warning-soft px-4 py-3 text-base text-ink">
@@ -108,11 +112,14 @@ export function ConfigSummary({ config }: ConfigSummaryProps): ReactElement {
                     </th>
                     {ROLE_ORDER.map((role) => (
                       <td key={role} className="numeric py-1.5 text-ink">
-                        {readRole(config, role, row.key)}
+                        {/* A cap that is not set is "Unlimited", not a dash:
+                            the dash belongs to a row the role does not have. */}
+                        {readRole(config, role, row.key, row.nullable ? (row.placeholder ?? '—') : '—')}
                       </td>
                     ))}
                   </tr>
                 ))}
+                {group === 'starting' ? <LeadTimeRow config={config} /> : null}
               </tbody>
             </table>
           </div>
@@ -124,7 +131,7 @@ export function ConfigSummary({ config }: ConfigSummaryProps): ReactElement {
         <p className="text-base text-ink">
           {DEMAND_KIND_LABEL[config.demand.kind]} — {demandSummary(config)}
         </p>
-        <DemandPreview demand={config.demand} durationWeeks={config.duration_weeks} />
+        <DemandPreview state={preview} />
       </section>
 
       <section className="flex flex-col gap-2">
@@ -144,10 +151,6 @@ export function ConfigSummary({ config }: ConfigSummaryProps): ReactElement {
                 ? 'No limit'
                 : String(config.visibility.max_order_quantity)
             }
-          />
-          <Row
-            label="Allow negative orders"
-            value={config.visibility.allow_negative_orders ? 'On' : 'Off'}
           />
         </dl>
       </section>

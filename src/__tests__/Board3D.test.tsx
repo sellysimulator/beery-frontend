@@ -113,6 +113,7 @@ function settlementFor(role: Role, over: Partial<WeekSettlement> = {}): WeekSett
     opening_inventory: 12,
     opening_backlog: 0,
     arrived: 14,
+    inventory_after_arrival: 26,
     incoming_order: 55,
     obligation: 55,
     shipped: 18,
@@ -148,7 +149,7 @@ function historyFor(role: Role): WeekRecord[] {
     backlog_cost: 0,
     fixed_order_cost: 0,
     purchase_cost: 0,
-    week_cost: 4,
+    total_week_cost: 4,
     cumulative_cost: 21.5,
     production_started: null,
     production_queued: null,
@@ -156,7 +157,7 @@ function historyFor(role: Role): WeekRecord[] {
 }
 
 /**
- * The gated keys — `accumulated_cost`, `week_cost`, `balance`, `neighbours`,
+ * The gated keys — `accumulated_cost`, `week_holding_backlog_cost`, `balance`, `neighbours`,
  * `chain`, `leaderboard`, `customer_demand_series` — are all absent by
  * default, because their absence is exactly what AC 6, AC 11 and AC 23 turn
  * on. `production_queue` follows `07 §3.8`: the Factory's unstarted
@@ -173,19 +174,22 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     backlog: 39,
     supply_line: 103,
     supply_line_slots: [41, 62],
+    supply_line_slot_weeks: [1, 2],
     orders_in_flight: role === 'FACTORY' ? 0 : 40,
     orders_in_flight_slots: role === 'FACTORY' ? [] : [17, 23],
+    orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2],
     incoming_order: 55,
     last_order: 31,
     settlement: settlementFor(role),
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: historyFor(role),
-    max_order_quantity: null,
-    allow_negative_orders: false,
+    min_order_quantity: 0,
+    max_order_quantity: 9999,
     show_supply_line_prominently: true,
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
+    order_arrival_week: 6 + 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     ...over,
@@ -508,7 +512,11 @@ describe('the production queue: one role, and only when there is one', () => {
 
 describe('the supply line: four lanes, front lane first', () => {
   it('a four-slot view builds four lanes, nearest first and largest', () => {
-    const model = modelFor('WHOLESALER', { supply_line_slots: [9, 13, 21, 33], supply_line: 76 })
+    const model = modelFor('WHOLESALER', {
+      supply_line_slots: [9, 13, 21, 33],
+      supply_line_slot_weeks: [1, 2, 3, 4],
+      supply_line: 76,
+    })
     const ids = fixtureIds(model)
 
     expect(ids).toContain('supply-lane-0')
@@ -533,7 +541,10 @@ describe('the supply line: four lanes, front lane first', () => {
   })
 
   it('a fifth slot folds into one placard rather than a fifth lane', () => {
-    const model = modelFor('WHOLESALER', { supply_line_slots: [9, 13, 21, 33, 5, 5] })
+    const model = modelFor('WHOLESALER', {
+      supply_line_slots: [9, 13, 21, 33, 5, 5],
+      supply_line_slot_weeks: [1, 2, 3, 4, 5, 6],
+    })
 
     expect(fixtureIds(model)).toContain('supply-lane-overflow')
     expect(signText(model, 'supply-lane-overflow-placard')).toBe('+2 MORE LANES')
@@ -544,6 +555,7 @@ describe('the supply line: four lanes, front lane first', () => {
     const model = modelFor('WHOLESALER', {
       show_supply_line_prominently: false,
       supply_line_slots: [9, 13, 21, 33],
+      supply_line_slot_weeks: [1, 2, 3, 4],
       supply_line: 76,
     })
     const ids = fixtureIds(model)
@@ -568,6 +580,21 @@ describe('the supply line: four lanes, front lane first', () => {
     const model = modelFor('RETAILER', { supply_line: 999, supply_line_slots: [41, 62] })
     expect(signText(model, 'gantry-total')).toBe('TOTAL ON THE WAY TO YOU: 999 UNITS')
   })
+
+  it('a lane and an order marker say when from the server s weeks to go, never their position', () => {
+    // 2026-11-03: `supply_line_slot_weeks` / `orders_in_flight_slot_weeks`.
+    // Deliberately not 1, 2: a scene counting positions would say NEXT WEEK.
+    const model = modelFor('WHOLESALER', {
+      supply_line_slots: [41, 62],
+      supply_line_slot_weeks: [2, 7],
+      orders_in_flight_slots: [17, 23],
+      orders_in_flight_slot_weeks: [5, 9],
+    })
+    expect(signText(model, 'supply-lane-0-placard')).toBe('41 UNITS ARRIVING THE WEEK AFTER')
+    expect(signText(model, 'supply-lane-1-placard')).toBe('62 UNITS ARRIVING IN 7 WEEKS')
+    expect(allSignText(model)).toMatch(/17 REACHING YOUR SUPPLIER IN 5 WEEKS/)
+    expect(allSignText(model)).toMatch(/23 REACHING YOUR SUPPLIER IN 9 WEEKS/)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -579,7 +606,9 @@ describe('FM 2: the order road is the SUPPLIER s pipeline, and the Factory has n
     const model = modelFor('RETAILER', {
       orders_in_flight: 40,
       orders_in_flight_slots: [17, 23],
+      orders_in_flight_slot_weeks: [1, 2],
       supply_line_slots: [41, 62],
+      supply_line_slot_weeks: [1, 2],
     })
     const ids = fixtureIds(model)
 
@@ -652,10 +681,12 @@ describe('cost visibility: absent means absent, not hidden', () => {
     expect(signText(model, 'ledger-row-0')).toBe('Nothing has settled yet')
   })
 
-  it('week_cost alone builds the corner; balance outranks accumulated_cost', () => {
-    const weekOnly = modelFor('DISTRIBUTOR', { week_cost: 7.5 })
+  it('the holding & backlog figure alone builds the corner; balance outranks accumulated_cost', () => {
+    // Never "this week": the order cost is a figure of its own, not yet
+    // charged while the week is open (2026-11-02).
+    const weekOnly = modelFor('DISTRIBUTOR', { week_holding_backlog_cost: 7.5, week_order_cost: null })
     expect(fixtureIds(weekOnly)).toContain('cost-corner')
-    expect(signText(weekOnly, 'cost-week')).toBe('THIS WEEK $7.50')
+    expect(signText(weekOnly, 'cost-week')).toBe('HOLDING & BACKLOG $7.50')
 
     const both = modelFor('DISTRIBUTOR', { balance: 81.25, accumulated_cost: 44 })
     expect(signText(both, 'cost-balance')).toBe('BALANCE $81.25')
@@ -758,7 +789,7 @@ describe('empty states: an empty floor is not nothing', () => {
   })
 
   it('supply_line_slots [] leaves painted lanes and the 2D empty copy', () => {
-    const model = modelFor('RETAILER', { supply_line_slots: [], supply_line: 0 })
+    const model = modelFor('RETAILER', { supply_line_slots: [], supply_line_slot_weeks: [], supply_line: 0 })
 
     expect(fixtureIds(model)).toContain('receiving-bay')
     expect(fixtureIds(model)).not.toContain('supply-lane-0')
@@ -884,10 +915,13 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
       inventory: 500,
       backlog: 500,
       supply_line_slots: [40, 40, 40, 40, 40, 40],
+      supply_line_slot_weeks: [1, 2, 3, 4, 5, 6],
       orders_in_flight_slots: role === 'FACTORY' ? [] : [40, 40, 40, 40],
+      orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2, 3, 4],
       production_queue: role === 'FACTORY' ? 90 : null,
       accumulated_cost: 61.25,
-      week_cost: 7.5,
+      week_holding_backlog_cost: 7.5,
+      week_order_cost: null,
       balance: 81.25,
       customer_demand_series: [3, 4, 9],
       neighbours: { RETAILER: { inventory: 71, backlog: 72 } },
@@ -1017,7 +1051,9 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
 
     expect(ledger).toHaveLength(2)
     expect(ledger[1].text.split('\n').length).toBeGreaterThan(1)
-    expect(ledger[1].text).toContain('Week cost')
+    expect(ledger[1].text).toContain('Holding & backlog')
+    expect(ledger[1].text).toContain('Order cost not yet charged')
+    expect(ledger[1].text).not.toContain('Week cost')
     expect(ledger[1].text).toContain('Holding cost')
 
     // The team board's four plaques are one mesh while they agree, and break
@@ -1032,6 +1068,19 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
     expect(plaques.map((item) => item.text).join('\n').split('\n')).toHaveLength(
       ROLE_ORDER.length,
     )
+  })
+
+  it('the ledger prints the server s stock after arrival, never opening + arrived', () => {
+    // 2026-11-03: 12 opening + 14 arrived would be 26; the server says 31.
+    const model = modelFor('RETAILER', {
+      settlement: settlementFor('RETAILER', { inventory_after_arrival: 31 }),
+    })
+    const ledger = model.signs.filter((item) => item.id.startsWith('ledger-row'))
+    const text = ledger.map((item) => item.text).join('\n')
+
+    expect(text).toMatch(/inventory 12 → 31/)
+    expect(text).toMatch(/inventory 31 → 8/)
+    expect(text).not.toMatch(/→ 26\b/)
   })
 
   it('every pool gathered on the model belongs to a fixture that is still in the scene', () => {

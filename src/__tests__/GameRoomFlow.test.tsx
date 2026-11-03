@@ -194,7 +194,6 @@ function gameConfig(): GameConfig {
       show_running_cost_to_players: true,
       show_leaderboard_during_game: false,
       max_order_quantity: null,
-      allow_negative_orders: false,
     },
     bot: { theta: 0.36, alpha: 0.26, beta: 0.34, target_stock_multiplier: 1 },
   };
@@ -207,6 +206,7 @@ function settlementFor(role: Role, week: number): WeekSettlement {
     opening_inventory: 12,
     opening_backlog: 0,
     arrived: 4,
+    inventory_after_arrival: 16,
     incoming_order: 8,
     obligation: 8,
     shipped: 8,
@@ -246,7 +246,7 @@ function ownHistory(role: Role): WeekRecord[] {
     backlog_cost: 0,
     fixed_order_cost: 0,
     purchase_cost: 0,
-    week_cost: 4,
+    total_week_cost: 4,
     cumulative_cost: 21.5,
     production_started: null,
     production_queued: null,
@@ -265,24 +265,28 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     backlog: 0,
     supply_line: 103,
     supply_line_slots: [41, 62],
+    supply_line_slot_weeks: [1, 2],
     orders_in_flight: role === 'FACTORY' ? 0 : 40,
     orders_in_flight_slots: role === 'FACTORY' ? [] : [17, 23],
+    orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2],
     incoming_order: 55,
     last_order: 31,
     settlement: settlementFor(role, week),
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: ownHistory(role),
+    min_order_quantity: 0,
     max_order_quantity: 500,
-    allow_negative_orders: false,
     show_supply_line_prominently: true,
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
+    order_arrival_week: week + 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     accumulated_cost: 21.5,
-    week_cost: 4,
+    week_holding_backlog_cost: 4,
+    week_order_cost: null,
     ...over,
   };
 }
@@ -420,25 +424,27 @@ function isNumericText(text: string): boolean {
 }
 
 /**
- * `§2.6a`: the chart "also renders the same three series as a visually hidden
- * table — one row per week". That table, not the canvas, is this section's
- * surface for the chart. It is the table that is not the settlement recap.
+ * `§2.6a` and criterion 21: the history renders its series as tables, and
+ * those tables, not the canvases, are this section's surface for the charts.
+ * They are the tables that are not the settlement recap. There are two (the
+ * stock panel's and the orders panel's), so a "week" row is read across both.
  */
-function historyTable(): HTMLElement {
-  const tables = Array.from(document.querySelectorAll<HTMLElement>('table, [role="table"]'));
-  const found = tables.find((t) => !/holding cost/i.test(textOf(t)));
-  if (!found) {
+function historyTables(): HTMLElement[] {
+  const tables = Array.from(document.querySelectorAll<HTMLElement>('table, [role="table"]')).filter(
+    (t) => !/holding cost/i.test(textOf(t)),
+  );
+  if (tables.length === 0) {
     throw new Error(
-      '\u00a72.6a requires the chart to render its three series as a table as well as a canvas; ' +
+      '\u00a72.6a requires the history to render its series as tables as well as canvases; ' +
         `no such table was rendered. The screen rendered: ${bodyText()}`,
     );
   }
-  return found;
+  return tables;
 }
 
-/** The table's data rows: the ones whose every cell is a number. */
-function historyRows(): number[][] {
-  const rows = Array.from(historyTable().querySelectorAll<HTMLElement>('tr, [role="row"]'));
+/** One table's data rows: the ones whose every cell is a number. */
+function tableRows(table: HTMLElement): number[][] {
+  const rows = Array.from(table.querySelectorAll<HTMLElement>('tr, [role="row"]'));
   const data: number[][] = [];
   for (const row of rows) {
     const cells = Array.from(
@@ -449,13 +455,28 @@ function historyRows(): number[][] {
   return data;
 }
 
-/** The three series columns, with the week column dropped. */
+/**
+ * One row per closed week: the week, then every table's figures for it, in
+ * the order the tables appear. Each table carries its own week column, which
+ * is dropped after the first.
+ */
+function historyRows(): number[][] {
+  const perTable = historyTables().map(tableRows);
+  const weeks = perTable[0].length;
+  const merged: number[][] = [];
+  for (let index = 0; index < weeks; index += 1) {
+    const row = [...perTable[0][index]];
+    for (const rows of perTable.slice(1)) row.push(...rows[index].slice(1));
+    merged.push(row);
+  }
+  return merged;
+}
+
+/** The series columns, with the week column dropped. */
 function historySeries(): number[][] {
   const rows = historyRows();
   if (rows.length === 0) throw new Error('\u00a72.6a requires one table row per week played.');
-  const weeks = rows.map((_, index) => index + 1).join(',');
-  const columns = rows[0].map((_, index) => rows.map((row) => row[index]));
-  return columns.filter((column) => column.join(',') !== weeks);
+  return rows[0].slice(1).map((_, index) => rows.map((row) => row[index + 1]));
 }
 
 /** The waiting tick-list: the tightest block that is about waiting and names every role. */
@@ -824,55 +845,72 @@ describe('FAILURE MODE 1: no other player’s order is ever visible', () => {
 // Criterion 21 — the player's own history, and nobody else's
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 21: the history chart exposes the player’s own three series', () => {
-  it('renders one row per week of own_history', () => {
+describe('CRITERION 21: the history exposes the player’s own figures, as tables', () => {
+  // The fixture holds these two constant: `incoming_order` 8, `supply_line_after` 10.
+  const OWN_INCOMING = OWN_INVENTORY.map(() => 8);
+  const OWN_SUPPLY_LINE = OWN_INVENTORY.map(() => 10);
+
+  it('renders one row per closed week of own_history in every table', () => {
     renderPlaying('RETAILER');
 
     expect(historyRows()).toHaveLength(OWN_INVENTORY.length);
+    for (const table of historyTables()) {
+      expect(tableRows(table)).toHaveLength(OWN_INVENTORY.length);
+    }
   });
 
-  it('exposes exactly three series beside the week column', () => {
+  it('exposes closing_inventory, closing_backlog, supply_line_after, incoming_order and order', () => {
     renderPlaying('RETAILER');
 
-    expect(historySeries()).toHaveLength(3);
-  });
-
-  it('exposes closing_inventory, closing_backlog and order, and nothing else', () => {
-    renderPlaying('RETAILER');
-
-    const series = historySeries().map((column) => column.join(','));
-    expect(series.sort()).toEqual(
-      [OWN_INVENTORY.join(','), OWN_BACKLOG.join(','), OWN_ORDERS.join(',')].sort(),
+    const series = historySeries();
+    expect(series).toHaveLength(5);
+    expect(series.map((column) => column.join(',')).sort()).toEqual(
+      [
+        OWN_INVENTORY.join(','),
+        OWN_BACKLOG.join(','),
+        OWN_SUPPLY_LINE.join(','),
+        OWN_INCOMING.join(','),
+        OWN_ORDERS.join(','),
+      ].sort(),
     );
   });
 
-  it('carries nobody else’s figures — every number traces to own_history', () => {
+  it('carries nobody else’s figures — every number is one of the five own_history fields', () => {
     renderPlaying('RETAILER');
 
     const all = historySeries()
       .flat()
       .sort((a, b) => a - b);
-    const own = [...OWN_INVENTORY, ...OWN_BACKLOG, ...OWN_ORDERS].sort((a, b) => a - b);
+    const own = [
+      ...OWN_INVENTORY,
+      ...OWN_BACKLOG,
+      ...OWN_SUPPLY_LINE,
+      ...OWN_INCOMING,
+      ...OWN_ORDERS,
+    ].sort((a, b) => a - b);
     expect(all).toEqual(own);
   });
 
-  it('names no other role in the table', () => {
+  it('names no other role in the tables', () => {
     renderPlaying('RETAILER');
 
-    const text = textOf(historyTable());
-    for (const role of ['WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as Role[]) {
-      expect(text).not.toMatch(new RegExp(role, 'i'));
+    for (const table of historyTables()) {
+      const text = textOf(table);
+      for (const role of ['WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as Role[]) {
+        expect(text).not.toMatch(new RegExp(role, 'i'));
+      }
     }
   });
 
-  it('leaves the table in the accessibility tree, which is what §2.6a is for', () => {
-    // Visually hidden, not hidden: §3.4 needs a screen reader to read it.
+  it('leaves the tables in the accessibility tree, which is what §2.6a is for', () => {
+    // Visually hidden, not hidden: §3.4 needs a screen reader to read them.
     renderPlaying('RETAILER');
 
-    const table = historyTable();
-    expect(table.getAttribute('aria-hidden')).not.toBe('true');
-    expect(table.hasAttribute('hidden')).toBe(false);
-    expect(table.closest('[aria-hidden="true"]')).toBeNull();
+    for (const table of historyTables()) {
+      expect(table.getAttribute('aria-hidden')).not.toBe('true');
+      expect(table.hasAttribute('hidden')).toBe(false);
+      expect(table.closest('[aria-hidden="true"]')).toBeNull();
+    }
   });
 });
 
@@ -1196,5 +1234,62 @@ describe('game over: the player can open the results', () => {
     });
 
     expect(resultsLink()?.getAttribute('href')).toBe(`/results/g/${'a'.repeat(32)}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A seat the host swapped to a bot can be taken back (2026-11-03)
+// ---------------------------------------------------------------------------
+
+describe('A player the host swapped for a bot can take the role back', () => {
+  function seatAsRetailer(): void {
+    act(() => {
+      useGameStore.setState({
+        myAlias: 'P1',
+        participants: ROLE_ORDER.map((role, index) => ({
+          alias: `P${index + 1}`,
+          display_name: role,
+          role,
+          is_bot: false,
+          connected: true,
+          is_host: false,
+        })),
+      });
+    });
+  }
+
+  it('replaces the order form with a notice and a "Take back my role" button', async () => {
+    renderPlaying('RETAILER');
+    seatAsRetailer();
+    expect(orderInput()).not.toBeNull();
+
+    dispatch('bot_substituted', { seq: nextSeq(), role: 'RETAILER', display_name: 'RETAILER' });
+
+    expect(bodyText()).toMatch(/handed your role to a bot/i);
+    expect(orderInput()).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(controlMatching(/take back my role/i, 'Take back my role'));
+    expect(emitsOf('reclaim_seat')).toEqual([{ room_id: ROOM }]);
+
+    dispatch('seat_reclaimed', {
+      seq: nextSeq(),
+      role: 'RETAILER',
+      alias: 'P1',
+      display_name: 'RETAILER',
+    });
+
+    expect(bodyText()).not.toMatch(/handed your role to a bot/i);
+    expect(orderInput()).not.toBeNull();
+  });
+
+  it('shows nothing when somebody else is swapped', () => {
+    renderPlaying('RETAILER');
+    seatAsRetailer();
+
+    dispatch('bot_substituted', { seq: nextSeq(), role: 'FACTORY', display_name: 'FACTORY' });
+
+    expect(bodyText()).not.toMatch(/handed your role to a bot/i);
+    expect(orderInput()).not.toBeNull();
   });
 });

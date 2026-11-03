@@ -7,9 +7,10 @@ import {
   type ComponentType,
   type ReactElement,
 } from 'react'
-import { submitOrder } from '../api/games'
+import { reclaimSeat, submitOrder } from '../api/games'
 import { useGameStore } from '../store/gameStore'
 import WaitingNotice from '../components/lobby/WaitingNotice'
+import BotSeatNotice from '../components/game/BotSeatNotice'
 import Board2D, { type BoardViewProps } from '../components/game/views/Board2D'
 import BoardViewToggle from '../components/game/views/BoardViewToggle'
 import { useBoardViewChoice } from '../components/game/views/boardViewChoice'
@@ -25,6 +26,9 @@ const TOO_MANY_SUBMISSIONS_MESSAGE =
 
 /** The one `error` code this screen maps to copy of its own. */
 const TOO_MANY_SUBMISSIONS_CODE = 'TOO_MANY_SUBMISSIONS'
+
+/** Shown where the order form would be while a bot holds the seat. */
+const BOT_SEAT_MESSAGE = 'A bot is playing your role. Take it back to order again.'
 
 /** How long the post-transition highlight lasts. A class of four is waiting. */
 const WEEK_HIGHLIGHT_MS = 400
@@ -93,6 +97,8 @@ export function GameRoomPlaying(): ReactElement {
   const roomState = useGameStore((state) => state.roomState)
   const lastError = useGameStore((state) => state.lastError)
   const clearLastError = useGameStore((state) => state.clearLastError)
+  const myAlias = useGameStore((state) => state.myAlias)
+  const participants = useGameStore((state) => state.participants)
 
   /** The week whose submitted order the player has reopened for editing. */
   const [reopenedWeek, setReopenedWeek] = useState<number | null>(null)
@@ -138,9 +144,19 @@ export function GameRoomPlaying(): ReactElement {
   // (§2.4, AC 17). Derived, not copied into component state, so it survives a
   // remount exactly as the store does.
   const refusedResubmission = lastError?.code === TOO_MANY_SUBMISSIONS_CODE
-  const isChangingOrder = reopenedWeek === week && !refusedResubmission
-  const locked = hasSubmitted && !isChangingOrder
-  const notice = refusedResubmission ? TOO_MANY_SUBMISSIONS_MESSAGE : null
+  // The host swapped a bot into this player's seat (`bot_substituted`). The
+  // server refuses this seat's orders until the player takes it back, so the
+  // form is replaced by the waiting panel and the notice above it.
+  const replacedByBot =
+    !gameOver &&
+    participants.some((participant) => participant.alias === myAlias && participant.is_bot)
+  const isChangingOrder = reopenedWeek === week && !refusedResubmission && !replacedByBot
+  const locked = (hasSubmitted && !isChangingOrder) || replacedByBot
+  const notice = replacedByBot
+    ? BOT_SEAT_MESSAGE
+    : refusedResubmission
+      ? TOO_MANY_SUBMISSIONS_MESSAGE
+      : null
 
   function handleSubmitOrder(order: number): void {
     // Paused or finished, the server refuses the order anyway; not emitting
@@ -184,15 +200,21 @@ export function GameRoomPlaying(): ReactElement {
     notice,
     // "Your last order stands": once the server has capped the
     // resubmissions, there is nothing left to change this week (§2.4).
-    canChangeOrder: !paused && !gameOver && !refusedResubmission,
+    canChangeOrder: !paused && !gameOver && !refusedResubmission && !replacedByBot,
     weekChanged,
     onSubmitOrder: handleSubmitOrder,
     onChangeOrder: handleChangeOrder,
     onKeepOrder: handleKeepOrder,
   }
 
+  function handleReclaim(): void {
+    if (!roomCode) return
+    reclaimSeat({ room_id: roomCode })
+  }
+
   return (
     <>
+      {replacedByBot ? <BotSeatNotice onReclaim={handleReclaim} /> : null}
       {/*
         `<Suspense>` because `Board3D` is a lazy chunk: on the toggle it is
         fetched mid-game, on classroom wi-fi, with three people waiting

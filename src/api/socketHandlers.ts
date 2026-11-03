@@ -46,6 +46,7 @@ import type {
   OrderSubmittedPayload,
   ParticipantEventPayload,
   RolesAssignedPayload,
+  SeatReclaimedPayload,
   WeekClosedPayload,
   YourStatePayload,
   YourWeekClosedPayload,
@@ -292,6 +293,10 @@ socket.on('host_reconnected', (payload: HostEventPayload) => {
 
 socket.on('bot_substituted', (payload: BotSubstitutedPayload) => {
   store().applyBotSubstituted(payload)
+})
+
+socket.on('seat_reclaimed', (payload: SeatReclaimedPayload) => {
+  store().applySeatReclaimed(payload)
 })
 
 socket.on('game_finished', (payload: GameFinishedPayload) => {

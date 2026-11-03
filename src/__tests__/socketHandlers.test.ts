@@ -311,6 +311,7 @@ describe('socketHandlers registers the wire contract', () => {
       'host_disconnected',
       'host_reconnected',
       'bot_substituted',
+      'seat_reclaimed',
       'game_finished',
       'game_persisted',
       'error',
@@ -795,7 +796,7 @@ describe('per-week records arrive on your_week_closed (12 §2)', () => {
     dispatch('your_week_closed', {
       seq: 4,
       week: 1,
-      record: { week: 1, inventory: 12, backlog: 4, week_cost: 9.5 },
+      record: { week: 1, inventory: 12, backlog: 4, total_week_cost: 9.5 },
     });
 
     expect(useGameStore.getState().lastSeq).toBe(4);
@@ -817,10 +818,10 @@ describe('per-week records arrive on your_week_closed (12 §2)', () => {
       has_submitted: false,
       awaiting_roles: ['RETAILER'],
     });
-    dispatch('your_week_closed', { seq: 4, week: 1, record: { week: 1, week_cost: 9.5 } });
+    dispatch('your_week_closed', { seq: 4, week: 1, record: { week: 1, total_week_cost: 9.5 } });
     const afterFirst = snapshot();
 
-    dispatch('your_week_closed', { seq: 4, week: 1, record: { week: 1, week_cost: 9.5 } });
+    dispatch('your_week_closed', { seq: 4, week: 1, record: { week: 1, total_week_cost: 9.5 } });
 
     expect(snapshot()).toBe(afterFirst);
   });
@@ -902,6 +903,9 @@ describe('what the client sends back', () => {
       'backlog',
       'supply_line',
       'week_cost',
+      'total_week_cost',
+      'week_holding_backlog_cost',
+      'week_order_cost',
       'total',
       'balance',
       'cost',

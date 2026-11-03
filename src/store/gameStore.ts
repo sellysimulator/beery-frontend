@@ -23,6 +23,7 @@ import type {
   RoleToAlias,
   RolesAssignedPayload,
   RoomState,
+  SeatReclaimedPayload,
   WeekClosedPayload,
   YourStatePayload,
   YourWeekClosedPayload,
@@ -148,6 +149,7 @@ export interface GameActions {
   applyHostDisconnected(p: HostEventPayload): void
   applyHostReconnected(p: HostEventPayload): void
   applyBotSubstituted(p: BotSubstitutedPayload): void
+  applySeatReclaimed(p: SeatReclaimedPayload): void
   applyGameFinished(p: GameFinishedPayload): void
   applyGamePersisted(p: GamePersistedPayload): void
 
@@ -229,6 +231,27 @@ export const HOST_RECONNECTED_MESSAGE = 'The host is back.'
 function mintAlertId(): string {
   alertCounter += 1
   return `alert-${alertCounter}`
+}
+
+/**
+ * The host's view with `role` ticked as decided for `week`, or the same view
+ * when it is for another week or there is none.
+ *
+ * `host_state` is what the console reads every "decided" mark from, and the
+ * server sends one per submission. `order_submitted` is the same fact,
+ * broadcast to the room including the host, so applying it here too means a
+ * `host_state` that never arrives cannot leave a seat on "Still deciding" —
+ * which is exactly what happened on the final week, whose closing submission
+ * used to send the host no state at all. The tick and the awaiting list are
+ * server facts, not arithmetic; the next `host_state` replaces both wholesale.
+ */
+function markDecided(view: HostView | null, role: Role, week: number): HostView | null {
+  if (!view || view.week !== week || view.roles[role].has_submitted) return view
+  return {
+    ...view,
+    awaiting_roles: view.awaiting_roles.filter((awaiting) => awaiting !== role),
+    roles: { ...view.roles, [role]: { ...view.roles[role], has_submitted: true } },
+  }
 }
 
 /** The role held by `alias`, or null. */
@@ -386,6 +409,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
       applySequenced(p.seq, (state) => ({
         awaitingRoles: state.awaitingRoles.filter((role) => role !== p.role),
         hasSubmitted: state.myRole === p.role ? true : state.hasSubmitted,
+        hostState: markDecided(state.hostState, p.role, p.week),
       })),
 
     applyWeekClosed: (p) =>
@@ -441,6 +465,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         participants: state.participants.map((participant) =>
           participant.role === p.role
             ? { ...participant, is_bot: true, display_name: p.display_name }
+            : participant,
+        ),
+      })),
+
+    // The player swapped out for a bot is back in their seat. Matched by
+    // alias: the seat's person never changed, only who decides for it.
+    applySeatReclaimed: (p) =>
+      applySequenced(p.seq, (state) => ({
+        participants: state.participants.map((participant) =>
+          participant.alias === p.alias
+            ? { ...participant, is_bot: false, connected: true, display_name: p.display_name }
             : participant,
         ),
       })),

@@ -913,3 +913,41 @@ describe('a waiting player can leave the lobby', () => {
     await waitFor(() => expect(isDisabled(control(LEAVE))).toBe(false));
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11 §2.2: the game never starts with a person left out
+// ---------------------------------------------------------------------------
+
+describe('a player with no seat is told the game will not start without them', () => {
+  const NOT_LEFT_OUT = /cannot start while you have no seat/i;
+
+  function renderAsBea(update: Record<string, unknown>) {
+    renderPlayerRoom();
+    dispatch('joined', { alias: 'P1', session_token: 'tok-bea', role: null, is_host: false });
+    dispatch('lobby_update', lobbyUpdate(update));
+  }
+
+  it.each(['HOST_ASSIGNS', 'PLAYER_CHOOSES'])('%s: says so while they have no role', (mode) => {
+    renderAsBea({ role_assignment_mode: mode });
+
+    expect(bodyText()).toMatch(NOT_LEFT_OUT);
+  });
+
+  it('drops the line once they hold a role', () => {
+    renderAsBea({
+      role_assignment_mode: 'HOST_ASSIGNS',
+      role_to_alias: { ...EMPTY_ROLES, DISTRIBUTOR: 'P1' },
+      participants: [participant({ alias: 'P1', display_name: 'Bea', role: 'DISTRIBUTOR' })],
+    });
+
+    expect(bodyText()).toMatch(/you are the distributor/i);
+    expect(bodyText()).not.toMatch(NOT_LEFT_OUT);
+  });
+
+  it('says nothing of the kind under RANDOM, where every seat is dealt at start', () => {
+    renderAsBea({ role_assignment_mode: 'RANDOM' });
+
+    expect(bodyText()).toMatch(/dealt at random/i);
+    expect(bodyText()).not.toMatch(NOT_LEFT_OUT);
+  });
+});

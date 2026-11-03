@@ -256,6 +256,7 @@ function hostView(roleOver: Partial<Record<Role, Partial<HostRoleView>>> = {}): 
   return {
     week: WEEK,
     duration_weeks: DURATION,
+    weeks_played: WEEK - 1,
     phase: 'DECISION',
     currency_symbol: '$',
     demand_series: [...DEMAND_SERIES],
@@ -430,18 +431,25 @@ async function enterPresentation(user: ReturnType<typeof userEvent.setup>): Prom
   await user.click(control(/present/i, 'Present'));
 }
 
-/** The demand curve's visually hidden table, inside a given root (`§2.1a`). */
-function demandTable(root: ParentNode): HTMLElement {
+/** The weeks the room has already seen: 1 to the open week (`07 §3.8`). */
+const REVEALED_DEMAND = DEMAND_SERIES.slice(0, WEEK);
+/** The weeks still to come — the host's alone, never the projector's. */
+const FUTURE_DEMAND = DEMAND_SERIES.slice(WEEK);
+
+/**
+ * The demand curve's visually hidden table, inside a given root (`§2.1a`):
+ * the one holding every value of `expected`.
+ */
+function demandTable(root: ParentNode, expected: number[] = DEMAND_SERIES): HTMLElement {
   const tables = Array.from(root.querySelectorAll<HTMLElement>('table, [role="table"]'));
   const found = tables.find((t) => {
     const text = textOf(t);
-    return DEMAND_SERIES.every((value) => hasNumber(text, value));
+    return expected.every((value) => hasNumber(text, value));
   });
   if (!found) {
     throw new Error(
-      '20 §2.4 and criterion 15: presentation mode must show the demand curve, which renders a ' +
-        'visually hidden table of the full series (§2.1a). None was found inside the projector ' +
-        `view, which rendered: ${textOf(root as Node)}`,
+      '20 §2.4 and criterion 15: the demand curve renders a visually hidden table of what it ' +
+        `plots (§2.1a). None holding ${expected.length} weeks was found, in: ${textOf(root as Node)}`,
     );
   }
   return found;
@@ -596,8 +604,8 @@ describe('CRITERION 15: presentation mode enters full screen and renders the cha
     renderRunning();
     await enterPresentation(user);
 
-    const rows = dataRows(demandTable(presentingRoot()));
-    expect(rows).toHaveLength(DURATION);
+    const rows = dataRows(demandTable(presentingRoot(), REVEALED_DEMAND));
+    expect(rows).toHaveLength(WEEK);
     expect(hasNumber(textOf(rows[WEEK - 1]), DEMAND_SERIES[WEEK - 1])).toBe(true);
   });
 
@@ -701,6 +709,52 @@ describe('CRITERION 16 / FAILURE MODE 2: no cost reaches the projector', () => {
     const text = presentingText();
     const leaked = COSTS.filter((value) => hasNumber(text, value));
     expect(leaked).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4 (2026-11-02) — no future demand reaches the projector
+// ---------------------------------------------------------------------------
+
+describe('PRESENTATION MODE: demand stops at the current week', () => {
+  it('shows none of the weeks still to come, in text or in an attribute', async () => {
+    const user = userEvent.setup();
+    renderRunning();
+    await enterPresentation(user);
+
+    const text = presentingText();
+    expect(FUTURE_DEMAND.filter((value) => hasNumber(text, value))).toEqual([]);
+
+    const attributes = allElements(presentingRoot())
+      .flatMap((el) => Array.from(el.attributes))
+      .filter((a) => a.name !== 'class' && a.name !== 'style')
+      .map((a) => a.value)
+      .join(' ');
+    expect(FUTURE_DEMAND.filter((value) => hasNumber(attributes, value))).toEqual([]);
+  });
+
+  it('shows every week already revealed, the open one included', async () => {
+    const user = userEvent.setup();
+    renderRunning();
+    await enterPresentation(user);
+
+    const text = presentingText();
+    expect(REVEALED_DEMAND.filter((value) => !hasNumber(text, value))).toEqual([]);
+  });
+
+  it('leaves the host console underneath with the whole series, future included', async () => {
+    const user = userEvent.setup();
+    renderRunning();
+    await enterPresentation(user);
+
+    // The console is outside the projector root; its own curve is unchanged.
+    const consoleTables = Array.from(document.querySelectorAll<HTMLElement>('table')).filter(
+      (table) => !presentingRoot().contains(table),
+    );
+    const full = consoleTables.find((table) =>
+      DEMAND_SERIES.every((value) => hasNumber(textOf(table), value)),
+    );
+    expect(full).toBeDefined();
   });
 });
 
@@ -849,5 +903,148 @@ describe('FAILURE MODE 9: the chain diagram’s backlog indicator carries a non-
     }
 
     expect(links.some(nonColourSignal)).toBe(true);
+  });
+});
+
+// ===========================================================================
+// BE-5 (CHARTS-PLAN.md): no order stream and no lane chip under `presenting`
+// (20 §2.1b). Appended; nothing above this line is changed. The builder is
+// wrapped with the real implementation underneath so its options are visible.
+// ===========================================================================
+
+const be5Rec = vi.hoisted(() => ({
+  calls: [] as Array<{ series: number[]; week: number; options: unknown }>,
+}));
+
+vi.mock('../components/host/demandCurveConfig', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  const build = actual.buildDemandCurveConfig as (...args: unknown[]) => unknown;
+  return {
+    ...actual,
+    buildDemandCurveConfig: (series: number[], week: number, options?: unknown) => {
+      be5Rec.calls.push({ series, week, options });
+      return build(series, week, options);
+    },
+  };
+});
+
+function be5Orders(role: Role): number[] {
+  const base = 5000 + ROLE_ORDER.indexOf(role) * 100;
+  return Array.from({ length: WEEK - 1 }, (_, i) => base + i);
+}
+
+const BE5_HISTORY: Record<Role, number[]> = {
+  RETAILER: be5Orders('RETAILER'),
+  WHOLESALER: be5Orders('WHOLESALER'),
+  DISTRIBUTOR: be5Orders('DISTRIBUTOR'),
+  FACTORY: be5Orders('FACTORY'),
+};
+const BE5_ALL_ORDERS = ROLE_ORDER.flatMap((role) => BE5_HISTORY[role]);
+
+function be5HeaderLabels(table: HTMLElement): string[] {
+  const row = table.querySelector<HTMLElement>('tr, [role="row"]');
+  return Array.from(row?.children ?? []).map((cell) => textOf(cell));
+}
+
+async function be5Labels(): Promise<string[]> {
+  const { orderSeriesLabel } = await import('../components/charts/chartSetup');
+  return ROLE_ORDER.map((role) => orderSeriesLabel(role));
+}
+
+async function be5Curve() {
+  const mod = (await import('../components/host/DemandCurve')) as unknown as Record<string, unknown>;
+  const found = mod.DemandCurve ?? mod.default;
+  return found as ComponentType<{
+    demandSeries: number[];
+    currentWeek: number;
+    presenting?: boolean;
+    orderHistory?: Partial<Record<Role, number[]>> | null;
+  }>;
+}
+
+describe('BE-5 acceptance 1 / failure mode: DemandCurve never overlays orders when presenting', () => {
+  beforeEach(() => {
+    be5Rec.calls.length = 0;
+  });
+
+  it('presenting: the builder gets no orderHistory and the table has no order column, whatever it was given', async () => {
+    const DemandCurve = await be5Curve();
+    const { container } = render(
+      <DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting orderHistory={BE5_HISTORY} />,
+    );
+
+    expect(be5Rec.calls.length).toBeGreaterThan(0);
+    for (const call of be5Rec.calls) {
+      expect((call.options as { orderHistory?: unknown } | undefined)?.orderHistory ?? null).toBeNull();
+    }
+    const text = textOf(container);
+    for (const value of BE5_ALL_ORDERS) expect(hasNumber(text, value)).toBe(false);
+    const headers = be5HeaderLabels(demandTable(container, REVEALED_DEMAND));
+    for (const label of await be5Labels()) expect(headers).not.toContain(label);
+  });
+
+  it('not presenting: the builder gets the orderHistory and the table shows the orders', async () => {
+    const DemandCurve = await be5Curve();
+    const { container } = render(
+      <DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting={false} orderHistory={BE5_HISTORY} />,
+    );
+
+    const last = be5Rec.calls[be5Rec.calls.length - 1];
+    expect((last.options as { orderHistory?: unknown }).orderHistory).toEqual(BE5_HISTORY);
+    const headers = be5HeaderLabels(demandTable(container));
+    for (const label of await be5Labels()) expect(headers).toContain(label);
+    expect(hasNumber(textOf(container), BE5_HISTORY.RETAILER[0])).toBe(true);
+  });
+
+  it.each([['undefined', undefined], ['null', null]])(
+    'not presenting with orderHistory %s: no overlay, no new columns, no error',
+    async (_name, value) => {
+      const DemandCurve = await be5Curve();
+      const plain = render(<DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting />);
+      const base = be5HeaderLabels(demandTable(plain.container, REVEALED_DEMAND)).length;
+      plain.unmount();
+
+      const { container } = render(
+        <DemandCurve demandSeries={[...DEMAND_SERIES]} currentWeek={WEEK} presenting={false} orderHistory={value} />,
+      );
+
+      const last = be5Rec.calls[be5Rec.calls.length - 1];
+      expect((last.options as { orderHistory?: unknown } | undefined)?.orderHistory ?? null).toBeNull();
+      expect(be5HeaderLabels(demandTable(container)).length).toBe(base);
+    },
+  );
+});
+
+describe('BE-5 failure mode: order streams and chips do not leak into the projector view', () => {
+  it('the console shows them, the presenting root does not', async () => {
+    const user = userEvent.setup();
+    renderRunning({ ...hostView(), order_history: BE5_HISTORY });
+    const labels = await be5Labels();
+
+    // Not vacuous: the console beneath carries the streams and the chips.
+    const consoleHeaders = be5HeaderLabels(demandTable(document.body));
+    for (const label of labels) expect(consoleHeaders).toContain(label);
+    expect(document.querySelectorAll('[data-chip]').length).toBe(6);
+
+    await enterPresentation(user);
+    const root = presentingRoot();
+
+    const headers = be5HeaderLabels(demandTable(root, REVEALED_DEMAND));
+    for (const label of labels) expect(headers).not.toContain(label);
+    const text = textOf(root);
+    for (const value of BE5_ALL_ORDERS) expect(hasNumber(text, value)).toBe(false);
+    expect(root.querySelector('[data-chip]')).toBeNull();
+    expect(text).not.toMatch(/beer on the way|orders in flight/i);
+    expect(root.querySelector('[aria-label^="Beer on the way"], [aria-label^="Orders in flight"]')).toBeNull();
+  });
+
+  it('a host_state without order_history presents without error', async () => {
+    const user = userEvent.setup();
+    renderRunning();
+
+    await enterPresentation(user);
+
+    expect(presenting()).toBe(true);
+    expect(presentingRoot().querySelector('[data-chip]')).toBeNull();
   });
 });

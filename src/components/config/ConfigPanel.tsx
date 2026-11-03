@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { errorMessage } from '../../api/http'
 import { getRoomConfig } from '../../api/rooms'
-import { configFormSchema, type ConfigFormValues } from '../../schemas/configSchema'
+import { buildConfigFormSchema, type ConfigFormValues } from '../../schemas/configSchema'
 import { useGameStore } from '../../store/gameStore'
 import type { DemandKind } from '../../types/game'
 import { getHostSecret } from '../../utils/storage'
@@ -17,10 +17,11 @@ import RoleGrid from './RoleGrid'
 import VisibilitySection from './VisibilitySection'
 import { ConfigFormContext, type ConfigFormContextValue } from './configFormContext'
 import type { ConfigPatch } from './configPatch'
-import { defaultDemand } from './demandDefaults'
 import { TextField } from './fields'
-import { PLACEHOLDER_FORM_VALUES, toFormValues } from './formValues'
+import { toFormValues } from './formValues'
+import LeadTimeRow from './LeadTimeRow'
 import { useConfigSave } from './useConfigSave'
+import { useLimits } from './useLimits'
 
 /**
  * The host configuration panel: the form where a teaching intention becomes a
@@ -35,14 +36,18 @@ import { useConfigSave } from './useConfigSave'
  *
  * - **The store is the source of truth** (`18 section 3.0`). Every input renders
  *   from `useGameStore().config`; React Hook Form holds the keystrokes of the
- *   field being edited and nothing else. That is the only arrangement in which
- *   a server-side clamp is visible — type 500 weeks and the field becomes 104,
- *   because 104 is what the game will actually play.
- * - **The server owns the rules.** Zod mirrors the ranges for immediate
- *   feedback, but nothing here rejects a value the server would accept, and the
- *   one hard client-side block is a `CUSTOM` demand series shorter than
- *   `duration_weeks` — the single demand error the server rejects rather than
- *   clamps (`18 section 3.2`).
+ *   field being edited and nothing else. What the field shows once a save
+ *   lands is what the game will actually play.
+ * - **The server owns the rules and the numbers.** Every range the form checks
+ *   comes from `GET /rooms/limits` (`useLimits`), the same object the server
+ *   validates against, so the two cannot disagree. A value outside its range
+ *   is refused with a message beside the field and is not sent; the server
+ *   refuses one that arrives anyway. Nothing is clamped (2026-11-02). Until the
+ *   ranges have arrived the panel shows a loading line, never a guessed range.
+ *   The demand preview and the lead times are the server's too
+ *   (`POST /rooms/preview`, `useConfigPreview`), and so are a new generator's
+ *   defaults: the panel holds no generator, no delay arithmetic and no default
+ *   (2026-11-03).
  * - **Authority is `host_secret`.** Every save carries it, over the socket when
  *   connected and over `PUT /rooms/{code}/config` when not. A client-side "I am
  *   the host" boolean is never sent (**D3**).
@@ -59,8 +64,8 @@ export function ConfigPanel(): ReactElement {
   /**
    * The demand generator the host has just picked, before the server has
    * acknowledged it. It is the one value the panel shows ahead of the store,
-   * and it can only ever show that kind's *declared defaults* — which is
-   * exactly what went out in the payload beside it — so it cannot mask a clamp.
+   * and it shows only the kind: the parameters are the server's defaults and
+   * appear when the stored config does, with a placeholder until then.
    * `toFormValues` ignores it as soon as the stored config agrees, so it
    * expires on its own rather than being cleared by an effect a render later.
    */
@@ -68,14 +73,22 @@ export function ConfigPanel(): ReactElement {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const saveApi = useConfigSave(roomCode, hostSecret, locked)
+  const { limits, error: limitsError } = useLimits()
 
+  // No config, no values: nothing is rendered until the stored config is here,
+  // so the form needs no placeholder (and the panel no copy of the defaults).
   const values = useMemo(
-    () => (config ? toFormValues(config, pendingKind) : PLACEHOLDER_FORM_VALUES),
+    () => (config ? toFormValues(config, pendingKind) : undefined),
     [config, pendingKind],
   )
+  const activePendingKind =
+    config && pendingKind !== null && pendingKind !== config.demand.kind ? pendingKind : null
+
+  const schema = useMemo(() => (limits ? buildConfigFormSchema(limits) : null), [limits])
 
   const form = useForm<ConfigFormValues>({
-    resolver: zodResolver(configFormSchema),
+    // No resolver until the ranges arrive; nothing is rendered before then.
+    resolver: schema ? zodResolver(schema) : undefined,
     values,
     mode: 'onChange',
   })
@@ -103,9 +116,9 @@ export function ConfigPanel(): ReactElement {
     }
   }, [config, hostSecret, roomCode])
 
-  const contextValue: ConfigFormContextValue = useMemo(
-    () => ({ form, saveApi, readOnly: locked }),
-    [form, saveApi, locked],
+  const contextValue: ConfigFormContextValue | null = useMemo(
+    () => (limits ? { form, saveApi, readOnly: locked, limits } : null),
+    [form, saveApi, locked, limits],
   )
 
   // `config` is compared loosely on purpose. The store types it as
@@ -121,18 +134,31 @@ export function ConfigPanel(): ReactElement {
     )
   }
 
+  // The summary shows stored values only, and needs no ranges.
   if (locked) {
+    return <ConfigSummary config={config} />
+  }
+
+  if (!contextValue) {
     return (
-      <ConfigFormContext.Provider value={contextValue}>
-        <ConfigSummary config={config} />
-      </ConfigFormContext.Provider>
+      <p
+        role={limitsError ? 'alert' : undefined}
+        className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-ink-muted"
+      >
+        {limitsError ?? 'Loading the current settings…'}
+      </p>
     )
   }
 
   function handleKindChange(kind: DemandKind): void {
     setPendingKind(kind)
-    // The whole demand object, and no field of the previous kind (AC 7, FM 2).
-    saveApi.save({ demand: defaultDemand(kind) as unknown as ConfigPatch }, true)
+    // A `CUSTOM` series has no default: nothing is saved until one is pasted,
+    // because an empty series is refused (`03 §3.1`).
+    if (kind === 'CUSTOM') return
+    // The kind and no field of the previous kind (AC 7, FM 2). A changed kind
+    // replaces the stored demand object, and the server fills every field
+    // the patch leaves out with that kind's own default (`10 §3.3`).
+    saveApi.save({ demand: { kind } }, true)
   }
 
   function handleApplyPreset(patch: ConfigPatch): void {
@@ -190,7 +216,12 @@ export function ConfigPanel(): ReactElement {
           title="Starting conditions"
           description="Where every role begins. Asymmetry here is a teaching tool — one role starting short is a whole lesson on its own."
         >
-          <RoleGrid group="starting" roles={config.roles} onApplyToAll={(p) => saveApi.save(p, true)} />
+          <RoleGrid
+            group="starting"
+            roles={config.roles}
+            onApplyToAll={(p) => saveApi.save(p, true)}
+            leadTimes={<LeadTimeRow config={config} />}
+          />
         </ConfigSection>
 
         <ConfigSection
@@ -217,8 +248,8 @@ export function ConfigPanel(): ReactElement {
           description="What the Retailer's customers ask for each week. Only the Retailer sees it, unless you turn that off below."
         >
           <DemandEditor
-            demand={values.demand}
-            durationWeeks={config.duration_weeks}
+            config={config}
+            pendingKind={activePendingKind}
             onKindChange={handleKindChange}
           />
         </ConfigSection>

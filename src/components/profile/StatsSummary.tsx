@@ -17,6 +17,19 @@ export interface StatsSummaryProps {
 export const NULL_BULLWHIP_AVG_EXPLANATION =
   "None of your games had customer demand that varied, so there's nothing to amplify."
 
+/**
+ * What the averages and *Best game* are compared across (2026-11-02).
+ *
+ * The server pools every finished game into one figure — `avg_cost_per_week`
+ * is total cost over total weeks, `bullwhip_avg` the mean of each game's
+ * ratio, and `best_game_id` the lowest cost per week — whatever each game's
+ * length, preset or cost settings (`14 §3.7`). That is deliberate and stays,
+ * but a player comparing a 20-week Fast Game with a 52-week Chaos game would
+ * otherwise read the result as like for like, so the screen says so.
+ */
+export const POOLED_GAMES_NOTE =
+  'Every game you finished counts here, whatever its length, preset or cost settings. The averages mix them all, and your best game is simply your lowest cost per week among them, so a short game with low costs can beat a long one with high costs.'
+
 /** The placeholder for a figure the server sent as `null`. Never `0`, never `0.00`. */
 const MISSING = '—'
 
@@ -62,6 +75,12 @@ export function StatsSummary({ stats }: StatsSummaryProps): ReactElement {
       <h2 id="profile-stats" className="text-2xl font-semibold">
         What you have played
       </h2>
+
+      {noGames ? null : (
+        <p id="profile-stats-pooled" className="text-sm text-ink-muted">
+          {POOLED_GAMES_NOTE}
+        </p>
+      )}
 
       {noGames ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised px-5 py-4">

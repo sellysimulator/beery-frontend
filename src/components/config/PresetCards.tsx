@@ -4,7 +4,6 @@ import { listPresets } from '../../api/rooms'
 import type { PresetSummary } from '../../types/game'
 import { useConfigFormContext } from './configFormContext'
 import type { ConfigPatch } from './configPatch'
-import { PRESET_COPY } from './copy'
 
 export interface PresetCardsProps {
   /** The preset currently claimed, or null for *Custom*. */
@@ -24,9 +23,11 @@ export interface PresetCardsProps {
  * MIT when they are not, because "we ran the standard scenario" is the claim
  * the whole debrief rests on.
  *
- * The card copy is this section's, keyed by the preset's name; the label and
- * description the server sends are the fallback, so a preset added later still
- * renders something true rather than nothing.
+ * The card copy is the server's label and description, as sent (2026-11-03).
+ * The description's figures are written from the preset's own config, so a
+ * card cannot promise "36 weeks" for a preset that plays 20. This section used
+ * to carry its own copy of that text, keyed by name, which restated every
+ * figure a second time.
  */
 export function PresetCards({
   presetName,
@@ -59,7 +60,6 @@ export function PresetCards({
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {presets.map((preset) => {
-          const copy = PRESET_COPY[preset.name]
           const selected = presetName === preset.name
 
           return (
@@ -75,8 +75,8 @@ export function PresetCards({
                   : 'border-border bg-surface hover:border-brand'
               }`}
             >
-              <span className="text-lg font-semibold text-ink">{copy?.label ?? preset.label}</span>
-              <span className="text-sm text-ink-muted">{copy?.description ?? preset.description}</span>
+              <span className="text-lg font-semibold text-ink">{preset.label}</span>
+              <span className="text-sm text-ink-muted">{preset.description}</span>
             </button>
           )
         })}

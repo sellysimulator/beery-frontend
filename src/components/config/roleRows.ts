@@ -7,17 +7,21 @@
  * knob is added, and the host reading it mid-game is the one person who cannot
  * check.
  */
-import { FORM_LIMITS } from '../../schemas/configSchema'
-import type { Role } from '../../types/game'
+import type { Limits, Role } from '../../types/game'
+
+/**
+ * Which of the server's ranges a row is checked against. The numbers
+ * themselves come from `GET /rooms/limits` at render time (`boundsFor`): the
+ * form keeps no copy of them (2026-11-02).
+ */
+export type RowBounds = 'quantity' | 'money' | 'delay' | 'cap'
 
 export interface RoleRow {
   /** The key inside a role's config, which is also the last path segment. */
   key: string
   label: string
   help?: string
-  min: number
-  max: number
-  step: number
+  bounds: RowBounds
   unit?: string
   nullable?: boolean
   placeholder?: string
@@ -27,13 +31,24 @@ export interface RoleRow {
   onlyFor?: Role[]
 }
 
-const quantityBounds = { min: 0, max: FORM_LIMITS.max_initial_quantity, step: 1 }
-const moneyBounds = { min: 0, max: FORM_LIMITS.max_unit_value, step: 0.05 }
-const delayBounds = {
-  min: FORM_LIMITS.min_delay_weeks,
-  max: FORM_LIMITS.max_delay_weeks,
-  step: 1,
-  unit: 'weeks',
+export interface Bounds {
+  min: number
+  max: number
+  step: number
+}
+
+/** A row's range, read from the server's limits. */
+export function boundsFor(row: RoleRow, limits: Limits): Bounds {
+  switch (row.bounds) {
+    case 'quantity':
+      return { min: 0, max: limits.max_initial_quantity, step: 1 }
+    case 'money':
+      return { min: 0, max: limits.max_unit_value, step: 0.05 }
+    case 'delay':
+      return { min: limits.min_delay_weeks, max: limits.max_delay_weeks, step: 1 }
+    case 'cap':
+      return { min: 0, max: limits.max_order_quantity, step: 1 }
+  }
 }
 
 /**
@@ -49,75 +64,94 @@ const delayBounds = {
  *   (`06-role-agents.md section 3.1`) and is therefore absent from the DOM, not
  *   merely disabled. A field that does nothing is worse than no field: a host
  *   who sets it believes they changed the game.
+ *
+ * Both order rows describe orders arriving AT the role, because that is what
+ * the engine does with them (`config_models.order_delay_weeks`): a role's
+ * order delay is how long its customer's orders take to reach it, so the
+ * Distributor's sets the Wholesaler's lead time, not the Distributor's own.
+ * The labels said the opposite until 2026-11-02.
  */
 export const STARTING_ROWS: RoleRow[] = [
   {
     key: 'initial_inventory',
     label: 'Starting inventory',
     help: 'Units on the shelf in week 1.',
-    ...quantityBounds,
+    bounds: 'quantity',
   },
-  { key: 'initial_backlog', label: 'Starting backlog', ...quantityBounds },
+  { key: 'initial_backlog', label: 'Starting backlog', bounds: 'quantity' },
   {
     key: 'initial_pipeline_quantity',
     label: 'Units already in transit',
     help: 'What is in each slot of the inbound pipeline at week 1.',
-    ...quantityBounds,
+    bounds: 'quantity',
   },
   {
     key: 'initial_order_in_pipeline',
-    label: 'Orders already placed',
-    ...quantityBounds,
+    label: 'Incoming orders already on the way',
+    help:
+      "Orders from this role's customer already travelling to it in week 1, one amount per week of its order delay. " +
+      "The customer sees them as \u201cOrders you've placed\u201d \u2014 so the Wholesaler's value is what the Retailer sees. " +
+      'The Retailer has no incoming order line: its value only sets a Retailer bot\u2019s first guess at demand.',
+    bounds: 'quantity',
   },
   {
     key: 'shipping_delay_weeks',
     label: 'Shipping delay',
     help: 'Weeks between a supplier shipping and this role receiving.',
-    ...delayBounds,
+    bounds: 'delay',
+    unit: 'weeks',
     hiddenFor: ['FACTORY'],
   },
   {
     key: 'production_delay_weeks',
     label: 'Production delay',
     help: 'Weeks between the Factory starting a batch and it being ready.',
-    ...delayBounds,
+    bounds: 'delay',
+    unit: 'weeks',
     onlyFor: ['FACTORY'],
   },
   {
     key: 'production_capacity_per_week',
     label: 'Production capacity per week',
-    help: 'Leave blank for unlimited.',
-    min: 0,
-    max: FORM_LIMITS.max_order_quantity,
-    step: 1,
+    help: '0 or blank = unlimited. Anything over capacity waits in a queue; it is never lost.',
+    bounds: 'cap',
     nullable: true,
     placeholder: 'Unlimited',
     onlyFor: ['FACTORY'],
   },
   {
     key: 'information_delay_weeks',
-    label: 'Order information delay',
-    help: 'Weeks between an order being placed and the supplier seeing it.',
-    ...delayBounds,
+    label: 'Order delay to this role',
+    help:
+      "Weeks an order from this role's customer (the role below it) takes to reach this role. " +
+      "The Wholesaler's sets how long the Retailer's orders take, and it adds to the Retailer's lead time. " +
+      "Not shown for the Retailer: customers' orders reach it at once.",
+    bounds: 'delay',
+    unit: 'weeks',
     hiddenFor: ['RETAILER'],
   },
 ]
 
 export const COST_ROWS: RoleRow[] = [
-  { key: 'holding_cost_per_unit_week', label: 'Holding cost per unit per week', ...moneyBounds },
-  { key: 'backlog_cost_per_unit_week', label: 'Backlog cost per unit per week', ...moneyBounds },
+  { key: 'holding_cost_per_unit_week', label: 'Holding cost per unit per week', bounds: 'money' },
+  { key: 'backlog_cost_per_unit_week', label: 'Backlog cost per unit per week', bounds: 'money' },
   {
     key: 'fixed_order_cost',
     label: 'Fixed cost per order',
-    help: 'Charged once in any week an order is placed.',
-    ...moneyBounds,
+    help: 'Charged once in any week an order above zero is placed, when the week closes.',
+    bounds: 'money',
   },
-  { key: 'unit_purchase_cost', label: 'Purchase cost per unit', ...moneyBounds },
+  {
+    key: 'unit_purchase_cost',
+    label: 'Purchase cost per unit',
+    help: 'Charged on every unit ordered, when the week closes.',
+    bounds: 'money',
+  },
   {
     key: 'starting_capital',
     label: 'Starting capital',
     help: 'Above zero, players see a balance counting down instead of a cost counting up.',
-    ...moneyBounds,
+    bounds: 'money',
   },
 ]
 

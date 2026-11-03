@@ -77,9 +77,10 @@ const BODY: ManualPageSpec[] = [
     content: (
       <>
         <p>
-          <strong>Nothing happens immediately.</strong> When you place an order, it takes a
-          couple of weeks just to reach your supplier, and a couple more for the beer to arrive.
-          So an order you place today shows up in your warehouse roughly four weeks from now.
+          <strong>Nothing happens immediately.</strong> When you place an order, it takes
+          weeks just to reach your supplier, and more weeks for the beer to arrive. Your order
+          form tells you exactly how many, and the week it should land: the host sets the delays,
+          and the game works the number out for your seat.
         </p>
         <p>
           This means you are always ordering for a situation you can't see yet — and it means
@@ -101,6 +102,10 @@ const BODY: ManualPageSpec[] = [
           Then wait. The host is configuring the game. You'll see who else has joined. You'll
           find out your role either in the lobby or when the game starts, depending on how your
           host set it up.
+        </p>
+        <p>
+          If you drop out mid-game, open the same link again to rejoin. If the host handed your
+          role to a bot meanwhile, press <strong>Take back my role</strong> to play it again.
         </p>
       </>
     ),
@@ -139,7 +144,9 @@ const BODY: ManualPageSpec[] = [
           <strong>Incoming order</strong> — how much your customer wants from you this week.
         </li>
         <li>
-          <strong>Your costs</strong> — this week's, and your running total.
+          <strong>Your costs</strong> — this week's holding and backlog cost, your order cost
+          (charged when the week closes, so until then it reads "not yet charged"), and your
+          running total.
         </li>
       </ul>
     ),
@@ -156,14 +163,17 @@ const BODY: ManualPageSpec[] = [
           you get.
         </p>
         <p>
-          <strong>2. Decide.</strong> Enter one number: how much to order from your supplier. The
-          screen tells you when it will arrive. Shortcuts are available — match the order you
-          just received, repeat your last order, or order nothing.
+          <strong>2. Decide.</strong> Enter one number: how much to order from your supplier —
+          a whole number from 0 up to the game's maximum, which the screen shows. A number
+          outside that is refused, never cut down to fit. The screen tells you when it will
+          arrive. Shortcuts are available — match the order you just received, repeat your last
+          order, or order nothing.
         </p>
         <p>
           <strong>3. Confirm and wait.</strong> Once you submit, you'll see who else still has to
-          decide. Everyone's order is hidden until the week closes. There is no time limit — the
-          week closes when everyone has decided, or when the host closes it.
+          decide. The other players never see your order — not now, and not after the week
+          closes; they only see that you have decided. There is no time limit — the week closes
+          when everyone has decided, or when the host closes it.
         </p>
         <p>Then the next week begins.</p>
       </>
@@ -187,8 +197,8 @@ const BODY: ManualPageSpec[] = [
           every week until you do.
         </li>
         <li>
-          <strong>You cannot ship what you don't have.</strong> If a customer wants 12 and you
-          have 5, you ship 5 and owe 7.
+          <strong>You cannot ship what you don't have.</strong> If a customer wants more than
+          you have, you ship everything on your shelf and owe them the rest.
         </li>
       </ul>
     ),
@@ -202,7 +212,7 @@ const BODY: ManualPageSpec[] = [
         <ManualCallout title="Before you increase an order, look at what's already on the way.">
           The most common mistake in this game — by a wide margin — is to see low inventory,
           order more, see inventory still low next week because nothing has arrived yet, and
-          order more again. You end up with four weeks of panic orders landing at once, a
+          order more again. You end up with weeks of panic orders landing at once, a
           warehouse you can't afford, and then you slam the brakes and order nothing, which
           starves everyone upstream of you.
         </ManualCallout>
@@ -253,7 +263,7 @@ const PAGES: ManualPageSpec[] = [
         </p>
         <p className="text-3xl font-bold">Player manual</p>
         <p className="text-ink-muted">
-          One link in the chain, one number a week, and the four weeks you can't see.
+          One link in the chain, one number a week, and the weeks you can't see.
         </p>
       </>
     ),

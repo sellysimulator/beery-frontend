@@ -141,7 +141,6 @@ function gameConfig(): GameConfig {
       show_running_cost_to_players: true,
       show_leaderboard_during_game: false,
       max_order_quantity: null,
-      allow_negative_orders: false,
     },
     bot: { theta: 0.36, alpha: 0.26, beta: 0.34, target_stock_multiplier: 1 },
   };
@@ -154,6 +153,7 @@ function settlementFor(role: Role, week: number): WeekSettlement {
     opening_inventory: 12,
     opening_backlog: 0,
     arrived: 4,
+    inventory_after_arrival: 16,
     incoming_order: 55,
     obligation: 55,
     shipped: 55,
@@ -183,20 +183,23 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     backlog: 0,
     supply_line: 8,
     supply_line_slots: [3, 5],
+    supply_line_slot_weeks: [1, 2],
     orders_in_flight: role === 'FACTORY' ? 0 : 5,
     orders_in_flight_slots: role === 'FACTORY' ? [] : [1, 4],
+    orders_in_flight_slot_weeks: role === 'FACTORY' ? [] : [1, 2],
     incoming_order: 55,
     last_order: 31,
     settlement: settlementFor(role, week),
     has_submitted: false,
     awaiting_roles: [...ROLE_ORDER],
     own_history: [],
-    max_order_quantity: null,
-    allow_negative_orders: false,
+    min_order_quantity: 0,
+    max_order_quantity: 9999,
     show_supply_line_prominently: true,
     // `07 §3.8`: the Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
+    order_arrival_week: week + 4,
     holding_cost_per_unit_week: 0.5,
     backlog_cost_per_unit_week: 1,
     ...over,
@@ -353,24 +356,31 @@ describe('CRITERION 9: the minimum and the maximum are stated in text', () => {
     expect(text).toMatch(/max(imum)?\b[^0-9]{0,14}500\b/i);
   });
 
-  it('states that there is no minimum once allow_negative_orders is set', () => {
-    // §2.3: "the form states that there is no minimum and sets no `min`
-    // attribute". There is no negative floor on the wire.
-    renderForm(viewFor('WHOLESALER', { max_order_quantity: 500, allow_negative_orders: true }));
+  it('takes both bounds from your_state, as min and max attributes', () => {
+    // Amended 2026-11-02: there are no negative orders. The floor is the
+    // server's `min_order_quantity` (always 0), never one the form invents.
+    renderForm(viewFor('WHOLESALER', { min_order_quantity: 0, max_order_quantity: 500 }));
 
-    const text = formText();
-    expect(text).toMatch(/min(imum)?/i);
-    expect(text).not.toMatch(/min(imum)?\b[^0-9-]{0,14}0\b/i);
+    expect(orderInput().getAttribute('min')).toBe('0');
+    expect(orderInput().getAttribute('max')).toBe('500');
   });
 
-  it('sets no `min` attribute, and invents no floor, when negatives are allowed', () => {
-    // Deriving a floor from `max_order_quantity` would be client-side game
-    // arithmetic (§2.3, 00-conventions §4).
-    renderForm(viewFor('WHOLESALER', { max_order_quantity: 500, allow_negative_orders: true }));
+  it('refuses an order outside the bounds in the server’s own words, and sends nothing', async () => {
+    const user = userEvent.setup();
+    renderForm(viewFor('WHOLESALER', { max_order_quantity: 500 }));
 
-    expect(orderInput().hasAttribute('min')).toBe(false);
-    expect(formText()).not.toMatch(/-\s*500\b/);
-    expect(formText()).not.toMatch(/min(imum)?\b[^0-9]{0,14}-\d/i);
+    for (const typed of ['501', '-1', '4.5']) {
+      await typeOrder(user, typed);
+      expect(formText()).toContain('Order must be a whole number from 0 to 500.');
+      expect(confirmControl()).toBeDisabled();
+    }
+    await user.click(confirmControl());
+    expect(emitsOf('submit_order')).toHaveLength(0);
+
+    await typeOrder(user, '500');
+    expect(formText()).not.toContain('Order must be a whole number');
+    await user.click(confirmControl());
+    expect(emitsOf('submit_order')[0].order).toBe(500);
   });
 
   it('states the constraint as text, not only as an input attribute', () => {
@@ -386,10 +396,14 @@ describe('CRITERION 9: the minimum and the maximum are stated in text', () => {
 // Criteria 10 and 11, failure mode 12 — the arrival preview
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10: the preview names week + order_arrival_lead_weeks', () => {
+describe('CRITERION 10: the preview names the server’s order_arrival_week', () => {
+  // 2026-11-03: the form used to add `week + order_arrival_lead_weeks` itself.
+  // It now prints the server's `order_arrival_week`, and the lead in weeks.
   it('names week 10 for week 6 and a lead of 4', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 4 }));
+    renderForm(
+      viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 4, order_arrival_week: 10 }),
+    );
 
     await typeOrder(user, '7');
 
@@ -398,9 +412,11 @@ describe('CRITERION 10: the preview names week + order_arrival_lead_weeks', () =
     expect(text).toMatch(/\b4\s*weeks?\b/i);
   });
 
-  it('follows the lead field when it changes, not a remembered number', async () => {
+  it('follows the arrival field when it changes, not a remembered number', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 1 }));
+    renderForm(
+      viewFor('WHOLESALER', { week: 6, order_arrival_lead_weeks: 1, order_arrival_week: 7 }),
+    );
 
     await typeOrder(user, '12');
 
@@ -426,19 +442,30 @@ describe('CRITERION 11: the Factory produces rather than orders', () => {
 
 describe('FAILURE MODE 14: the preview is never reassembled from other numbers', () => {
   // `§3.8`: no per-role delay is sent at all, precisely so this cannot be
-  // attempted. Only `order_arrival_lead_weeks` is 2, so week + 2 = 8 is the
-  // single right answer for the Factory and for a downstream role alike.
+  // attempted, and since 2026-11-03 the week itself is the server's too.
   const roles: Role[] = ['FACTORY', 'WHOLESALER'];
 
   it.each(roles)('%s names week 8 for week 6 and a lead of 2', async (role) => {
     const user = userEvent.setup();
-    renderForm(viewFor(role, { week: 6, order_arrival_lead_weeks: 2 }));
+    renderForm(viewFor(role, { week: 6, order_arrival_lead_weeks: 2, order_arrival_week: 8 }));
 
     await typeOrder(user, '12');
 
     const text = formText();
     expect(text).toMatch(/week\s*8\b/i);
     expect(text).not.toMatch(/week\s*(7|9|10|11)\b/i);
+  });
+
+  it.each(roles)('%s prints the server’s arrival week even when it is not week + lead', async (role) => {
+    // 6 + 2 would be 8. The server says 13, and the server is the authority.
+    const user = userEvent.setup();
+    renderForm(viewFor(role, { week: 6, order_arrival_lead_weeks: 2, order_arrival_week: 13 }));
+
+    await typeOrder(user, '12');
+
+    const text = formText();
+    expect(text).toMatch(/week\s*13\b/i);
+    expect(text).not.toMatch(/week\s*8\b/i);
   });
 });
 
@@ -513,7 +540,7 @@ describe('CRITERION 13: confirming emits submit_order for the open week', () => 
 describe('FAILURE MODE 5: no client-computed total reaches the wire', () => {
   it('emits exactly {room_id, week, order}', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_cost: 9.25 }));
+    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
 
     await typeOrder(user, '37');
     await user.click(confirmControl());
@@ -524,12 +551,20 @@ describe('FAILURE MODE 5: no client-computed total reaches the wire', () => {
 
   it('puts no display-only figure on the wire, on any emit', async () => {
     const user = userEvent.setup();
-    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_cost: 9.25 }));
+    renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
 
     await typeOrder(user, '37');
     await user.click(confirmControl());
 
-    const forbidden = ['accumulated_cost', 'week_cost', 'balance', 'total', 'inventory', 'backlog'];
+    const forbidden = [
+      'accumulated_cost',
+      'week_holding_backlog_cost',
+      'week_order_cost',
+      'balance',
+      'total',
+      'inventory',
+      'backlog',
+    ];
     const keys = rec.emits.flatMap((e) => Object.keys((e.payload ?? {}) as object));
     for (const key of forbidden) expect(keys).not.toContain(key);
   });
