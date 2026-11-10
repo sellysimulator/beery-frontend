@@ -229,6 +229,18 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     422 — rendering that array directly white-screens React. Server `error` events land in
     `store.lastError` (`{message, code}`) plus an alert; a screen maps a specific `code` to
     its own copy. `ErrorBoundary` is the outermost component in `main.tsx`.
+    **Abuse limits** (backend `app/core/abuse.py`) are mapped in those same two places only:
+    `errorMessage` turns 429 (with `Retry-After` seconds when CORS exposes it), 503 and 413
+    into fixed sentences whatever the `detail`, and `isRateLimited(err)` lets
+    `useConfigPreview` keep its last answer silently on a 429. In `socketHandlers.ts`,
+    `error` with `code: "RATE_LIMITED"` and a `join_error` carrying the backend's
+    rate-limit sentence get friendly text, and that `join_error` is alert-only (as
+    `joinError` it would put up HostRoom's recovery screen). A refused handshake is told apart by its message: the per-IP socket cap raises
+    `ConnectionRefusedError` with exactly `CAP_REFUSAL_MESSAGE` ("Too many connections from
+    your network. Try again in a minute."), which `classifyConnectError` calls `cap` and
+    retries with bounded jittered backoff because Socket.IO never retries a `CONNECT_ERROR`
+    itself; any other refusal (the generic `Connection rejected by server`, a failed ID token)
+    is `auth`: the sign-in message, no retry.
 11. **Styling is Tailwind v4, CSS-first.** All design tokens are `@theme` variables in
     `src/index.css` (surface/ink/brand/role/quantity colours, `--text-figure`). Use the
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.

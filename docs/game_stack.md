@@ -67,6 +67,34 @@ forecast for a live decision.) A game may be stricter than this: Beery plots onl
 server fields, and shows a combination with geometry (stacking, drawing below the axis)
 instead of a computed number. Decided 2026-11-02; see `chart-proposals-plan.md` §1.
 
+8. **Every unauthenticated path is bounded.** **[HARD-WON]** Anyone can open a guest socket or
+   create a room, and the backend is one small instance holding live state in memory, so one
+   script could OOM it and kill every running game. The limits are plain constants in one
+   module, `app/core/abuse.py`, enforced at three choke points only, never per handler:
+   - **REST:** one pure-ASGI middleware, added *before* CORS so a 429 keeps its CORS headers.
+     It applies a per-IP request limit, stricter limits on public costly routes (room create,
+     room status, config previews), and a 64 KB body cap that also counts chunked bodies.
+   - **Socket handshake:** an open-socket cap per IP. The slot is released in `try/finally` on
+     every disconnect and on every refused connect, or an IP drifts into a permanent lockout.
+   - **Socket events:** a per-sid (and per-IP) event limit inside the existing `@guarded`
+     wrapper. `max_http_buffer_size` is 64 KB, not the 5 MB default some copies carried.
+   - **Client IP:** use `cf-connecting-ip`, then the RIGHTMOST `X-Forwarded-For` entry, then
+     the peer. Render fronts services with Cloudflare, and `FORWARDED_ALLOW_IPS=*` makes
+     `request.client` forgeable.
+   - **Limiter memory:** the limiter's key table is bounded. When full it trims to 90%, not
+     to exactly the cap, so it never rescans every key on each new one.
+   - **Live state:** a room code or game id is validated in the state service before any
+     lock or read. Process locks live in a `weakref.WeakValueDictionary` with no manual
+     pops: the old pops used the wrong key, so no lock was ever freed. In-memory stores
+     purge expired rooms on create and cap live rooms (503 past the cap). Rooms that never
+     started get a short TTL (2 h); started rooms keep 24 h.
+   - **Event loop:** Firebase verification runs in a thread (`asyncio.to_thread`), and a
+     token over 4096 characters is rejected first. A route that does sync DB or CPU work is
+     a plain `def`, never `async def`. `/health/deep` reuses its answer for 15 s.
+
+   Size limits for a classroom behind one NAT (30–40 students, one public IP), never for one
+   user.
+
 ---
 
 ## 1. Frontend

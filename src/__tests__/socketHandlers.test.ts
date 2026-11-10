@@ -932,3 +932,102 @@ describe('what the client sends back', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// the backend's abuse limits (app/core/abuse.py, app/sockets/errors.py)
+// ---------------------------------------------------------------------------
+
+describe('abuse limits: rate-limited events and the socket cap', () => {
+  const SERVER_RATE_LIMITED = 'Too many requests. Please slow down and try again.';
+  const FRIENDLY_RATE_LIMITED =
+    'Too many actions from your network in a short time. Please wait a moment and try again.';
+  const CAP_REFUSED = 'Too many connections from your network. Try again in a minute.';
+  const GENERIC_REFUSED = 'Connection rejected by server';
+  const CAP_RETRYING = 'Too many connections from your network. Retrying…';
+
+  async function mockSocket(): Promise<Record<string, unknown>> {
+    return (await import('../api/socket')).socket as unknown as Record<string, unknown>;
+  }
+
+  it('RATE_LIMITED on `error` shows the friendly text and keeps the code', () => {
+    dispatch('error', { message: SERVER_RATE_LIMITED, code: 'RATE_LIMITED' });
+
+    const state = useGameStore.getState();
+    expect(state.alerts.at(-1)).toMatchObject({ kind: 'error', message: FRIENDLY_RATE_LIMITED });
+    expect(state.lastError).toEqual({ message: FRIENDLY_RATE_LIMITED, code: 'RATE_LIMITED' });
+  });
+
+  it('a rate-limited join_error alerts but is not a refusal (no host-recovery screen)', () => {
+    dispatch('join_error', { message: SERVER_RATE_LIMITED });
+
+    const state = useGameStore.getState();
+    expect(state.alerts.at(-1)).toMatchObject({ kind: 'error', message: FRIENDLY_RATE_LIMITED });
+    expect(state.joinError).toBeNull();
+  });
+
+  it('classifies a refusal by its message: the cap text is cap, any other is auth', async () => {
+    const { classifyConnectError, CAP_REFUSAL_MESSAGE } = await import('../api/socketHandlers');
+    expect(CAP_REFUSAL_MESSAGE).toBe(CAP_REFUSED);
+    expect(classifyConnectError(CAP_REFUSED)).toBe('cap');
+    expect(classifyConnectError(GENERIC_REFUSED)).toBe('auth');
+    expect(classifyConnectError('xhr poll error')).toBe('network');
+  });
+
+  it('a client refused at the cap sees the cap message, not the sign-in one, and retries with backoff', async () => {
+    vi.useFakeTimers();
+    try {
+      dispatch('connect');
+      useGameStore.getState().reset();
+      const socket = await mockSocket();
+      socket.connected = false;
+      dispatch('connect_error', { message: CAP_REFUSED });
+      const state = useGameStore.getState();
+      expect(state.connectionError).toBe(CAP_RETRYING);
+      expect(state.alerts).toHaveLength(1);
+      expect(state.alerts[0]).toMatchObject({ kind: 'info', message: CAP_RETRYING });
+
+      // Socket.IO will not retry a refused handshake itself; this module does.
+      expect(rec.connectCalls).toBe(0);
+      vi.advanceTimersByTime(2_000);
+      expect(rec.connectCalls).toBe(1);
+      socket.connected = false;
+
+      // Bounded: after the last delay it gives up and says so, once.
+      for (let i = 1; i < 6; i += 1) {
+        dispatch('connect_error', { message: CAP_REFUSED });
+        vi.advanceTimersByTime(30_000);
+        socket.connected = false;
+      }
+      expect(rec.connectCalls).toBe(6);
+      dispatch('connect_error', { message: CAP_REFUSED });
+      vi.advanceTimersByTime(60_000);
+      expect(rec.connectCalls).toBe(6);
+
+      const after = useGameStore.getState();
+      expect(after.connectionError).toBe(
+        'Too many connections from your network. Please reload the page in a few minutes.',
+      );
+      expect(after.alerts).toHaveLength(1);
+      expect(after.alerts[0].kind).toBe('error');
+    } finally {
+      vi.useRealTimers();
+      dispatch('connect');
+    }
+  });
+
+  it('a generic refusal keeps the sign-in message and does not retry', async () => {
+    vi.useFakeTimers();
+    try {
+      dispatch('connect');
+      useGameStore.getState().reset();
+      (await mockSocket()).connected = false;
+      dispatch('connect_error', { message: GENERIC_REFUSED });
+      expect(useGameStore.getState().connectionError).toMatch(/^Sign-in could not be verified/);
+      vi.advanceTimersByTime(60_000);
+      expect(rec.connectCalls).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      dispatch('connect');
+    }
+  });
+});
