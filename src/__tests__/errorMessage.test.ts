@@ -148,3 +148,37 @@ describe('FAILURE MODE 4: the 422 array must not reach React as a child', () => 
     ).toThrow();
   });
 });
+
+describe('errorMessage — the backend abuse limits (status wins over detail)', () => {
+  const RATE_LIMITED_DETAIL = 'Too many requests. Please slow down and try again.';
+  const withHeaders = (status: number, headers: Record<string, unknown>, detail: unknown = RATE_LIMITED_DETAIL) => ({
+    isAxiosError: true,
+    response: { status, headers, data: { detail } },
+  });
+
+  it('429 with Retry-After names the wait in seconds', () => {
+    expect(errorMessage(withHeaders(429, { 'retry-after': '60' }), 'fallback')).toBe(
+      'Too many requests from your network. Please wait about 60 seconds and try again.',
+    );
+  });
+
+  it('429 without a readable Retry-After (CORS hides it, or a date) says "a moment"', () => {
+    const expected = 'Too many requests from your network. Please wait a moment and try again.';
+    expect(errorMessage(withHeaders(429, {}), 'fallback')).toBe(expected);
+    expect(errorMessage(axiosErr(RATE_LIMITED_DETAIL, 429), 'fallback')).toBe(expected);
+    expect(errorMessage(withHeaders(429, { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' }), 'fallback')).toBe(expected);
+  });
+
+  it('503 (the room store is full) is the busy message', () => {
+    expect(
+      errorMessage(axiosErr('The server is at its room limit. Please try again later.', 503), 'fallback'),
+    ).toBe('The server is busy right now — please try again in a minute.');
+    expect(errorMessage(withHeaders(503, {}, undefined), 'fallback')).toBe(
+      'The server is busy right now — please try again in a minute.',
+    );
+  });
+
+  it('413 says the request was too large', () => {
+    expect(errorMessage(withHeaders(413, {}, undefined), 'fallback')).toBe('That request was too large.');
+  });
+});

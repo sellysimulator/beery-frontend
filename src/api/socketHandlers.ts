@@ -62,15 +62,81 @@ const store = () => useGameStore.getState()
  * upgrade) have a small, well-known set of message strings. Anything else
  * reaching `connect_error` means the transport DID connect and the Socket.IO
  * handshake itself was refused — which in this app only happens when the
- * server could not verify the presented ID token, or Firebase is unconfigured
- * server-side. Unrecognised messages therefore default to 'auth'.
+ * server refused it: the socket cap, or an ID token it could not verify (or
+ * Firebase unconfigured server-side). Only the cap's own message is 'cap'; every
+ * other refusal is 'auth'.
  */
 const NETWORK_ERROR_PATTERN =
   /xhr poll error|websocket error|^timeout$|transport (error|close)|failed to fetch|network error|ECONNREFUSED|ETIMEDOUT/i
 
-export function classifyConnectError(message: string): 'auth' | 'network' {
-  return NETWORK_ERROR_PATTERN.test(message) ? 'network' : 'auth'
+/**
+ * The backend refuses a handshake for two reasons (`app/core/abuse.py`): this
+ * address already holds its cap of open sockets, which it says with exactly
+ * this text, or the ID token failed, which python-socketio reports with its
+ * generic "Connection rejected by server".
+ */
+export const CAP_REFUSAL_MESSAGE = 'Too many connections from your network. Try again in a minute.'
+
+/**
+ * `network` for a transport failure, `cap` for the cap's refusal message, and
+ * `auth` for any other refusal.
+ */
+export function classifyConnectError(message: string): 'auth' | 'network' | 'cap' {
+  if (NETWORK_ERROR_PATTERN.test(message)) return 'network'
+  return message === CAP_REFUSAL_MESSAGE ? 'cap' : 'auth'
 }
+
+const CONNECT_ERROR_MESSAGE = {
+  auth: 'Sign-in could not be verified by the server. Try signing out and back in, or continue as a guest.',
+  network: 'Could not reach the game server. Retrying…',
+  cap: 'Too many connections from your network. Retrying…',
+} as const
+
+const CAP_GAVE_UP_MESSAGE =
+  'Too many connections from your network. Please reload the page in a few minutes.'
+
+/**
+ * Socket.IO does not retry a refused handshake: a `CONNECT_ERROR` packet
+ * destroys the socket (`active` goes false) and `reconnectionAttempts` never
+ * comes into play. A cap refusal is temporary — it lifts as soon as someone
+ * else on the network closes a tab — so it is retried here, with growing
+ * delays and jitter so a classroom behind one address does not retry in step.
+ */
+const CAP_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000, 30_000] as const
+let capRetries = 0
+let capRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearCapRetry(): void {
+  capRetries = 0
+  if (capRetryTimer !== null) clearTimeout(capRetryTimer)
+  capRetryTimer = null
+}
+
+/** Schedules the next retry; false once the retries are spent. */
+function scheduleCapRetry(): boolean {
+  if (capRetryTimer !== null) return true
+  const delay = CAP_RETRY_DELAYS_MS[capRetries]
+  if (delay === undefined) return false
+  capRetries += 1
+  capRetryTimer = setTimeout(
+    () => {
+      capRetryTimer = null
+      if (!socket.connected && !socket.active) socket.connect()
+    },
+    delay / 2 + Math.random() * (delay / 2),
+  )
+  return true
+}
+
+/**
+ * A rate-limited event (`app/sockets/errors.py`, `@guarded`). The play loop
+ * says so with `code: "RATE_LIMITED"`; the lobby's `join_error` has no code,
+ * so it is recognised by the backend's one fixed sentence.
+ */
+const RATE_LIMITED_CODE = 'RATE_LIMITED'
+const RATE_LIMITED_SERVER_MESSAGE = 'Too many requests. Please slow down and try again.'
+const RATE_LIMITED_MESSAGE =
+  'Too many actions from your network in a short time. Please wait a moment and try again.'
 
 /**
  * Suppresses duplicate alerts across the automatic retries
@@ -155,6 +221,7 @@ export function rejoinAfterConnect(): void {
 
 socket.on('connect', () => {
   connectErrorAlerted = false
+  clearCapRetry()
   dismissConnectErrorAlert()
   store().setConnectionError(null)
   rejoinAfterConnect()
@@ -166,11 +233,18 @@ socket.on('disconnect', () => {
 
 socket.on('connect_error', (error: Error) => {
   const kind = classifyConnectError(error?.message ?? '')
-  const message =
-    kind === 'auth'
-      ? 'Sign-in could not be verified by the server. Try signing out and back in, or continue as a guest.'
-      : 'Could not reach the game server. Retrying…'
 
+  if (kind === 'cap' && !scheduleCapRetry()) {
+    // The retries are spent: replace the "Retrying…" alert with one that
+    // does not promise another attempt.
+    store().setConnectionError(CAP_GAVE_UP_MESSAGE)
+    dismissConnectErrorAlert()
+    connectErrorAlerted = true
+    connectErrorAlertId = store().addAlert({ kind: 'error', message: CAP_GAVE_UP_MESSAGE })
+    return
+  }
+
+  const message = CONNECT_ERROR_MESSAGE[kind]
   store().setConnectionError(message)
 
   // One alert per failed retry cycle, not one per attempt.
@@ -201,6 +275,13 @@ socket.on('host_claimed', (payload: HostClaimedPayload) => {
 })
 
 socket.on('join_error', (payload: JoinErrorPayload) => {
+  // A rate-limited lobby event is not a refusal of this tab: written to
+  // `joinError` it would put up HostRoom's "This tab isn't the host" screen
+  // over a host who merely clicked too fast. It gets the alert only.
+  if (payload?.message === RATE_LIMITED_SERVER_MESSAGE) {
+    store().addAlert({ kind: 'error', message: RATE_LIMITED_MESSAGE })
+    return
+  }
   const message = payload?.message || 'Could not join the room.'
   // The store field is what lets a screen tell a refusal apart from silence —
   // D18's recovery path depends on it. The alert is the generic surfacing, in
@@ -316,8 +397,11 @@ socket.on('game_persisted', (payload: GamePersistedPayload) => {
 const SILENT_ERROR_CODES: ReadonlySet<string> = new Set(['GAME_FINISHED'])
 
 socket.on('error', (payload: ErrorPayload) => {
-  const message = payload?.message || 'A server error occurred.'
   const code = payload?.code ?? ''
+  const message =
+    code === RATE_LIMITED_CODE
+      ? RATE_LIMITED_MESSAGE
+      : payload?.message || 'A server error occurred.'
   // Two pieces of store state from one handler, exactly as `join_error` does:
   // the field is the durable signal a screen maps to its own copy by `code`,
   // the alert is the transient one every other screen gets for free.
