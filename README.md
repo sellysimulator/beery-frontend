@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 1252 passed, 39 files (2026-11-03)
+npm run test:run        # vitest run — 1303 passed, 41 files (2026-11-13)
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -69,8 +69,9 @@ pure unit suite, and why changing CI or deploy config breaks tests until they ar
 
 All of it. The plan's 24 sections are built and gated — see `../docs/plan/HANDOFF.md` — so the
 app covers the whole session: welcome screen, both manuals, the home page (create or join a
-room), the player and host lobbies, the host's configuration panel, the week-by-week decision
-panel, the host console, the results screen with its charts and exports, and the player profile
+room), multi-game hosting (a batch of games made at once, watched from one dashboard), the
+player and host lobbies with a full-screen join QR code, the host's configuration panel, the
+week-by-week decision panel, the host console, the results screen with its charts and exports, and the player profile
 with match history.
 
 The two game shells and the configuration panel still resolve their screens through
@@ -127,19 +128,25 @@ src/
 ├── store/gameStore.ts          the Zustand store — written only by socket handlers
 ├── types/game.ts               TypeScript mirrors of every wire payload
 ├── schemas/configSchema.ts     the host form's checks, built from GET /rooms/limits (no copy)
-├── utils/storage.ts            alias, guest id, session_token, host_secret, display name,
-│                               board_view
+├── utils/storage.ts            alias, guest id, session_token, host_secret, host_room,
+│                               host_batch, display name, board_view
+├── utils/clipboard.ts          copyToClipboard(): Clipboard API, then a textarea fallback
 ├── pages/                      one module per route, each exporting a `route` descriptor
 │   ├── WelcomeScreen  HomePage  GameRoom  HostRoom
+│   ├── MultiHostSetupPage (/multihost/new)  MultiHostDashboard (/multihost)
 │   ├── GameRoomPlaying  HostConsole  ResultsPage  ProfilePage
 │   ├── PlayerManualPage  HostManualPage
 │   └── shellScreens.ts         lazy seam; the three screens it resolves export no `route`
 ├── components/
 │   ├── shared/                 LoadingSpinner, Tooltip, AlertContainer, BackendWakeUp,
 │   │                           Avatar, ErrorBoundary, NotFound, ScreenLoading,
-│   │                           AuthGuard, BackendGuard
-│   ├── lobby/                  the two lobbies, participant list, role cards, invite panel,
-│   │                           and a self-contained QR encoder
+│   │                           AuthGuard, BackendGuard, Select, JoinQrOverlay (full-screen
+│   │                           join QR, drawn locally by qrcode.react)
+│   ├── lobby/                  the two lobbies, participant list, role cards, invite panel
+│   │                           (copy + Show QR), roomCode.ts (alphabet, inviteUrl)
+│   ├── multihost/              the dashboard's GameCard, useRoomsSummary (polls
+│   │                           POST /rooms/summary every 5 s) and multihost.ts
+│   │                           (openHostScreen, statusLabel, hostedRooms)
 │   ├── config/                 the host configuration panel and its react-hook-form pieces;
 │   │                           useLimits (GET /rooms/limits) and useConfigPreview
 │   │                           (POST /rooms/preview) — no generator, default or range here
@@ -194,6 +201,8 @@ up.
 | guest id | `localStorage` | Stable per browser; what makes guest reconnection work. |
 | `session_token` | `localStorage`, per room | Secret; the reconnect credential. |
 | `host_secret` | **`sessionStorage`**, per room | Secret and **tab-scoped**. In `localStorage` it would leak host authority into every tab, including one opened from an invite link. |
+| `host_room` | `sessionStorage` | UI hint only: which room this tab hosts. Never trusted by the server. |
+| `host_batch` | `sessionStorage` | The multi-game dashboard's room codes (a JSON array). Only codes: each secret is under `host_secret_<room>`. |
 | display name | `localStorage` | Display data, sanitised on write. |
 | `board_view` | `localStorage` | Display preference, **not a credential**; browser-wide on purpose, so a second tab keeps the choice. An unrecognised value is treated as unset. |
 

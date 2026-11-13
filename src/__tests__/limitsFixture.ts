@@ -24,4 +24,6 @@ export const TEST_LIMITS: Limits = {
   max_currency_symbol_length: 4,
   max_bot_weight: 1.0,
   max_target_stock_multiplier: 10.0,
+  min_batch_rooms: 2,
+  max_batch_rooms: 10,
 }

@@ -20,3 +20,12 @@ export function sanitiseRoomCode(raw: string): string {
   }
   return code
 }
+
+/**
+ * The link a player opens to join `roomCode`: `/join/:roomCode`, which
+ * redirects into the player shell. One composition for the host lobby, the
+ * multi-game dashboard and every join QR code, so they cannot drift apart.
+ */
+export function inviteUrl(roomCode: string, origin: string = window.location.origin): string {
+  return `${origin}/join/${encodeURIComponent(roomCode)}`
+}

@@ -173,6 +173,37 @@ export function clearHostRoom(): void {
   sessionStorage.removeItem(HOST_ROOM_KEY)
 }
 
+/* ─── host batch — the multi-game dashboard's room codes, tab-scoped ─── */
+//
+// The codes of the batch this tab made on `/multihost/new`. Only the codes:
+// each room's secret is stored with `setHostSecret`, under the key the host
+// screen reads. sessionStorage, like the rest of the host state, so the
+// dashboard survives a reload but not closing the tab, and a tab opened from
+// an invite link never inherits it.
+
+const HOST_BATCH_KEY = 'host_batch'
+
+export function setHostBatch(roomCodes: string[]): void {
+  sessionStorage.setItem(HOST_BATCH_KEY, JSON.stringify(roomCodes))
+}
+
+/** The batch's room codes, or null when this tab has none or it is unreadable. */
+export function getHostBatch(): string[] | null {
+  try {
+    const raw = sessionStorage.getItem(HOST_BATCH_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed) || !parsed.every((code) => typeof code === 'string')) return null
+    return parsed.length > 0 ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function clearHostBatch(): void {
+  sessionStorage.removeItem(HOST_BATCH_KEY)
+}
+
 /* ─── board view — a DISPLAY PREFERENCE, not a credential; browser-scoped ─── */
 //
 // The per-browser choice between the 2D board and the 3D warehouse (24 §2.3).

@@ -7,6 +7,7 @@ import ManualLink from '../manual/ManualLink'
 import Select from '../shared/Select'
 import { configPanelScreen } from '../../pages/shellScreens'
 import InvitePanel from './InvitePanel'
+import { inviteUrl } from './roomCode'
 import ParticipantList from './ParticipantList'
 import StartControl from './StartControl'
 import { ROLE_LABEL, ROLE_MODE_DESCRIPTION, ROLE_MODE_LABEL } from './roleCopy'
@@ -90,7 +91,7 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
 
         <InvitePanel
           roomCode={roomCode}
-          inviteUrl={`${window.location.origin}/join/${roomCode}`}
+          inviteUrl={inviteUrl(roomCode)}
         />
 
         <section className="flex flex-col gap-3">

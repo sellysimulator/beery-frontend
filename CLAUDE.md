@@ -77,7 +77,7 @@ src/
   utils/storage.ts       the only module that touches localStorage/sessionStorage
   pages/                 one module per route; each exports `route`
   components/
-    shared/  lobby/  config/  game/  host/  results/  profile/  manual/
+    shared/  lobby/  config/  game/  host/  results/  profile/  manual/  multihost/
     charts/              chartSetup.ts (results view model + bullwhip builder),
                          chartTheme.ts (every canvas colour), ChartBox.tsx, Legend.tsx,
                          plugins/crosshairSync.ts + plugins/CrosshairGroup.tsx
@@ -107,6 +107,7 @@ bearing documentation — match that style.
 | `/results/:roomCode` | public |
 | `/join/:roomCode` | public (redirect into `/game/:roomCode`) |
 | `/home`, `/game/:roomCode`, `/host/:roomCode` | auth+backend |
+| `/multihost/new`, `/multihost` | auth+backend |
 | `/profile`, `/profile/games/:gameId` | auth+backend |
 
 ## 4. Commands
@@ -123,8 +124,8 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-03 (after moving every remaining figure to the server: preview, lead times, preset copy, arrival week, stock after arrival, slot weeks, weeks played): **1252 tests / 39 files passed**, `eslint .` clean, `tsc -b`
-clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
+Verified green on 2026-11-13 (after multi-game hosting and the join QR code): **1303 tests /
+41 files passed**, `eslint .` clean, `tsc -b` clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
 CI (`.github/workflows/firebase-hosting-{merge,pull-request}.yml`) runs, on push to `main`
@@ -326,6 +327,37 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     (`week_order_cost`, *"not yet charged"* while it is `null`). The stored sum is
     `WeekRecord.total_week_cost` and is never shown as a single figure (2026-11-02).
 
+### Multi-game hosting and the join QR code (2026-11-13)
+
+`/multihost/new` (`MultiHostSetupPage`) takes a count, a preset and a host name and calls
+`createRoomBatch` (`POST /rooms/batch-create`, backend `10 §3.5c`); the count's range is the
+server's (`Limits.min_batch_rooms`/`max_batch_rooms` via `useLimits()`), refused, never
+clamped. It deliberately does **not** reuse the `components/config` form, which is bound to a
+live room: each game's own host screen still offers that form until the game starts. It
+stores every secret with `setHostSecret` and the codes with `setHostBatch` before navigating,
+and nothing at all if any room came back without a secret.
+
+`/multihost` (`MultiHostDashboard`) is a grid of `multihost/GameCard`s polled from
+`getRoomsSummary` (`POST /rooms/summary`, every 5 s, `useRoomsSummary`). It never joins a
+room's socket channel, and on mount it `reset()`s the store if `roomCode` is set, so
+`rejoinAfterConnect` cannot re-claim an old room on the next reconnect. **"Open host screen"
+is a `<button>` calling `openHostScreen`: `setHostRoom(code)` then `window.open(url, '_blank')`
+without `noopener`**, so the browser copies this tab's sessionStorage (`host_room`,
+`host_secret_<code>`) into the new tab, which runs the ordinary `/host/:roomCode`. Never turn it
+into an `<a target="_blank">`: that implies `noopener`, the new tab starts with no secret, and
+a room made over REST has no `host_identity` yet for D18 to recover. **"Start all ready
+games"** emits the ordinary `startGame` (`api/games.ts`) for each room whose summary says
+`can_start`; the server authorises `start_game` by `host_secret` alone and re-checks
+`can_start`, and sends `host_state` to the claimed host tab (or, if none is open, to the
+dashboard, which ignores it).
+
+`components/shared/JoinQrOverlay.tsx` is the full-screen QR of the invite link
+(`inviteUrl(code)` in `lobby/roomCode.ts`, `/join/:roomCode`), drawn locally by `qrcode.react`.
+It encodes the player link only, never a secret, and closes on Close, Escape or a backdrop
+click. The host lobby's `InvitePanel` opens it with **Show QR** / **Hide QR**; every
+dashboard card shows a small inline QR and opens it too. `utils/clipboard.ts`'s
+`copyToClipboard` is the one copy helper both use.
+
 ## 7. Storage scopes — not interchangeable
 
 `utils/storage.ts` is the only module allowed to touch Web Storage.
@@ -337,6 +369,7 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 | `session_token_<room>` | localStorage | Secret; the reconnect credential |
 | `host_secret_<room>` | **sessionStorage** | Secret **and tab-scoped** — in localStorage it leaks host authority into a tab opened from an invite link |
 | `host_room` | sessionStorage | UI hint only; never trusted by the server |
+| `host_batch` | sessionStorage | The multi-game dashboard's room codes (JSON array; `getHostBatch()` is null when absent or malformed). Codes only — each secret is under `host_secret_<room>` |
 | `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it) |
 | `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (`24 §2.3`) |
 

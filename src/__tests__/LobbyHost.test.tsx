@@ -1015,6 +1015,37 @@ describe('CRITERION 20: copying the invite link', () => {
   });
 });
 
+describe('the join QR code on the host screen', () => {
+  it('toggles a full-screen QR of the invite link for players to scan', () => {
+    armedTab();
+    renderHostRoom();
+    settleClaim();
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show QR' }));
+
+    const dialog = screen.getByRole('dialog', { name: `Scan to join room ${ROOM}` });
+    expect(dialog.querySelector('svg')).not.toBeNull();
+    expect(dialog).toHaveTextContent(`${window.location.origin}/join/${ROOM}`);
+    // The code is the player link only, never the host's secret.
+    expect(dialog.innerHTML).not.toContain('hs-stored');
+    expect(dialog.innerHTML).not.toContain('hs-from-server');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide QR' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show QR' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show QR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Nothing went over the wire for any of it.
+    expect(rec.emits.filter((e) => e.event !== 'join_waiting')).toEqual([]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Criterion 21 — bots are labelled on the host side too
 // ---------------------------------------------------------------------------

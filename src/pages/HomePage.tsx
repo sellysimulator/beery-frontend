@@ -292,6 +292,22 @@ export function HomePage(): ReactElement {
           </form>
         </div>
 
+        <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface-raised px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xl font-semibold">Host several games</h2>
+            <p className="text-sm text-ink-muted">
+              One class, several groups: create a batch of games at once and watch them all from
+              one dashboard.
+            </p>
+          </div>
+          <Link
+            to="/multihost/new"
+            className="shrink-0 rounded-md border border-border-strong px-4 py-3 text-center font-semibold transition hover:border-brand hover:text-brand"
+          >
+            Set up several games
+          </Link>
+        </section>
+
         <nav className="flex gap-6 text-sm">
           <Link to="/player-manual" className="text-ink-muted hover:text-brand">
             Player manual

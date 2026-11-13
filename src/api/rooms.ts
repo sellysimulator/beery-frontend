@@ -12,10 +12,16 @@ import type {
   ConfigResponse,
   GameConfig,
   Limits,
+  HostedRoom,
   PresetListResponse,
+  RoomBatchCreateRequest,
+  RoomBatchCreateResponse,
   RoomCreateRequest,
   RoomCreateResponse,
   RoomStatusResponse,
+  RoomSummary,
+  RoomSummaryRequest,
+  RoomSummaryResponse,
 } from '../types/game'
 
 function hostHeaders(hostSecret: string) {
@@ -81,4 +87,37 @@ export async function getLimits(): Promise<Limits> {
 export async function previewConfig(config: object): Promise<ConfigPreview> {
   const { data } = await http.post<ConfigPreview>('/rooms/preview', { config })
   return data
+}
+
+/**
+ * Creates `count` rooms that all start alike, for the multi-game dashboard
+ * (`10 §3.5c`). The server resolves the preset and validates the config patch
+ * once, before any room exists, so a refusal (400 unknown preset, 422 naming
+ * the field) creates nothing. Every room counts against the per-address
+ * room-create limit, all or nothing (429).
+ *
+ * Every room in the answer carries its `host_secret`: the caller stores each
+ * with `setHostSecret` and never logs the response.
+ */
+export async function createRoomBatch(
+  body: RoomBatchCreateRequest,
+): Promise<RoomBatchCreateResponse> {
+  const { data } = await http.post<RoomBatchCreateResponse>('/rooms/batch-create', {
+    count: body.count,
+    preset: body.preset ?? null,
+    config: body.config ?? {},
+    host_display_name: body.host_display_name ?? 'Host',
+  })
+  return data
+}
+
+/**
+ * State, seats, week and `can_start` for each room this tab hosts, in the
+ * order asked (`10 §3.5d`). A POST so the secrets stay out of URLs. Read-only
+ * on the server: polling it never extends a room's lifetime.
+ */
+export async function getRoomsSummary(rooms: HostedRoom[]): Promise<RoomSummary[]> {
+  const body: RoomSummaryRequest = { rooms }
+  const { data } = await http.post<RoomSummaryResponse>('/rooms/summary', body)
+  return data.rooms
 }
