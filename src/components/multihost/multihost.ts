@@ -3,7 +3,7 @@
  * A plain `.ts` module: a component file may export only its component
  * (react-refresh/only-export-components).
  */
-import type { HostedRoom, RoomSummary } from '../../types/game'
+import type { HostedRoom, RoomState, RoomSummary } from '../../types/game'
 import { getHostSecret, setHostRoom } from '../../utils/storage'
 
 /**
@@ -59,4 +59,27 @@ export function statusTone(summary: RoomSummary | undefined): StatusTone {
   if (summary.finished) return 'over'
   if (summary.state === 'RUNNING' || summary.state === 'PAUSED') return 'live'
   return summary.can_start ? 'ready' : 'waiting'
+}
+
+const STARTED_STATES: ReadonlySet<RoomState> = new Set(['RUNNING', 'PAUSED', 'FINISHED'])
+
+/** True once the server's summary shows the game started (running, paused or over). */
+export function hasStarted(summary: RoomSummary | undefined): boolean {
+  return summary?.exists === true && summary.state !== null && STARTED_STATES.has(summary.state)
+}
+
+/** A start refusal as its card shows it: "Game N (CODE): <server message>". */
+export function startErrorText(index: number, roomCode: string, message: string): string {
+  return `Game ${index + 1} (${roomCode}): ${message}`
+}
+
+/**
+ * The one status line after "Start all": "Started X of Y games.", plus, when
+ * some failed, "Z couldn't start, see their cards."
+ */
+export function startAllStatus(started: number, total: number): string {
+  const failed = total - started
+  return failed > 0
+    ? `Started ${started} of ${total} games. ${failed} couldn't start, see their cards.`
+    : `Started ${started} of ${total} games.`
 }

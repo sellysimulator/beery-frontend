@@ -124,7 +124,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-14 (after the batch base config and the open export): **1306 tests /
+Verified green on 2026-11-14 (after the Start-all card errors): **1311 tests /
 41 files passed**, `eslint .` clean, `tsc -b` clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
@@ -364,6 +364,20 @@ games"** emits the ordinary `startGame` (`api/games.ts`) for each room whose sum
 `can_start`; the server authorises `start_game` by `host_secret` alone and re-checks
 `can_start`, and sends `host_state` to the claimed host tab (or, if none is open, to the
 dashboard, which ignores it).
+
+**"Start all" refusals go on their card** (2026-11-14, identical in every Novus game). The
+server names the room on every `start_game` refusal (`join_error` `{message, room_code}`). The
+dashboard registers its codes with the store's `setBatchRooms` (cleared on unmount), and the
+`join_error` handler in `socketHandlers.ts` sends a refusal whose `room_code` is in the batch to
+`setBatchStartError` instead of `applyJoinError` + a global alert; the card shows
+"Game N (CODE): <server message>" (`startErrorText`) until a later summary shows the game
+started (`hasStarted`: `RUNNING`/`PAUSED`/`FINISHED`). A refusal with no `room_code`, or for a
+room outside the batch, keeps the old behaviour. After "Start all" one status line reads
+"Started X of Y games." (+ "Z couldn't start, see their cards."; `startAllStatus`), X counted once
+from the first summary **sent** at or after the refresh ~1 s after the click:
+`useRoomsSummary` returns `asOf`, the send time of the answer it holds, so a poll already in
+flight does not count. The store writes here are the one exception to "only socket handlers
+write the store" that the dashboard needs: it registers which rooms are its own.
 
 `components/shared/JoinQrOverlay.tsx` is the full-screen QR of the invite link
 (`inviteUrl(code)` in `lobby/roomCode.ts`, `/join/:roomCode`), drawn locally by `qrcode.react`.

@@ -9,6 +9,13 @@ export const SUMMARY_POLL_MS = 5000
 export interface RoomsSummaryState {
   /** The latest answer, keyed by room code; a room is absent until it arrives. */
   summaries: Record<string, RoomSummary>
+  /**
+   * When the request behind `summaries` was **sent** (`Date.now()`), null
+   * before the first answer. The dashboard counts a "Start all" from the
+   * first answer sent at or after its refresh, so a poll already in flight
+   * when the host clicked does not count.
+   */
+  asOf: number | null
   /** The last refresh's failure, cleared by the next success. */
   error: string | null
   /** Ask again now, outside the interval. */
@@ -25,6 +32,7 @@ export interface RoomsSummaryState {
  */
 export function useRoomsSummary(rooms: HostedRoom[]): RoomsSummaryState {
   const [summaries, setSummaries] = useState<Record<string, RoomSummary>>({})
+  const [asOf, setAsOf] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
   const refresh = useCallback(() => setTick((t) => t + 1), [])
@@ -35,10 +43,12 @@ export function useRoomsSummary(rooms: HostedRoom[]): RoomsSummaryState {
 
     function poll(): void {
       if (document.hidden) return
+      const sentAt = Date.now()
       getRoomsSummary(rooms)
         .then((answer) => {
           if (cancelled) return
           setSummaries(Object.fromEntries(answer.map((summary) => [summary.room_code, summary])))
+          setAsOf(sentAt)
           setError(null)
         })
         .catch((err: unknown) => {
@@ -56,5 +66,5 @@ export function useRoomsSummary(rooms: HostedRoom[]): RoomsSummaryState {
     }
   }, [rooms, tick])
 
-  return { summaries, error, refresh }
+  return { summaries, asOf, error, refresh }
 }

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { startGame } from '../api/games'
 import GameCard from '../components/multihost/GameCard'
-import { hostedRooms } from '../components/multihost/multihost'
+import { hasStarted, hostedRooms, startAllStatus } from '../components/multihost/multihost'
 import { useRoomsSummary } from '../components/multihost/useRoomsSummary'
 import { useGameStore } from '../store/gameStore'
 import { clearHostBatch, getHostBatch } from '../utils/storage'
@@ -11,6 +11,14 @@ import type { RouteDescriptor } from '../routes/registry'
 /** How long after "Start all" the dashboard asks again, so the server has
  * handled the `start_game` emits before the cards are refreshed. */
 const REFRESH_AFTER_START_MS = 1000
+
+/** One "Start all": the rooms it tried, when its counting refresh is due,
+ * and, once a summary sent at or after then has answered, how many started. */
+interface StartAttempt {
+  rooms: string[]
+  countFrom: number
+  started: number | null
+}
 
 /**
  * `/multihost`: every game of the batch this tab made, as a grid of cards.
@@ -28,29 +36,66 @@ const REFRESH_AFTER_START_MS = 1000
  * `game_started` broadcast reaches the room's players and any open host
  * screen, and the host view goes to the claimed host tab — or here, when no
  * host screen is open, where it is ignored until one opens and re-claims.
+ *
+ * **Refusals go on their card** (2026-11-14, identical in every Novus game).
+ * The server names the room on every `start_game` refusal (`join_error`
+ * `{message, room_code}`); `socketHandlers.ts` puts one for this batch on the
+ * store's `batchStartErrors`, and the card shows "Game N (CODE): <message>"
+ * instead of a global alert, until a later summary shows that game started.
+ * One status line then says "Started X of Y games." (plus "Z couldn't start,
+ * see their cards."), with X counted once, from the first summary *sent* at or
+ * after the refresh ~1 s after the click (`useRoomsSummary`'s `asOf`), so a
+ * poll already in flight does not count.
  */
 export function MultiHostDashboard(): ReactElement {
   const navigate = useNavigate()
   // Read once: the batch only changes on /multihost/new, which remounts this page.
   const [rooms] = useState(() => hostedRooms(getHostBatch() ?? []))
-  const { summaries, error, refresh } = useRoomsSummary(rooms)
+  const { summaries, asOf, error, refresh } = useRoomsSummary(rooms)
+  const startErrors = useGameStore((state) => state.batchStartErrors)
+  const [attempt, setAttempt] = useState<StartAttempt | null>(null)
 
   // This tab may have been in a room before (a single game's host screen, say).
   // On every reconnect `rejoinAfterConnect` re-claims `store.roomCode`, which
   // would put this tab back in that room's channel and its broadcasts in the
   // store. Clearing the store stops that; the dashboard keeps no room of its own.
+  // The batch's codes then route their `start_game` refusals to the cards.
   useEffect(() => {
-    if (useGameStore.getState().roomCode !== null) useGameStore.getState().reset()
-  }, [])
+    const store = useGameStore.getState()
+    if (store.roomCode !== null) store.reset()
+    useGameStore.getState().setBatchRooms(rooms.map(({ room_code }) => room_code))
+    return () => useGameStore.getState().setBatchRooms([])
+  }, [rooms])
+
+  // A card's refusal clears once a later summary shows that game started.
+  useEffect(() => {
+    const started = Object.keys(startErrors).filter((code) => hasStarted(summaries[code]))
+    if (started.length > 0) useGameStore.getState().clearBatchStartErrors(started)
+  }, [summaries, startErrors])
+
+  // Count the attempt once, from the first answer sent at or after its
+  // refresh (state adjusted during render, guarded, as React documents).
+  if (attempt && attempt.started === null && asOf !== null && asOf >= attempt.countFrom) {
+    setAttempt({
+      ...attempt,
+      started: attempt.rooms.filter((code) => hasStarted(summaries[code])).length,
+    })
+  }
 
   if (rooms.length === 0) return <Navigate to="/multihost/new" replace />
 
   const ready = rooms.filter(({ room_code }) => summaries[room_code]?.can_start === true)
 
   function handleStartAll(): void {
-    for (const room of ready) {
+    const tried = ready.filter((room) => room.host_secret)
+    for (const room of tried) {
       if (room.host_secret) startGame({ room_id: room.room_code, host_secret: room.host_secret })
     }
+    setAttempt({
+      rooms: tried.map(({ room_code }) => room_code),
+      countFrom: Date.now() + REFRESH_AFTER_START_MS,
+      started: null,
+    })
     window.setTimeout(refresh, REFRESH_AFTER_START_MS)
   }
 
@@ -98,9 +143,21 @@ export function MultiHostDashboard(): ReactElement {
           </p>
         ) : null}
 
+        {attempt && attempt.started !== null ? (
+          <p role="status" className="font-medium text-ink">
+            {startAllStatus(attempt.started, attempt.rooms.length)}
+          </p>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {rooms.map(({ room_code }, index) => (
-            <GameCard key={room_code} index={index} roomCode={room_code} summary={summaries[room_code]} />
+            <GameCard
+              key={room_code}
+              index={index}
+              roomCode={room_code}
+              summary={summaries[room_code]}
+              startError={startErrors[room_code]}
+            />
           ))}
         </div>
       </div>

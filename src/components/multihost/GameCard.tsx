@@ -4,7 +4,7 @@ import type { RoomSummary } from '../../types/game'
 import { copyToClipboard } from '../../utils/clipboard'
 import { inviteUrl } from '../lobby/roomCode'
 import JoinQrOverlay from '../shared/JoinQrOverlay'
-import { openHostScreen, statusLabel, statusTone, type StatusTone } from './multihost'
+import { openHostScreen, startErrorText, statusLabel, statusTone, type StatusTone } from './multihost'
 
 export interface GameCardProps {
   /** Zero-based position in the batch; the card is named `Game <index + 1>`. */
@@ -12,6 +12,8 @@ export interface GameCardProps {
   roomCode: string
   /** The server's latest summary of the room; undefined until the first answer. */
   summary: RoomSummary | undefined
+  /** The server's last refusal to start this game, until it starts. */
+  startError?: string
 }
 
 const TONE_CLASS: Record<StatusTone, string> = {
@@ -30,7 +32,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
  * what the label says. A room the server no longer knows gets no QR code and
  * no host-screen button, since nobody can join or run it.
  */
-export function GameCard({ index, roomCode, summary }: GameCardProps): ReactElement {
+export function GameCard({ index, roomCode, summary, startError }: GameCardProps): ReactElement {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [showQr, setShowQr] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -75,6 +77,16 @@ export function GameCard({ index, roomCode, summary }: GameCardProps): ReactElem
           {statusLabel(summary)}
         </span>
       </header>
+
+      {startError ? (
+        <p
+          role="alert"
+          data-testid="start-error"
+          className="rounded-md border border-danger bg-danger-soft px-3 py-2 text-sm text-danger"
+        >
+          {startErrorText(index, roomCode, startError)}
+        </p>
+      ) : null}
 
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-col gap-1">

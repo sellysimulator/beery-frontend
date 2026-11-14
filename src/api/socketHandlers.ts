@@ -275,6 +275,18 @@ socket.on('host_claimed', (payload: HostClaimedPayload) => {
 })
 
 socket.on('join_error', (payload: JoinErrorPayload) => {
+  // A `start_game` refusal names its room (2026-11-14). For a room of the
+  // multi-game dashboard's batch it goes on that game's card, not into a
+  // global alert or `joinError`. Anything else keeps the behaviour below.
+  const refusedRoom = payload?.room_code
+  if (typeof refusedRoom === 'string' && store().batchRooms.includes(refusedRoom)) {
+    const message =
+      payload.message === RATE_LIMITED_SERVER_MESSAGE
+        ? RATE_LIMITED_MESSAGE
+        : payload.message || 'The game could not start.'
+    store().setBatchStartError(refusedRoom, message)
+    return
+  }
   // A rate-limited lobby event is not a refusal of this tab: written to
   // `joinError` it would put up HostRoom's "This tab isn't the host" screen
   // over a host who merely clicked too fast. It gets the alert only.

@@ -97,6 +97,13 @@ export interface GameState {
    * what StrictMode double-registers and a reconnect leaves stale.
    */
   lastError: ServerError | null
+
+  // multi-game dashboard (2026-11-14)
+  /** The dashboard's batch codes, so a `start_game` refusal naming one of
+   * them goes on that game's card instead of into a global alert. */
+  batchRooms: string[]
+  /** Each batch room's last `start_game` refusal, by room code. */
+  batchStartErrors: Record<string, string>
 }
 
 export interface ServerError {
@@ -127,6 +134,14 @@ export interface GameActions {
   applyJoinError(p: JoinErrorPayload): void
   /** A screen dismisses the error after acting on it. */
   clearJoinError(): void
+
+  // multi-game dashboard
+  /** The dashboard's batch; clears every card error. Empty on leaving it. */
+  setBatchRooms(roomCodes: string[]): void
+  /** A `start_game` refusal (`join_error` with this `room_code`) for that card. */
+  setBatchStartError(roomCode: string, message: string): void
+  /** Drops the cards' errors once a summary shows those games started. */
+  clearBatchStartErrors(roomCodes: string[]): void
   /** Wipes the room from the store and raises `leftRoom`. */
   applyLeaveAck(): void
   /** Lowered by the shell once it has acted on `leftRoom`. */
@@ -210,6 +225,9 @@ const initialState: GameState = {
   alerts: [],
   connectionError: null,
   lastError: null,
+
+  batchRooms: [],
+  batchStartErrors: {},
 }
 
 /** Drops the envelope's `seq`, leaving just the view the server sent. */
@@ -323,6 +341,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
     applyJoinError: (p) => set({ joinError: p?.message ?? null }),
 
     clearJoinError: () => set({ joinError: null }),
+
+    setBatchRooms: (roomCodes) => set({ batchRooms: [...roomCodes], batchStartErrors: {} }),
+    setBatchStartError: (roomCode, message) =>
+      set((state) => ({ batchStartErrors: { ...state.batchStartErrors, [roomCode]: message } })),
+    clearBatchStartErrors: (roomCodes) =>
+      set((state) => {
+        const next = { ...state.batchStartErrors }
+        for (const code of roomCodes) delete next[code]
+        return { batchStartErrors: next }
+      }),
 
     /**
      * A full reset, not a field edit. The seat is gone server-side, so leaving

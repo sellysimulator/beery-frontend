@@ -689,6 +689,12 @@ export interface HostClaimedPayload {
 
 export interface JoinErrorPayload {
   message: string
+  /**
+   * The room a `start_game` refusal was for (additive, 2026-11-14), so the
+   * multi-game dashboard can put it on that game's card. Absent on every
+   * other `join_error`.
+   */
+  room_code?: string
 }
 
 /**

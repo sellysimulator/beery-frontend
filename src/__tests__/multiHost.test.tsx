@@ -43,7 +43,30 @@ vi.mock('../api/rooms', () => ({
   getLimits: api.getLimits,
 }));
 
-vi.mock('../api/games', () => ({ startGame: api.startGame }));
+vi.mock('../api/games', () => ({ startGame: api.startGame, join: vi.fn(), joinWaiting: vi.fn() }));
+
+// The real `socketHandlers.ts` registers against this recorder, so a test can
+// deliver a server `join_error` exactly as the wire would.
+const wire = vi.hoisted(() => ({
+  listeners: new Map<string, Array<(payload: unknown) => void>>(),
+}));
+
+vi.mock('../api/socket', () => ({
+  socket: {
+    connected: true,
+    active: true,
+    on: (event: string, cb: (payload: unknown) => void) => {
+      wire.listeners.set(event, [...(wire.listeners.get(event) ?? []), cb]);
+    },
+    connect: () => {},
+  },
+}));
+
+function serverSends(event: string, payload: unknown): void {
+  act(() => {
+    for (const listener of wire.listeners.get(event) ?? []) listener(payload);
+  });
+}
 
 vi.mock('../api/http', () => ({
   default: {},
@@ -58,10 +81,11 @@ vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({ firebaseUser: null, mode: 'guest', logout: async () => {} }),
 }));
 
+import '../api/socketHandlers';
 import * as SetupModule from '../pages/MultiHostSetupPage';
 import * as DashboardModule from '../pages/MultiHostDashboard';
 import * as HomePageModule from '../pages/HomePage';
-import { openHostScreen, statusLabel } from '../components/multihost/multihost';
+import { openHostScreen, startAllStatus, statusLabel } from '../components/multihost/multihost';
 import { resetLimitsCacheForTests } from '../components/config/useLimits';
 import { resetPreviewCacheForTests } from '../components/config/useConfigPreview';
 import { fieldFromPreviewError } from '../components/config/useDraftConfig';
@@ -594,6 +618,131 @@ describe('MultiHostDashboard', () => {
       [{ room_id: A, host_secret: 'secret-a' }],
       [{ room_id: C, host_secret: 'secret-c' }],
     ]);
+  });
+
+  it('shows a start refusal on that game card only, with no global alert, and a status line', async () => {
+    seedBatch();
+    let started = false;
+    api.getRoomsSummary.mockImplementation(async () =>
+      started
+        ? [
+            summary(A, { state: 'RUNNING', week: 1, seats_taken: 4 }),
+            summary(B, { seats_taken: 1 }),
+            summary(C, { seats_taken: 4, can_start: true, start_blocked_reason: null }),
+          ]
+        : [
+            summary(A, { seats_taken: 4, can_start: true, start_blocked_reason: null }),
+            summary(B, { seats_taken: 1 }),
+            summary(C, { seats_taken: 4, can_start: true, start_blocked_reason: null }),
+          ],
+    );
+    renderAt('/multihost');
+
+    const startAll = await screen.findByRole('button', { name: 'Start all ready games (2)' });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fireEvent.click(startAll);
+    expect(api.startGame).toHaveBeenCalledTimes(2);
+
+    // The server starts A and refuses C mid-batch, naming C.
+    started = true;
+    serverSends('join_error', { message: 'Someone left; seat them again.', room_code: C });
+
+    const third = within(screen.getByRole('article', { name: 'Game 3' }));
+    expect(third.getByTestId('start-error')).toHaveTextContent(
+      `Game 3 (${C}): Someone left; seat them again.`,
+    );
+    expect(within(screen.getByRole('article', { name: 'Game 1' })).queryByTestId('start-error')).toBeNull();
+    expect(within(screen.getByRole('article', { name: 'Game 2' })).queryByTestId('start-error')).toBeNull();
+    // Not a global alert, and not the host screen's join refusal.
+    expect(useGameStore.getState().alerts).toEqual([]);
+    expect(useGameStore.getState().joinError).toBeNull();
+
+    // No status line until the refresh after the click has answered.
+    expect(screen.queryByText(/^Started /)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(await screen.findByText("Started 1 of 2 games. 1 couldn't start, see their cards.")).toBeInTheDocument();
+    expect(await screen.findByText('Week 1 of 36')).toBeInTheDocument();
+  });
+
+  it('counts only a summary sent after the refresh, not a poll already in flight', async () => {
+    seedBatch();
+    let release: (rooms: RoomSummary[]) => void = () => {};
+    let calls = 0;
+    api.getRoomsSummary.mockImplementation(() => {
+      calls += 1;
+      if (calls === 2) {
+        // A poll sent before the click, answering after it: stale.
+        return new Promise<RoomSummary[]>((resolve) => {
+          release = resolve;
+        });
+      }
+      return Promise.resolve(
+        calls === 1
+          ? [summary(A, { can_start: true }), summary(B, { can_start: true }), summary(C)]
+          : [summary(A, { state: 'RUNNING', week: 1 }), summary(B, { state: 'RUNNING', week: 1 }), summary(C)],
+      );
+    });
+    renderAt('/multihost');
+    const startAll = await screen.findByRole('button', { name: 'Start all ready games (2)' });
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange')); // poll #2, in flight
+    });
+    fireEvent.click(startAll);
+    await act(async () => {
+      release([summary(A, { can_start: true }), summary(B, { can_start: true }), summary(C)]);
+    });
+    expect(screen.queryByText(/^Started /)).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(await screen.findByText('Started 2 of 2 games.')).toBeInTheDocument();
+  });
+
+  it("clears a card's refusal once a later summary shows that game started", async () => {
+    seedBatch();
+    let running = false;
+    api.getRoomsSummary.mockImplementation(async () => [
+      summary(A, running ? { state: 'RUNNING', week: 1 } : { can_start: true }),
+      summary(B),
+      summary(C),
+    ]);
+    renderAt('/multihost');
+    await screen.findByRole('button', { name: 'Start all ready games (1)' });
+
+    serverSends('join_error', { message: 'Not yet.', room_code: A });
+    const first = within(screen.getByRole('article', { name: 'Game 1' }));
+    expect(first.getByTestId('start-error')).toHaveTextContent(`Game 1 (${A}): Not yet.`);
+
+    running = true;
+    // The next poll (a tab shown again asks at once, like the 5 s tick).
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() => expect(first.queryByTestId('start-error')).toBeNull());
+    expect(await first.findByText('Week 1 of 36')).toBeInTheDocument();
+  });
+
+  it('keeps the global alert for a refusal without a room_code or for another room', async () => {
+    seedBatch();
+    api.getRoomsSummary.mockResolvedValue([summary(A), summary(B), summary(C)]);
+    renderAt('/multihost');
+    await screen.findByRole('article', { name: 'Game 1' });
+
+    serverSends('join_error', { message: 'Plain refusal.' });
+    serverSends('join_error', { message: 'Other room.', room_code: 'ZZZZZZ' });
+
+    expect(useGameStore.getState().alerts.map((a) => a.message)).toEqual(['Plain refusal.', 'Other room.']);
+    expect(screen.queryByTestId('start-error')).toBeNull();
+  });
+
+  it('words the status line', () => {
+    expect(startAllStatus(3, 3)).toBe('Started 3 of 3 games.');
+    expect(startAllStatus(1, 3)).toBe("Started 1 of 3 games. 2 couldn't start, see their cards.");
   });
 
   it('cannot start anything while no game is ready', async () => {

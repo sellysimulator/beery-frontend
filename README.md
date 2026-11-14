@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 1306 passed, 41 files (2026-11-14)
+npm run test:run        # vitest run — 1311 passed, 41 files (2026-11-14)
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -146,8 +146,9 @@ src/
 │   │                           join QR, drawn locally by qrcode.react)
 │   ├── lobby/                  the two lobbies, participant list, role cards, invite panel
 │   │                           (copy + Show QR), roomCode.ts (alphabet, inviteUrl)
-│   ├── multihost/              the dashboard's GameCard, useRoomsSummary (polls
-│   │                           POST /rooms/summary every 5 s) and multihost.ts
+│   ├── multihost/              the dashboard's GameCard (with a start refusal on the card),
+│   │                           useRoomsSummary (polls POST /rooms/summary every 5 s, with
+│   │                           asOf) and multihost.ts
 │   │                           (openHostScreen, statusLabel, hostedRooms)
 │   ├── config/                 the host configuration panel and its react-hook-form pieces;
 │   │                           ConfigSections (the stateless form, shared by the lobby's
