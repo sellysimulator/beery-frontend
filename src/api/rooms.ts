@@ -83,9 +83,14 @@ export async function getLimits(): Promise<Limits> {
  * The demand series and lead times a draft config will play (`10 §3.5b`).
  * No authentication: nothing is stored, and no room is read. A draft the
  * server refuses is a 422 whose `detail` names the field and the range.
+ *
+ * With a `patch`, the server first merges it over `config` exactly as a
+ * config save merges it, and the answer's `config` is the validated result:
+ * the multi-game setup form edits its local draft this way (2026-11-14).
  */
-export async function previewConfig(config: object): Promise<ConfigPreview> {
-  const { data } = await http.post<ConfigPreview>('/rooms/preview', { config })
+export async function previewConfig(config: object, patch?: object): Promise<ConfigPreview> {
+  const body = patch === undefined ? { config } : { config, patch }
+  const { data } = await http.post<ConfigPreview>('/rooms/preview', body)
   return data
 }
 

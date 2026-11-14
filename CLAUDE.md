@@ -124,7 +124,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-13 (after multi-game hosting and the join QR code): **1303 tests /
+Verified green on 2026-11-14 (after the batch base config and the open export): **1306 tests /
 41 files passed**, `eslint .` clean, `tsc -b` clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
@@ -247,7 +247,8 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.
     Palette is Okabe-Ito for colour-blind safety, and **colour is never the only signal** —
     backlog and alerts always carry an icon and a label too.
-12. **Forms**: react-hook-form + Zod, only in the host config panel. **The ranges are the
+12. **Forms**: react-hook-form + Zod, only in the host config form (the lobby's `ConfigPanel`
+    and, over a draft, `/multihost/new`; both render `ConfigSections`). **The ranges are the
     server's, never ours** (2026-11-02): `useLimits()` fetches `GET /rooms/limits` once and
     `buildConfigFormSchema(limits)` builds every check, `min`/`max` and hint from it (sections
     read `ConfigFormContext.limits`); there is no `FORM_LIMITS` and must never be one — add a
@@ -329,13 +330,26 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 
 ### Multi-game hosting and the join QR code (2026-11-13)
 
-`/multihost/new` (`MultiHostSetupPage`) takes a count, a preset and a host name and calls
-`createRoomBatch` (`POST /rooms/batch-create`, backend `10 §3.5c`); the count's range is the
-server's (`Limits.min_batch_rooms`/`max_batch_rooms` via `useLimits()`), refused, never
-clamped. It deliberately does **not** reuse the `components/config` form, which is bound to a
-live room: each game's own host screen still offers that form until the game starts. It
-stores every secret with `setHostSecret` and the codes with `setHostBatch` before navigating,
-and nothing at all if any room came back without a secret.
+`/multihost/new` (`MultiHostSetupPage`) takes a count, a host name and **the full base config**
+every game in the batch starts with, and calls `createRoomBatch` (`POST /rooms/batch-create`,
+backend `10 §3.5c`) with `{count, preset, config, host_display_name}`: `preset` is the preset the
+draft started from, `config` the validated draft itself. The count's range is the server's
+(`Limits.min_batch_rooms`/`max_batch_rooms` via `useLimits()`), refused, never clamped. Since
+2026-11-14 the config is the lobby's own form: `config/ConfigSections.tsx` is the stateless
+rendering (no store, no room), `config/useConfigForm.ts` the form state (ranges, Zod, `useForm`,
+pending demand kind, preset/kind handlers), and each caller supplies a `ConfigSaveApi`.
+`ConfigPanel` supplies the store's config and `useConfigSave` and behaves exactly as before; the
+setup page supplies `config/useDraftConfig.ts`, whose save posts the current draft **and the
+patch** to `POST /rooms/preview`. The server merges the patch (`merge_config_patch`: a changed
+demand kind replaces the block and gets its defaults), validates, and returns `config`, which
+becomes the draft; the figures prime `useConfigPreview`'s cache (`primePreview`). A 422
+`"field: message"` is parsed by `fieldFromPreviewError` and shown beside the field. The draft
+starts from the preset marked `is_default` on `/rooms/presets`. Create stays disabled while an
+edit is queued or in flight, the server refuses one, a field is out of range, or a picked demand
+generator has no settings yet. Never copy the merge rule or a kind's defaults into the client.
+Each game's own host screen still offers the form until that game starts. The page stores every
+secret with `setHostSecret` and the codes with `setHostBatch` before navigating, and nothing at
+all if any room came back without a secret.
 
 `/multihost` (`MultiHostDashboard`) is a grid of `multihost/GameCard`s polled from
 `getRoomsSummary` (`POST /rooms/summary`, every 5 s, `useRoomsSummary`). It never joins a
@@ -358,6 +372,20 @@ click. The host lobby's `InvitePanel` opens it with **Show QR** / **Hide QR**; e
 dashboard card shows a small inline QR and opens it too. `utils/clipboard.ts`'s
 `copyToClipboard` is the one copy helper both use.
 
+### Results export is open to every viewer (2026-11-14)
+
+`results/ExportControls.tsx` renders CSV and JSON for anyone viewing a persisted game (one with a
+`public_id`), host or player, guest or signed in, and downloads from
+`GET /games/id/{public_id}/export` with no `X-Host-Secret` — the host too. The export is not
+bound to the host because a guest host has no account to fall back on once the room or tab is
+gone (backend `15 §10`, `00-decisions.md` D22). The export by room code stays host-only on the
+server and is not called from here. Each game and format can be downloaded **once per browser
+session**: after a success the button is disabled and reads "CSV already downloaded this
+session"; a failure marks nothing. That flag is UX only; the server's per-address limit (100
+exports an hour, both formats) is the real guard, and its 429 arrives through `errorMessage`.
+Don't reintroduce a host check, an expiry warning or "only the host can export" copy, and
+`GuestClaimPrompt` must not sell an account as the way to keep exporting.
+
 ## 7. Storage scopes — not interchangeable
 
 `utils/storage.ts` is the only module allowed to touch Web Storage.
@@ -370,6 +398,7 @@ dashboard card shows a small inline QR and opens it too. `utils/clipboard.ts`'s
 | `host_secret_<room>` | **sessionStorage** | Secret **and tab-scoped** — in localStorage it leaks host authority into a tab opened from an invite link |
 | `host_room` | sessionStorage | UI hint only; never trusted by the server |
 | `host_batch` | sessionStorage | The multi-game dashboard's room codes (JSON array; `getHostBatch()` is null when absent or malformed). Codes only — each secret is under `host_secret_<room>` |
+| `export_downloaded_<public_id>_<format>` | sessionStorage | The results screen's once-per-session download flag (`markExportDownloaded` / `wasExportDownloaded`). **UX only**: the server's per-address export budget (100 an hour, backend `core/abuse.py`) is the real guard |
 | `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it) |
 | `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (`24 §2.3`) |
 

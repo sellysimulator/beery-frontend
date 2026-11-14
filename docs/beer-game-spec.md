@@ -456,7 +456,7 @@ Every wait MUST say what is being waited for and who is holding it up: *"Waiting
 - The big reveal: **true customer demand plotted against all four order streams** on one chart. This is the moment the lesson lands.
 - Bullwhip ratio per role: `Var(orders) / Var(customer demand)`.
 - Peak inventory, peak backlog, weeks in backlog, shipped vs waiting.
-- Host-only: CSV/JSON export of the full week-by-week record. Two of its columns are easy to misread, so they say what they hold: `incoming_orders_in_flight_after` is the orders travelling **to** the role (its customer's orders not yet arrived) — not the player's on-screen "orders in flight", which are the player's **own** orders going upstream — and `total_week_cost` is holding + backlog + fixed order + purchase cost for the week.
+- CSV/JSON export of the full week-by-week record, for anyone who can see the results (since 2026-11-14; once per format per browser session, and the server limits each address to 100 exports an hour). Two of its columns are easy to misread, so they say what they hold: `incoming_orders_in_flight_after` is the orders travelling **to** the role (its customer's orders not yet arrived) — not the player's on-screen "orders in flight", which are the player's **own** orders going upstream — and `total_week_cost` is holding + backlog + fixed order + purchase cost for the week.
 
 ### 9.6 Host console
 - All four roles side by side, live: inventory, backlog, last order, accumulated cost, submission status.

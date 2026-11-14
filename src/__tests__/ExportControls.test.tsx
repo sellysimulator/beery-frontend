@@ -1,18 +1,17 @@
 /**
- * `21-frontend-results.md §2.4` — `ExportControls`, the host's download.
+ * `21-frontend-results.md §2.4` — `ExportControls`, the full record's download.
  *
- * Covers acceptance criteria 10, 11, 12 and 13, and failure mode 5.
+ * Since 2026-11-14 the export is open to anyone who can see the results
+ * screen: host or player, signed in or guest, everybody downloads by the
+ * game's permanent id (`GET /api/v1/games/id/{public_id}/export`) with no host
+ * secret. Each format can be downloaded once per game per browser session
+ * (a sessionStorage flag; a courtesy, the server's per-address limit is the
+ * guard).
  *
  * Harness notes:
  *  - `src/api/http.ts` is replaced by a recorder, so the export request is
- *    asserted as a wire call: `15 §2` gives the route
- *    `GET /api/v1/games/{room_code}/export` and its `X-Host-Secret` auth.
- *  - Host authority is put in place only through `16 §3`'s storage helpers
- *    (`setHostRoom`, `setHostSecret`), which is what `§2.4`'s
- *    `isHostForRoom(roomCode)` reads.
+ *    asserted as a wire call.
  *  - `src/auth/AuthContext.tsx` is stubbed with the value `16 §3` freezes.
- *    The host tab's authority is a room capability (**D3**); only the
- *    account way (`15 §3.2`, the last block) signs anybody in.
  *  - `chart.js` and `react-chartjs-2` are **not** mocked (failure mode 13).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -24,7 +23,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { ROLE_ORDER } from '../types/game';
 import type { Role, RoleStats } from '../types/game';
-import { getHostSecret, setHostRoom, setHostSecret } from '../utils/storage';
+import { setHostRoom, setHostSecret, wasExportDownloaded } from '../utils/storage';
 import type { RouteDescriptor } from '../routes/registry';
 import * as ResultsPageModule from '../pages/ResultsPage';
 import * as ExportControlsModule from '../components/results/ExportControls';
@@ -139,8 +138,8 @@ vi.mock('../auth/AuthContext', () => ({
 // ---------------------------------------------------------------------------
 
 const ROOM = 'BEERYX';
-const OTHER = 'MASHUP';
 const HOST_SECRET = 'host-secret-for-tests';
+const PUBLIC_ID = 'f'.repeat(32);
 const WEEKS = 6;
 
 const DEMAND = [4, 4, 12, 12, 12, 12];
@@ -205,6 +204,7 @@ const STATS: Record<Role, RoleStats> = {
 
 function resultsResponse() {
   return {
+    public_id: PUBLIC_ID,
     room_code: ROOM,
     weeks_played: WEEKS,
     duration_weeks: WEEKS,
@@ -370,10 +370,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 10 and failure mode 5 — host only, and absent otherwise
+// Open to every viewer of the results screen (2026-11-14)
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10 and FAILURE MODE 5: export is the host’s, and nobody else sees it', () => {
+describe('the export is open to anyone who can see the results', () => {
   it('is exported from src/components/results/ExportControls.tsx', () => {
     const exported = ExportControlsModule as Record<string, unknown>;
     const component =
@@ -383,229 +383,160 @@ describe('CRITERION 10 and FAILURE MODE 5: export is the host’s, and nobody el
     expect(typeof component === 'function' || typeof component === 'object').toBe(true);
   });
 
-  it('renders both formats for the host of that room', async () => {
+  it('renders both formats for a player with no host key and no account', async () => {
+    await renderResults();
+
+    expect(control(/csv/i, 'the CSV export control')).toBeEnabled();
+    expect(control(/json/i, 'the JSON export control')).toBeEnabled();
+  });
+
+  it('renders both formats for the host too', async () => {
     asHostTab();
     await renderResults();
 
-    expect(control(/csv/i, 'the CSV export control (§2.4)')).toBeTruthy();
-    expect(control(/json/i, 'the JSON export control (§2.4)')).toBeTruthy();
+    expect(control(/csv/i, 'the CSV export control')).toBeEnabled();
+    expect(control(/json/i, 'the JSON export control')).toBeEnabled();
   });
 
-  it('is absent from the DOM for a player, not merely disabled', async () => {
-    await renderResults();
-
-    expect(controlsMatching(/csv/i)).toEqual([]);
-    expect(controlsMatching(/json/i)).toEqual([]);
-    expect(controlsMatching(/export|download/i)).toEqual([]);
-    expect(bodyText()).not.toMatch(/\bexport\b/i);
-  });
-
-  it('is absent for the host of some other room', async () => {
-    asHostTab(OTHER);
-    await renderResults();
-
-    expect(controlsMatching(/csv|json|export|download/i)).toEqual([]);
-  });
-
-  it('issues no export request when nobody asked for one', async () => {
+  it('says nothing about only the host being able to export', async () => {
     asHostTab();
+    await renderResults();
+
+    expect(exportRegionText()).not.toMatch(/only (the|a) (signed-in )?host/i);
+    expect(exportRegionText()).toMatch(/once per browser session/i);
+  });
+
+  it('is absent when the results carry no permanent id', async () => {
+    httpRec.get.mockImplementation(async (url: string) => {
+      if (/\/results(\?|$)/.test(url)) {
+        const { public_id: _omit, ...rest } = resultsResponse();
+        void _omit;
+        return { data: rest, status: 200 };
+      }
+      throw axiosError(404, `Unexpected GET ${url}`);
+    });
+    await renderResults();
+
+    expect(controlsMatching(/csv|json/i)).toEqual([]);
+  });
+
+  it('issues no export request until a button is pressed, and never asks who hosted', async () => {
+    auth.value = { ...auth.value, mode: 'authenticated' };
     await renderResults();
 
     expect(exportCalls()).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Criterion 11 — the request
-// ---------------------------------------------------------------------------
-
-describe('CRITERION 11: the export carries the stored host_secret, in both formats', () => {
-  it('requests GET /games/{code}/export when CSV is pressed', async () => {
-    const user = userEvent.setup();
-    asHostTab();
-    await renderResults();
-
-    await user.click(control(/csv/i, 'the CSV export control (§2.4)'));
-
-    await waitFor(() => {
-      expect(exportCalls()).toHaveLength(1);
-    });
-    expect(String(exportCalls()[0][0])).toContain(`/games/${ROOM}/export`);
-  });
-
-  it('sends the tab’s host secret in the X-Host-Secret header', async () => {
-    const user = userEvent.setup();
-    asHostTab();
-    await renderResults();
-
-    await user.click(control(/csv/i, 'the CSV export control (§2.4)'));
-
-    await waitFor(() => {
-      expect(exportCalls()).toHaveLength(1);
-    });
-    expect(getHostSecret(ROOM)).toBe(HOST_SECRET);
-    expect(headerValue(exportCalls()[0][1], 'X-Host-Secret')).toBe(HOST_SECRET);
-  });
-
-  it('keeps the secret out of the URL', async () => {
-    const user = userEvent.setup();
-    asHostTab();
-    await renderResults();
-
-    await user.click(control(/csv/i, 'the CSV export control (§2.4)'));
-
-    await waitFor(() => {
-      expect(exportCalls()).toHaveLength(1);
-    });
-    expect(String(exportCalls()[0][0])).not.toContain(HOST_SECRET);
-    const params = (exportCalls()[0][1] as { params?: unknown } | undefined)?.params;
-    expect(JSON.stringify(params ?? {})).not.toContain(HOST_SECRET);
-  });
-
-  it('asks for CSV and JSON distinctly, each with the secret', async () => {
-    const user = userEvent.setup();
-    asHostTab();
-    await renderResults();
-
-    await user.click(control(/csv/i, 'the CSV export control (§2.4)'));
-    await waitFor(() => {
-      expect(exportCalls()).toHaveLength(1);
-    });
-    await user.click(control(/json/i, 'the JSON export control (§2.4)'));
-    await waitFor(() => {
-      expect(exportCalls()).toHaveLength(2);
-    });
-
-    const [csvCall, jsonCall] = exportCalls().map((call) => JSON.stringify(call));
-    expect(csvCall).toMatch(/csv/i);
-    expect(jsonCall).toMatch(/json/i);
-    expect(csvCall).not.toBe(jsonCall);
-    for (const call of exportCalls()) {
-      expect(headerValue(call[1], 'X-Host-Secret')).toBe(HOST_SECRET);
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Criterion 12 — a 403 in plain language
-// ---------------------------------------------------------------------------
-
-describe('CRITERION 12: a 403 is explained, not dumped', () => {
-  beforeEach(() => {
-    httpRec.get.mockImplementation(async (url: string) => {
-      if (/\/results(\?|$)/.test(url)) return { data: resultsResponse(), status: 200 };
-      throw axiosError(403, 'Forbidden: host_secret mismatch');
-    });
-  });
-
-  it('renders §2.4’s message', async () => {
-    const user = userEvent.setup();
-    asHostTab();
-    await renderResults();
-
-    await user.click(control(/csv/i, 'the CSV export control (§2.4)'));
-
-    await waitFor(() => {
-      expect(bodyText()).toContain('Only the host who created this room can export it.');
-    });
-  });
-
-  it('shows no raw error and no status code', async () => {
-    const user = userEvent.setup();
-    asHostTab();
-    await renderResults();
-
-    await user.click(control(/csv/i, 'the CSV export control (§2.4)'));
-
-    await waitFor(() => {
-      expect(bodyText()).toContain('Only the host who created this room can export it.');
-    });
-    expect(bodyText()).not.toMatch(/403|AxiosError|Request failed|host_secret/i);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Criterion 13 — download now
-// ---------------------------------------------------------------------------
-
-describe('CRITERION 13: the host is told the data expires', () => {
-  it('states the 24-hour expiry beside the buttons', async () => {
-    asHostTab();
-    await renderResults();
-
-    const text = exportRegionText();
-    expect(text).toMatch(/download now/i);
-    expect(text).toContain('expires in 24 hours');
-  });
-
-  it('says only a signed-in host can export afterwards', async () => {
-    asHostTab();
-    await renderResults();
-
-    expect(exportRegionText()).toMatch(/only a signed-in host can export it/i);
+    expect(httpRec.get.mock.calls.some((call) => /hosted-games/.test(String(call[0])))).toBe(false);
   });
 
   it('is print-omitted, like every other control (§3.3)', async () => {
-    asHostTab();
     await renderResults();
 
-    const holder = control(/csv/i, 'the CSV export control (§2.4)').closest('[data-print]');
+    const holder = control(/csv/i, 'the CSV export control').closest('[data-print]');
     expect(holder?.getAttribute('data-print')).toBe('omit');
   });
 });
 
 // ---------------------------------------------------------------------------
-// The account way (`15 §3.2`): a signed-in host, in a tab that is not the host's
+// The request: by public_id, for everyone, host included
 // ---------------------------------------------------------------------------
 
-describe('the signed-in host exports by account from any tab', () => {
-  const PUBLIC_ID = 'f'.repeat(32);
-
-  function signedInWithHosted(hosted: boolean): void {
-    auth.value = { ...auth.value, mode: 'authenticated' };
-    httpRec.get.mockImplementation(async (url: string) => {
-      if (/\/results(\?|$)/.test(url)) {
-        return { data: { ...resultsResponse(), public_id: PUBLIC_ID }, status: 200 };
-      }
-      if (url === `/users/me/hosted-games/${PUBLIC_ID}`) {
-        if (hosted) return { data: '', status: 204 };
-        throw axiosError(404, 'Game not found.');
-      }
-      if (/\/export(\?|$)/.test(url)) {
-        return { data: CSV_BODY, status: 200, headers: { 'content-type': 'text/csv' } };
-      }
-      throw axiosError(404, `Unexpected GET ${url}`);
-    });
-  }
-
-  it('renders for the confirmed host and downloads by id, with no host secret', async () => {
-    signedInWithHosted(true);
+describe('every download goes by public_id, with no host secret', () => {
+  it.each([
+    ['a player', () => {}],
+    ['the host', () => asHostTab()],
+  ])('requests GET /games/id/{public_id}/export for %s', async (_who, arrange) => {
+    arrange();
+    const user = userEvent.setup();
     await renderResults();
 
-    const user = userEvent.setup();
-    await user.click(await waitFor(() => control(/csv/i, 'the CSV download')));
+    await user.click(control(/csv/i, 'the CSV export control'));
 
-    await waitFor(() => expect(exportCalls().length).toBe(1));
+    await waitFor(() => expect(exportCalls()).toHaveLength(1));
     const [url, config] = exportCalls()[0];
     expect(url).toBe(`/games/id/${PUBLIC_ID}/export`);
+    expect((config as { params?: unknown }).params).toEqual({ format: 'csv' });
     expect(headerValue(config, 'X-Host-Secret')).toBeNull();
-    expect(exportRegionText()).toMatch(/you hosted this game/i);
+    expect(JSON.stringify(exportCalls()[0])).not.toContain(HOST_SECRET);
   });
 
-  it('stays absent when the server says this account did not host it', async () => {
-    signedInWithHosted(false);
+  it('asks for CSV and JSON distinctly', async () => {
+    const user = userEvent.setup();
     await renderResults();
 
+    await user.click(control(/csv/i, 'the CSV export control'));
+    await waitFor(() => expect(exportCalls()).toHaveLength(1));
+    await user.click(control(/json/i, 'the JSON export control'));
+    await waitFor(() => expect(exportCalls()).toHaveLength(2));
+
+    expect(exportCalls().map((call) => (call[1] as { params?: unknown }).params)).toEqual([
+      { format: 'csv' },
+      { format: 'json' },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Once per game and format per browser session (UX only)
+// ---------------------------------------------------------------------------
+
+describe('each format downloads once per browser session', () => {
+  it('disables a downloaded format and says so, leaving the other one', async () => {
+    const user = userEvent.setup();
+    await renderResults();
+
+    await user.click(control(/csv/i, 'the CSV export control'));
     await waitFor(() =>
-      expect(httpRec.get.mock.calls.some((call) => /hosted-games/.test(String(call[0])))).toBe(true),
+      expect(control(/csv/i, 'the CSV export control')).toHaveTextContent(
+        'CSV already downloaded this session',
+      ),
     );
-    expect(controlsMatching(/csv|json/i)).toEqual([]);
+    expect(control(/csv/i, 'the CSV export control')).toBeDisabled();
+    expect(control(/json/i, 'the JSON export control')).toBeEnabled();
+    expect(wasExportDownloaded(PUBLIC_ID, 'csv')).toBe(true);
+    expect(wasExportDownloaded(PUBLIC_ID, 'json')).toBe(false);
+
+    await user.click(control(/csv/i, 'the CSV export control'));
+    expect(exportCalls()).toHaveLength(1);
   });
 
-  it('never asks for a guest', async () => {
+  it('keeps the flag in sessionStorage, so a reload of this tab still knows', async () => {
+    const user = userEvent.setup();
+    const first = await renderResults();
+    await user.click(control(/json/i, 'the JSON export control'));
+    await waitFor(() => expect(wasExportDownloaded(PUBLIC_ID, 'json')).toBe(true));
+    first.unmount();
+
+    expect(Object.keys(sessionStorage).some((key) => key.includes(PUBLIC_ID))).toBe(true);
+    expect(Object.keys(localStorage).some((key) => key.includes(PUBLIC_ID))).toBe(false);
+
+    await renderResults();
+    expect(control(/json/i, 'the JSON export control')).toBeDisabled();
+    expect(control(/json/i, 'the JSON export control')).toHaveTextContent(
+      'JSON already downloaded this session',
+    );
+    expect(control(/csv/i, 'the CSV export control')).toBeEnabled();
+  });
+
+  it('counts per game: another game is still downloadable', async () => {
+    sessionStorage.setItem(`export_downloaded_${'a'.repeat(32)}_csv`, '1');
     await renderResults();
 
-    expect(httpRec.get.mock.calls.some((call) => /hosted-games/.test(String(call[0])))).toBe(false);
-    expect(controlsMatching(/csv|json/i)).toEqual([]);
+    expect(control(/csv/i, 'the CSV export control')).toBeEnabled();
+  });
+
+  it('a refused download is not marked: the server limit says why, and the button stays', async () => {
+    httpRec.get.mockImplementation(async (url: string) => {
+      if (/\/results(\?|$)/.test(url)) return { data: resultsResponse(), status: 200 };
+      throw axiosError(429, 'Too many requests. Please slow down and try again.');
+    });
+    const user = userEvent.setup();
+    await renderResults();
+
+    await user.click(control(/csv/i, 'the CSV export control'));
+
+    await waitFor(() => expect(bodyText()).toContain('Too many requests.'));
+    expect(bodyText()).not.toMatch(/AxiosError|Request failed/i);
+    expect(wasExportDownloaded(PUBLIC_ID, 'csv')).toBe(false);
+    expect(control(/csv/i, 'the CSV export control')).toBeEnabled();
   });
 });

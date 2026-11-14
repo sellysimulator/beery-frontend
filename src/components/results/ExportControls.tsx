@@ -1,24 +1,19 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import http, { errorMessage } from '../../api/http'
-import { useAuth } from '../../auth/AuthContext'
-import { getHostSecret, isHostForRoom } from '../../utils/storage'
+import { markExportDownloaded, wasExportDownloaded } from '../../utils/storage'
 
 export interface ExportControlsProps {
   roomCode: string
-  /** The game's permanent id; only the persisted record has it. */
+  /** The game's permanent id; the export is addressed by it. */
   publicId?: string
 }
 
 type Format = 'csv' | 'json'
 
-/** What a refused export says, instead of a raw 403 (section 2.4). */
-export const EXPORT_FORBIDDEN_MESSAGE =
-  'Only the host who created this room can export it.'
-
-function statusOf(err: unknown): number | null {
-  const response = (err as { response?: { status?: unknown } } | null | undefined)?.response
-  return typeof response?.status === 'number' ? response.status : null
-}
+const FORMATS: ReadonlyArray<{ format: Format; label: string }> = [
+  { format: 'csv', label: 'CSV' },
+  { format: 'json', label: 'JSON' },
+]
 
 /**
  * Hands the downloaded body to the browser.
@@ -42,75 +37,47 @@ function saveFile(data: unknown, filename: string): void {
 }
 
 /**
- * CSV and JSON of the complete week-by-week record, for the host only.
+ * CSV and JSON of the complete week-by-week record, for anyone who can see
+ * this results screen (2026-11-14).
  *
- * Two ways in, both decided by the server (`15 §3.2`, `§9`):
- *  - the host's tab: the stored `host_secret`, presented in `X-Host-Secret` —
- *    never a client-side "I am the host" boolean (**D3**);
- *  - the host's account, in any tab: a signed-in caller the server confirms
- *    hosted this game (`GET /users/me/hosted-games/{publicId}`) downloads by
- *    the game's permanent id with their own token. A guest host gets there by
- *    claiming their results (`GuestClaimPrompt`).
+ * The export is not bound to the host. A host may be a guest, and a guest
+ * host has no account to fall back on once the room or the tab is gone, so
+ * every viewer — host included — downloads by the game's permanent id,
+ * `GET /games/id/{public_id}/export`, with no secret and no token. The file
+ * carries what this screen already shows (names, seats, figures) and no
+ * account or credential. The export by room code stays host-only on the
+ * server and is not used here.
  *
- * Anyone else renders nothing at all rather than a disabled button, because a
- * disabled button is an invitation to try it from devtools.
- *
- * The 24-hour prompt is not decoration: once the room expires only the
- * account way is left, so a guest host who has not signed in by then has
- * nothing left to export.
+ * **Once per game and format per browser session.** After a download the
+ * button is disabled and says so, from a sessionStorage flag
+ * (`markExportDownloaded`). That is a courtesy against an accidental flood of
+ * clicks, **not** a guard: storage can be cleared and the route called
+ * directly. The real limit is the server's per-address export budget
+ * (`core/abuse.py`, 100 an hour across both formats), whose 429 shows here as
+ * `errorMessage`'s rate-limit sentence.
  */
 export function ExportControls({ roomCode, publicId }: ExportControlsProps): ReactElement | null {
-  const { mode } = useAuth()
   const [busy, setBusy] = useState<Format | null>(null)
   const [error, setError] = useState('')
-  const [hostedId, setHostedId] = useState<string | null>(null)
+  // Re-read on every render; bumped after a download so the button updates.
+  const [, setDownloads] = useState(0)
 
-  const hostTab = isHostForRoom(roomCode)
-  const askAccount = !hostTab && mode === 'authenticated' && Boolean(publicId)
-
-  useEffect(() => {
-    if (!askAccount || !publicId) return
-    let cancelled = false
-    http
-      .get(`/users/me/hosted-games/${publicId}`)
-      .then(() => {
-        if (!cancelled) setHostedId(publicId)
-      })
-      // A 404 means "not the host": the controls stay absent, with nothing to say.
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [askAccount, publicId])
-
-  const byAccount = askAccount && hostedId === publicId
-  if (!hostTab && !byAccount) return null
-
-  const secret = hostTab ? getHostSecret(roomCode) : null
+  if (!publicId) return null
 
   async function download(format: Format): Promise<void> {
-    if (!secret && !byAccount) return
+    if (!publicId || wasExportDownloaded(publicId, format)) return
     setBusy(format)
     setError('')
     try {
-      // The account way needs no header: `http` attaches the signed-in token.
-      const response = secret
-        ? await http.get(`/games/${roomCode}/export`, {
-            params: { format },
-            headers: { 'X-Host-Secret': secret },
-            responseType: 'blob',
-          })
-        : await http.get(`/games/id/${publicId}/export`, {
-            params: { format },
-            responseType: 'blob',
-          })
+      const response = await http.get(`/games/id/${publicId}/export`, {
+        params: { format },
+        responseType: 'blob',
+      })
       saveFile(response.data, `beer-game-${roomCode}.${format}`)
+      markExportDownloaded(publicId, format)
+      setDownloads((count) => count + 1)
     } catch (err) {
-      setError(
-        statusOf(err) === 403
-          ? EXPORT_FORBIDDEN_MESSAGE
-          : errorMessage(err, 'The export could not be downloaded.'),
-      )
+      setError(errorMessage(err, 'The export could not be downloaded.'))
     } finally {
       setBusy(null)
     }
@@ -124,36 +91,30 @@ export function ExportControls({ roomCode, publicId }: ExportControlsProps): Rea
     >
       <h2 className="text-lg font-semibold">Export the full record</h2>
       <p className="text-sm text-ink-muted">
-        {byAccount
-          ? 'You hosted this game, so your account can download its full record.'
-          : "Download now — the room's data expires in 24 hours, and after that only a signed-in host can export it."}
+        Every week of every role, as a spreadsheet (CSV) or as data (JSON). Each file can be
+        downloaded once per browser session.
       </p>
 
-      {secret || byAccount ? (
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void download('csv')}
-            className="rounded-md border border-border-strong px-4 py-2 font-semibold transition hover:border-brand hover:text-brand disabled:text-ink-subtle"
-          >
-            {busy === 'csv' ? 'Downloading…' : 'Download CSV'}
-          </button>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void download('json')}
-            className="rounded-md border border-border-strong px-4 py-2 font-semibold transition hover:border-brand hover:text-brand disabled:text-ink-subtle"
-          >
-            {busy === 'json' ? 'Downloading…' : 'Download JSON'}
-          </button>
-        </div>
-      ) : (
-        <p className="text-sm text-ink-muted">
-          This tab no longer holds the room&apos;s host key, so it cannot download the
-          record.
-        </p>
-      )}
+      <div className="flex flex-wrap gap-3">
+        {FORMATS.map(({ format, label }) => {
+          const done = wasExportDownloaded(publicId, format)
+          return (
+            <button
+              key={format}
+              type="button"
+              disabled={busy !== null || done}
+              onClick={() => void download(format)}
+              className="rounded-md border border-border-strong px-4 py-2 font-semibold transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:text-ink-subtle"
+            >
+              {busy === format
+                ? 'Downloading…'
+                : done
+                  ? `${label} already downloaded this session`
+                  : `Download ${label}`}
+            </button>
+          )
+        })}
+      </div>
 
       {error ? (
         <p role="alert" className="text-sm text-danger">

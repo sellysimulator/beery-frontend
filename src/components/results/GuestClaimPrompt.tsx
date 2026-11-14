@@ -21,9 +21,11 @@ interface ClaimResponse {
  * payload can say who was in the room. The three conditions are guest mode, a
  * minted guest id, and this browser's own evidence that it was in the room: a
  * `session_token` for it (a player), or this tab hosting it (a host). A guest
- * host who claims becomes the game's registered host, and may export it later
- * from any tab once signed in (`15 §3.2`); a hosted game never enters the
- * profile's game history, which counts only the roles a user played.
+ * host who claims becomes the game's registered host (`15 §3.2`); a hosted game
+ * never enters the profile's game history, which counts only the roles a user
+ * played. Exporting needs no claim: since 2026-11-14 anyone who can open the
+ * results downloads the record by its permanent id (`ExportControls`), so the
+ * host's copy must not promise an account is the way to keep exporting.
  *
  * The guest id travels in the `POST /games/claim` body and nowhere else: not
  * in a path, not in a query string, not in a log.
@@ -71,12 +73,12 @@ export function GuestClaimPrompt({ roomCode }: GuestClaimPromptProps): ReactElem
           <h2 className="text-lg font-semibold">
             {playedHere
               ? 'Sign in to keep this result in your profile.'
-              : 'Sign in to keep exporting this game.'}
+              : 'Sign in to link this game to your account.'}
           </h2>
           <p className="text-sm text-ink-muted">
             {playedHere
               ? 'You played this game as a guest. Signing in attaches it — and every other game this browser played — to your account.'
-              : "You hosted this game as a guest. Signing in lets your account export it after the room expires. Hosted games don't appear in your game history; games this browser played as a guest are added to it."}
+              : "You hosted this game as a guest. Signing in records your account as its host. You don't need an account to download the full record: anyone with this results page can. Hosted games don't appear in your game history; games this browser played as a guest are added to it."}
           </p>
           <div>
             <button

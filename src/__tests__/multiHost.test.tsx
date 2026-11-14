@@ -1,6 +1,12 @@
 /**
- * Multi-game hosting: one preset, N games (`POST /rooms/batch-create`), and a
- * dashboard above each game's unchanged host screen (`10 §3.5c`, `§3.5d`).
+ * Multi-game hosting: one base config, N games (`POST /rooms/batch-create`), and
+ * a dashboard above each game's unchanged host screen (`10 §3.5c`, `§3.5d`).
+ *
+ * The setup page runs the lobby's own config form (`ConfigSections`) over a
+ * local draft (2026-11-14). The fake `previewConfig` below plays the server's
+ * part: it merges the patch over the draft, fills a new demand kind's
+ * defaults, refuses what the server refuses with its `"field: message"` 422,
+ * and answers with the validated `config`.
  *
  * Seats and status come from `POST /rooms/summary`. A host screen opens in its
  * own tab, which only works if the browser copies this tab's sessionStorage,
@@ -17,11 +23,12 @@ import { render, screen, within, waitFor, fireEvent, act } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
-import type { GameConfig, RoomCreateResponse, RoomSummary } from '../types/game';
+import type { GameConfig, PresetSummary, RoomCreateResponse, RoomSummary } from '../types/game';
 import { TEST_LIMITS } from './limitsFixture';
 
 const api = vi.hoisted(() => ({
   createRoomBatch: vi.fn(),
+  previewConfig: vi.fn(),
   getRoomsSummary: vi.fn(),
   listPresets: vi.fn(),
   getLimits: vi.fn(),
@@ -30,6 +37,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock('../api/rooms', () => ({
   createRoomBatch: api.createRoomBatch,
+  previewConfig: api.previewConfig,
   getRoomsSummary: api.getRoomsSummary,
   listPresets: api.listPresets,
   getLimits: api.getLimits,
@@ -43,6 +51,7 @@ vi.mock('../api/http', () => ({
     const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
     return typeof detail === 'string' ? detail : fallback;
   },
+  isRateLimited: () => false,
 }));
 
 vi.mock('../auth/AuthContext', () => ({
@@ -54,6 +63,8 @@ import * as DashboardModule from '../pages/MultiHostDashboard';
 import * as HomePageModule from '../pages/HomePage';
 import { openHostScreen, statusLabel } from '../components/multihost/multihost';
 import { resetLimitsCacheForTests } from '../components/config/useLimits';
+import { resetPreviewCacheForTests } from '../components/config/useConfigPreview';
+import { fieldFromPreviewError } from '../components/config/useDraftConfig';
 import { inviteUrl } from '../components/lobby/roomCode';
 import { useGameStore } from '../store/gameStore';
 import {
@@ -69,6 +80,113 @@ import {
 const A = 'ABC234';
 const B = 'DEF567';
 const C = 'GHJ789';
+
+function baseConfig(over: Partial<GameConfig> = {}): GameConfig {
+  const role = {
+    initial_inventory: 12,
+    initial_backlog: 0,
+    shipping_delay_weeks: 2,
+    information_delay_weeks: 2,
+    initial_pipeline_quantity: 4,
+    initial_order_in_pipeline: 4,
+    holding_cost_per_unit_week: 0.5,
+    backlog_cost_per_unit_week: 1.0,
+    fixed_order_cost: 0.0,
+    unit_purchase_cost: 0.0,
+    starting_capital: 0.0,
+  };
+  return {
+    duration_weeks: 36,
+    stage_count: 4,
+    pause_on_disconnect: true,
+    bot_fill_empty_roles: true,
+    random_seed: null,
+    currency_symbol: '$',
+    role_assignment_mode: 'HOST_ASSIGNS',
+    preset_name: null,
+    roles: {
+      RETAILER: { ...role },
+      WHOLESALER: { ...role },
+      DISTRIBUTOR: { ...role },
+      FACTORY: { ...role, production_delay_weeks: 2, production_capacity_per_week: null },
+    },
+    demand: { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 },
+    visibility: {
+      show_true_customer_demand_to_all: false,
+      show_neighbour_inventory: false,
+      show_all_inventories: false,
+      show_supply_line_prominently: true,
+      show_running_cost_to_players: true,
+      show_leaderboard_during_game: false,
+      max_order_quantity: null,
+    },
+    bot: { theta: 0.25, alpha: 0.3, beta: 0.25, target_stock_multiplier: 3.0 },
+    ...over,
+  } as GameConfig;
+}
+
+// Alphabetical, as the server lists them: the default is not first, so the
+// page must find it by `is_default`, not by position.
+const PRESETS: PresetSummary[] = [
+  {
+    name: 'CHAOS',
+    label: 'Chaos',
+    description: '48 weeks. Expect failure.',
+    config: baseConfig({ preset_name: 'CHAOS', duration_weeks: 48 }),
+    is_default: false,
+  },
+  {
+    name: 'CLASSIC_MIT',
+    label: 'Classic MIT',
+    description: '36 weeks. The standard.',
+    config: baseConfig({ preset_name: 'CLASSIC_MIT' }),
+    is_default: true,
+  },
+  {
+    name: 'FAST_GAME',
+    label: 'Fast Game',
+    description: '20 weeks. Tight.',
+    config: baseConfig({ preset_name: 'FAST_GAME', duration_weeks: 20 }),
+    is_default: false,
+  },
+];
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepMerge(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    out[key] = isObject(value) && isObject(out[key]) ? deepMerge(out[key] as Record<string, unknown>, value) : value;
+  }
+  return out;
+}
+
+/** The server's side of `POST /rooms/preview`, for this file. */
+async function fakePreview(config: GameConfig, patch?: Record<string, unknown>) {
+  let merged = deepMerge(config as unknown as Record<string, unknown>, patch ?? {});
+  const patchDemand = patch?.demand;
+  if (isObject(patchDemand) && patchDemand.kind !== config.demand.kind) {
+    // A changed kind replaces the block; the server fills that kind's defaults.
+    const defaults =
+      patchDemand.kind === 'CONSTANT' ? { kind: 'CONSTANT', value: 6 } : { ...patchDemand };
+    merged = { ...merged, demand: { ...defaults, ...patchDemand } };
+  }
+  if (merged.currency_symbol === '##') {
+    throw {
+      isAxiosError: true,
+      response: { status: 422, data: { detail: 'currency_symbol: must not be ##.' } },
+    };
+  }
+  const weeks = merged.duration_weeks as number;
+  return {
+    demand_series: Array.from({ length: weeks }, () => 4),
+    demand_is_example: false,
+    lead_times: { RETAILER: 4, WHOLESALER: 4, DISTRIBUTOR: 4, FACTORY: 3 },
+    config: merged as unknown as GameConfig,
+  };
+}
 
 function summary(room_code: string, fields: Partial<RoomSummary> = {}): RoomSummary {
   return {
@@ -127,14 +245,11 @@ function seedBatch(): void {
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getLimits.mockResolvedValue(TEST_LIMITS);
-  api.listPresets.mockResolvedValue({
-    presets: [
-      { name: 'CLASSIC_MIT', label: 'Classic MIT', description: '36 weeks. The standard.', config: {} },
-      { name: 'FAST_GAME', label: 'Fast Game', description: '20 weeks. Tight.', config: {} },
-    ],
-  });
+  api.listPresets.mockResolvedValue({ presets: PRESETS });
+  api.previewConfig.mockImplementation(fakePreview);
   api.getRoomsSummary.mockResolvedValue([]);
   resetLimitsCacheForTests();
+  resetPreviewCacheForTests();
   act(() => useGameStore.getState().reset());
 });
 
@@ -205,28 +320,44 @@ describe('openHostScreen', () => {
   });
 });
 
+/** The batch request the page sent, once it has sent one. */
+function sentBatch() {
+  return api.createRoomBatch.mock.calls[0][0] as {
+    count: number;
+    preset: string | null;
+    config: GameConfig;
+    host_display_name: string;
+  };
+}
+
+async function settingsReady() {
+  const form = await screen.findByRole('form', { name: 'Game settings' });
+  await waitFor(() => expect(screen.getByRole('button', { name: /^Create \d+ games$/ })).toBeEnabled());
+  return within(form);
+}
+
 describe('MultiHostSetupPage', () => {
-  it('creates the batch, stores each secret and goes to the dashboard', async () => {
+  it('starts from the server default preset and creates the batch with that whole config', async () => {
     api.createRoomBatch.mockResolvedValue({ rooms: [created(A, 'secret-a'), created(B, 'secret-b'), created(C, 'secret-c')] });
     const user = userEvent.setup();
     renderAt('/multihost/new');
 
-    const count = await screen.findByLabelText('Number of games');
-    await waitFor(() => expect(count).toHaveValue(TEST_LIMITS.min_batch_rooms));
+    const settings = await settingsReady();
+    expect(settings.getByRole('button', { name: /Classic MIT/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(settings.getByLabelText('Weeks to play')).toHaveValue(36);
+
+    const count = screen.getByLabelText('Number of games');
+    expect(count).toHaveValue(TEST_LIMITS.min_batch_rooms);
     await user.clear(count);
     await user.type(count, '3');
-
-    await user.click(screen.getByRole('combobox', { name: 'Preset' }));
-    await user.click(await screen.findByRole('option', { name: 'Fast Game' }));
-    expect(screen.getByText('20 weeks. Tight.')).toBeInTheDocument();
-
     await user.type(screen.getByLabelText('Name to host as'), 'Ms Frizzle');
     await user.click(screen.getByRole('button', { name: 'Create 3 games' }));
 
     await waitFor(() => expect(api.createRoomBatch).toHaveBeenCalledTimes(1));
-    expect(api.createRoomBatch).toHaveBeenCalledWith({
+    expect(sentBatch()).toEqual({
       count: 3,
-      preset: 'FAST_GAME',
+      preset: 'CLASSIC_MIT',
+      config: { ...PRESETS[1].config, preset_name: 'CLASSIC_MIT' },
       host_display_name: 'Ms Frizzle',
     });
 
@@ -238,22 +369,120 @@ describe('MultiHostSetupPage', () => {
     expect(getDisplayName()).toBe('Ms Frizzle');
   });
 
-  it('sends no preset for the default settings', async () => {
+  it('switches the starting point with a preset card', async () => {
     api.createRoomBatch.mockResolvedValue({ rooms: [created(A, 'a'), created(B, 'b')] });
     const user = userEvent.setup();
     renderAt('/multihost/new');
 
+    const settings = await settingsReady();
+    await user.click(settings.getByRole('button', { name: /Fast Game/ }));
+
+    await waitFor(() => expect(settings.getByLabelText('Weeks to play')).toHaveValue(20));
+    expect(settings.getByRole('button', { name: /Fast Game/ })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(await screen.findByRole('button', { name: 'Create 2 games' }));
+
+    await waitFor(() => expect(api.createRoomBatch).toHaveBeenCalled());
+    expect(sentBatch().preset).toBe('FAST_GAME');
+    expect(sentBatch().config).toMatchObject({ preset_name: 'FAST_GAME', duration_weeks: 20 });
+  });
+
+  it('validates each edit through /rooms/preview and sends the validated draft', async () => {
+    api.createRoomBatch.mockResolvedValue({ rooms: [created(A, 'a'), created(B, 'b')] });
+    const user = userEvent.setup();
+    renderAt('/multihost/new');
+
+    const settings = await settingsReady();
+    const weeks = settings.getByLabelText('Weeks to play');
+    await user.clear(weeks);
+    await user.type(weeks, '30');
+    await user.tab();
+
+    await waitFor(() =>
+      expect(api.previewConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ preset_name: 'CLASSIC_MIT', duration_weeks: 36 }),
+        { duration_weeks: 30, preset_name: null },
+      ),
+    );
+    // Touching a field leaves the preset: the cards say Custom.
+    await waitFor(() => expect(settings.getByRole('button', { name: /^Custom\s*Your own settings/ })).toHaveAttribute('aria-pressed', 'true'));
+
     await user.click(await screen.findByRole('button', { name: 'Create 2 games' }));
     await waitFor(() => expect(api.createRoomBatch).toHaveBeenCalled());
-    expect(api.createRoomBatch.mock.calls[0][0]).toMatchObject({ count: 2, preset: null, host_display_name: 'Host' });
+    expect(sentBatch().preset).toBe('CLASSIC_MIT');
+    expect(sentBatch().config).toMatchObject({ duration_weeks: 30, preset_name: null });
+    expect(sentBatch().config.roles.FACTORY).toEqual(PRESETS[1].config.roles.FACTORY);
+  });
+
+  it("keeps the server's merge: a new demand kind arrives with the server's defaults", async () => {
+    api.createRoomBatch.mockResolvedValue({ rooms: [created(A, 'a'), created(B, 'b')] });
+    const user = userEvent.setup();
+    renderAt('/multihost/new');
+
+    const settings = await settingsReady();
+    await user.click(settings.getByRole('combobox', { name: 'Generator' }));
+    await user.click(await screen.findByRole('option', { name: /Constant/ }));
+
+    await waitFor(() =>
+      expect(api.previewConfig).toHaveBeenCalledWith(expect.anything(), {
+        demand: { kind: 'CONSTANT' },
+        preset_name: null,
+      }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Create 2 games' }));
+    await waitFor(() => expect(api.createRoomBatch).toHaveBeenCalled());
+    expect(sentBatch().config.demand).toEqual({ kind: 'CONSTANT', value: 6 });
+  });
+
+  it("shows the server's preview of the draft, as the lobby does", async () => {
+    renderAt('/multihost/new');
+
+    const settings = await settingsReady();
+    const leadTimes = await settings.findByTestId('lead-time-row');
+    await waitFor(() => expect(within(leadTimes).getAllByText('4 weeks')).toHaveLength(3));
+    expect(within(leadTimes).getByText('3 weeks')).toBeInTheDocument();
+    await waitFor(() => expect(settings.getByTestId('demand-preview')).toHaveAttribute('data-series'));
+  });
+
+  it("refuses to create while the server refuses the draft, naming the field", async () => {
+    const user = userEvent.setup();
+    renderAt('/multihost/new');
+
+    const settings = await settingsReady();
+    const symbol = settings.getByLabelText('Currency symbol');
+    await user.clear(symbol);
+    await user.type(symbol, '##');
+    await user.tab();
+
+    expect(await settings.findByText('must not be ##.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create games' })).toBeDisabled();
+    expect(screen.getByText('Fix this setting first: currency_symbol: must not be ##.')).toBeInTheDocument();
+    expect(api.createRoomBatch).not.toHaveBeenCalled();
+
+    // Fixing it lets the host create again.
+    await user.clear(symbol);
+    await user.type(symbol, '€');
+    await user.tab();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create 2 games' })).toBeEnabled());
+  });
+
+  it('reads the field out of a preview 422 and nothing else', () => {
+    const refusal = (status: number, detail: unknown) => ({ response: { status, data: { detail } } });
+    expect(fieldFromPreviewError(refusal(422, 'roles.RETAILER.initial_inventory: must be at most 9999.'))).toEqual({
+      field: 'roles.RETAILER.initial_inventory',
+      message: 'must be at most 9999.',
+    });
+    expect(fieldFromPreviewError(refusal(422, 'no field here'))).toBeNull();
+    expect(fieldFromPreviewError(refusal(429, 'duration_weeks: x'))).toBeNull();
+    expect(fieldFromPreviewError(refusal(422, [{ loc: ['body'] }]))).toBeNull();
+    expect(fieldFromPreviewError(null)).toBeNull();
   });
 
   it("refuses a count outside the server's range rather than clamping it", async () => {
     const user = userEvent.setup();
     renderAt('/multihost/new');
+    await settingsReady();
 
-    const count = await screen.findByLabelText('Number of games');
-    await waitFor(() => expect(count).toBeEnabled());
+    const count = screen.getByLabelText('Number of games');
     await user.clear(count);
     await user.type(count, String(TEST_LIMITS.max_batch_rooms + 1));
     expect(screen.getByRole('button', { name: 'Create games' })).toBeDisabled();
@@ -274,6 +503,14 @@ describe('MultiHostSetupPage', () => {
     expect(screen.getByText('Loading the allowed range…')).toBeInTheDocument();
   });
 
+  it('cannot create without a starting config, and says why', async () => {
+    api.listPresets.mockRejectedValue({ isAxiosError: true, response: { status: 503, data: { detail: 'Server busy.' } } });
+    renderAt('/multihost/new');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Server busy.');
+    expect(screen.getByRole('button', { name: 'Create games' })).toBeDisabled();
+  });
+
   it("shows the server's refusal and stores nothing", async () => {
     api.createRoomBatch.mockRejectedValue({
       isAxiosError: true,
@@ -281,8 +518,9 @@ describe('MultiHostSetupPage', () => {
     });
     const user = userEvent.setup();
     renderAt('/multihost/new');
+    await settingsReady();
 
-    await user.click(await screen.findByRole('button', { name: 'Create 2 games' }));
+    await user.click(screen.getByRole('button', { name: 'Create 2 games' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Unknown preset.');
     expect(getHostBatch()).toBeNull();
@@ -292,8 +530,9 @@ describe('MultiHostSetupPage', () => {
     api.createRoomBatch.mockResolvedValue({ rooms: [created(A, 'secret-a'), created(B, '')] });
     const user = userEvent.setup();
     renderAt('/multihost/new');
+    await settingsReady();
 
-    await user.click(await screen.findByRole('button', { name: 'Create 2 games' }));
+    await user.click(screen.getByRole('button', { name: 'Create 2 games' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/no host secret/);
     expect(getHostBatch()).toBeNull();

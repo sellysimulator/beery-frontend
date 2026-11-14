@@ -4,7 +4,8 @@
  * Covers acceptance criteria 1, 2, 3, 8, 9, 14, 15, 16, 17, 18, 19, 20, 21,
  * 22 and 23, and failure modes 3, 4, 6, 7, 9, 10, 11, 12 and 14. Criteria 4, 5, 6,
  * 7 and 24 and failure modes 1, 2 and 8 are in `BullwhipChart.test.tsx`;
- * criteria 10, 11, 12 and 13 and failure mode 5 in `ExportControls.test.tsx`.
+ * criteria 10, 11, 12 and 13 and failure mode 5 in `ExportControls.test.tsx` (the export
+ * is open to every viewer since 2026-11-14).
  *
  * Harness notes:
  *  - `src/api/http.ts` is replaced by a recorder, so every request the screen
@@ -1095,13 +1096,15 @@ describe('CRITERION 14: the claim prompt is for a guest who played this game', (
     expect(bodyText()).not.toMatch(OFFER);
   });
 
-  it('is offered to a guest host in the host tab, for export and not for history', async () => {
+  it('is offered to a guest host in the host tab, never as the way to export', async () => {
     auth.value = { ...auth.value, mode: 'guest' };
     getOrCreateGuestId();
     asHostTab();
     await renderReady();
 
-    expect(bodyText()).toMatch(/sign in to keep exporting this game/i);
+    expect(bodyText()).toMatch(/sign in to link this game to your account/i);
+    expect(bodyText()).toMatch(/don't need an account to download the full record/i);
+    expect(bodyText()).not.toMatch(/keep exporting/i);
     expect(bodyText()).toMatch(/hosted games don't appear in your game history/i);
     expect(bodyText()).not.toMatch(OFFER);
   });

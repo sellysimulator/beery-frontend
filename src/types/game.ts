@@ -203,6 +203,12 @@ export interface ConfigPreview {
   demand_is_example: boolean
   /** Weeks from each role ordering to that order arriving. */
   lead_times: Record<Role, number>
+  /**
+   * The validated draft as a stored config holds it: the request's `patch`
+   * merged in and every default filled (additive, 2026-11-14). Optional here
+   * because only the multi-game setup form reads it.
+   */
+  config?: GameConfig
 }
 
 /* ─── Engine records (07 section 2) ─── */
@@ -495,6 +501,8 @@ export interface PresetSummary {
   label: string
   description: string
   config: GameConfig
+  /** The preset `/create` and `/batch-create` use when none is named (2026-11-14). */
+  is_default?: boolean
 }
 
 export interface PresetListResponse {

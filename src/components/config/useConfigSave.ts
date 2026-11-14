@@ -48,7 +48,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** Every leaf of a patch, keyed by its dotted path. Arrays are leaves. */
-function flattenPatch(patch: ConfigPatch, prefix = ''): Record<string, unknown> {
+export function flattenPatch(patch: ConfigPatch, prefix = ''): Record<string, unknown> {
   const flat: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(patch)) {
@@ -73,7 +73,7 @@ export function valueAt(config: GameConfig, path: string): unknown {
   return cursor
 }
 
-function sameValue(a: unknown, b: unknown): boolean {
+export function sameValue(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length === b.length && a.every((item, index) => sameValue(item, b[index]))

@@ -1,27 +1,12 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useEffect, useState, type ReactElement } from 'react'
 import { errorMessage } from '../../api/http'
 import { getRoomConfig } from '../../api/rooms'
-import { buildConfigFormSchema, type ConfigFormValues } from '../../schemas/configSchema'
 import { useGameStore } from '../../store/gameStore'
-import type { DemandKind } from '../../types/game'
 import { getHostSecret } from '../../utils/storage'
-import BotSection from './BotSection'
-import ConfigSection from './ConfigSection'
+import ConfigSections from './ConfigSections'
 import ConfigSummary from './ConfigSummary'
-import DemandEditor from './DemandEditor'
-import LengthSection from './LengthSection'
-import PresetCards from './PresetCards'
-import RoleGrid from './RoleGrid'
-import VisibilitySection from './VisibilitySection'
-import { ConfigFormContext, type ConfigFormContextValue } from './configFormContext'
-import type { ConfigPatch } from './configPatch'
-import { TextField } from './fields'
-import { toFormValues } from './formValues'
-import LeadTimeRow from './LeadTimeRow'
+import { useConfigForm } from './useConfigForm'
 import { useConfigSave } from './useConfigSave'
-import { useLimits } from './useLimits'
 
 /**
  * The host configuration panel: the form where a teaching intention becomes a
@@ -51,6 +36,12 @@ import { useLimits } from './useLimits'
  * - **Authority is `host_secret`.** Every save carries it, over the socket when
  *   connected and over `PUT /rooms/{code}/config` when not. A client-side "I am
  *   the host" boolean is never sent (**D3**).
+ *
+ * The sections themselves are `ConfigSections`, which holds no state and knows
+ * no room; the form state is `useConfigForm`. This panel supplies the room:
+ * the store's config, `useConfigSave`, the locked summary and the missing-key
+ * notice. The multi-game setup page supplies a local draft instead
+ * (`useDraftConfig`) and renders the same sections (2026-11-14).
  */
 export function ConfigPanel(): ReactElement {
   const roomCode = useGameStore((state) => state.roomCode)
@@ -61,37 +52,11 @@ export function ConfigPanel(): ReactElement {
   const hostSecret = roomCode === null ? null : getHostSecret(roomCode)
   const locked = roomState === 'RUNNING' || roomState === 'PAUSED' || roomState === 'FINISHED'
 
-  /**
-   * The demand generator the host has just picked, before the server has
-   * acknowledged it. It is the one value the panel shows ahead of the store,
-   * and it shows only the kind: the parameters are the server's defaults and
-   * appear when the stored config does, with a placeholder until then.
-   * `toFormValues` ignores it as soon as the stored config agrees, so it
-   * expires on its own rather than being cleared by an effect a render later.
-   */
-  const [pendingKind, setPendingKind] = useState<DemandKind | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const saveApi = useConfigSave(roomCode, hostSecret, locked)
-  const { limits, error: limitsError } = useLimits()
-
-  // No config, no values: nothing is rendered until the stored config is here,
-  // so the form needs no placeholder (and the panel no copy of the defaults).
-  const values = useMemo(
-    () => (config ? toFormValues(config, pendingKind) : undefined),
-    [config, pendingKind],
-  )
-  const activePendingKind =
-    config && pendingKind !== null && pendingKind !== config.demand.kind ? pendingKind : null
-
-  const schema = useMemo(() => (limits ? buildConfigFormSchema(limits) : null), [limits])
-
-  const form = useForm<ConfigFormValues>({
-    // No resolver until the ranges arrive; nothing is rendered before then.
-    resolver: schema ? zodResolver(schema) : undefined,
-    values,
-    mode: 'onChange',
-  })
+  const { contextValue, limitsError, activePendingKind, handleKindChange, handleApplyPreset } =
+    useConfigForm(config, saveApi, locked)
 
   /**
    * The host arrives here with a room the server already holds a config for,
@@ -115,11 +80,6 @@ export function ConfigPanel(): ReactElement {
       cancelled = true
     }
   }, [config, hostSecret, roomCode])
-
-  const contextValue: ConfigFormContextValue | null = useMemo(
-    () => (limits ? { form, saveApi, readOnly: locked, limits } : null),
-    [form, saveApi, locked, limits],
-  )
 
   // `config` is compared loosely on purpose. The store types it as
   // `GameConfig | null`, but a caller that replaces the whole state rather than
@@ -150,129 +110,37 @@ export function ConfigPanel(): ReactElement {
     )
   }
 
-  function handleKindChange(kind: DemandKind): void {
-    setPendingKind(kind)
-    // A `CUSTOM` series has no default: nothing is saved until one is pasted,
-    // because an empty series is refused (`03 §3.1`).
-    if (kind === 'CUSTOM') return
-    // The kind and no field of the previous kind (AC 7, FM 2). A changed kind
-    // replaces the stored demand object, and the server fills every field
-    // the patch leaves out with that kind's own default (`10 §3.3`).
-    saveApi.save({ demand: { kind } }, true)
-  }
-
-  function handleApplyPreset(patch: ConfigPatch): void {
-    setPendingKind(null)
-    saveApi.save(patch, true)
-  }
-
   const showBots =
     config.bot_fill_empty_roles ||
     (Array.isArray(participants) && participants.some((p) => p.is_bot))
   const panelError = saveApi.serverError?.field === null ? saveApi.serverError.message : null
 
   return (
-    <ConfigFormContext.Provider value={contextValue}>
-      <form
-        onSubmit={(event) => event.preventDefault()}
-        aria-label="Game settings"
-        className="flex flex-col gap-4"
-      >
-        {hostSecret === null ? (
-          <p role="status" className="rounded-lg border border-warning bg-warning-soft px-4 py-3 text-sm text-ink">
-            This tab does not hold this room&apos;s host key, so the settings are read-only here.
-            Open the room from the tab you created it in.
-          </p>
-        ) : null}
+    <ConfigSections
+      config={config}
+      context={contextValue}
+      pendingKind={activePendingKind}
+      onKindChange={handleKindChange}
+      onApplyPreset={handleApplyPreset}
+      onClearPreset={() => saveApi.save({ preset_name: null }, true)}
+      showBots={showBots}
+      notices={
+        <>
+          {hostSecret === null ? (
+            <p role="status" className="rounded-lg border border-warning bg-warning-soft px-4 py-3 text-sm text-ink">
+              This tab does not hold this room&apos;s host key, so the settings are read-only here.
+              Open the room from the tab you created it in.
+            </p>
+          ) : null}
 
-        {panelError ? (
-          <p role="alert" className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-sm text-ink">
-            {panelError}
-          </p>
-        ) : null}
-
-        <ConfigSection
-          id="config-presets"
-          title="Presets"
-          description="Start from a known scenario, then change anything you like."
-        >
-          <PresetCards
-            presetName={config.preset_name}
-            onApplyPreset={handleApplyPreset}
-            onClearPreset={() => saveApi.save({ preset_name: null }, true)}
-          />
-        </ConfigSection>
-
-        <ConfigSection
-          id="config-length"
-          title="Length and pacing"
-          description="How long the session runs, and what happens when somebody drops out."
-        >
-          <LengthSection />
-        </ConfigSection>
-
-        <ConfigSection
-          id="config-starting"
-          title="Starting conditions"
-          description="Where every role begins. Asymmetry here is a teaching tool — one role starting short is a whole lesson on its own."
-        >
-          <RoleGrid
-            group="starting"
-            roles={config.roles}
-            onApplyToAll={(p) => saveApi.save(p, true)}
-            leadTimes={<LeadTimeRow config={config} />}
-          />
-        </ConfigSection>
-
-        <ConfigSection
-          id="config-costs"
-          title="Costs"
-          description="What each role pays per week. Backlog costing more than holding is what makes hoarding rational."
-        >
-          <div className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-4">
-              <TextField
-                name="currency_symbol"
-                label="Currency symbol"
-                hint="Shown beside every figure in the game."
-                maxLength={4}
-              />
-            </div>
-            <RoleGrid group="costs" roles={config.roles} onApplyToAll={(p) => saveApi.save(p, true)} />
-          </div>
-        </ConfigSection>
-
-        <ConfigSection
-          id="config-demand"
-          title="Customer demand"
-          description="What the Retailer's customers ask for each week. Only the Retailer sees it, unless you turn that off below."
-        >
-          <DemandEditor
-            config={config}
-            pendingKind={activePendingKind}
-            onKindChange={handleKindChange}
-          />
-        </ConfigSection>
-
-        <ConfigSection
-          id="config-visibility"
-          title="Visibility"
-          description="The teaching levers. Run the same scenario twice with different answers here and the difference is the lesson."
-        >
-          <VisibilitySection />
-        </ConfigSection>
-
-        {showBots ? (
-          <ConfigSection
-            id="config-bots"
-            title="Bot difficulty"
-            description="How the bots decide what to order."
-          >
-            <BotSection />
-          </ConfigSection>
-        ) : null}
-      </form>
-    </ConfigFormContext.Provider>
+          {panelError ? (
+            <p role="alert" className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-sm text-ink">
+              {panelError}
+            </p>
+          ) : null}
+        </>
+      }
+    />
   )
 }
 

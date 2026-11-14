@@ -204,6 +204,35 @@ export function clearHostBatch(): void {
   sessionStorage.removeItem(HOST_BATCH_KEY)
 }
 
+/* ─── export downloads — a UX courtesy, sessionStorage ─── */
+//
+// Which finished games this tab has already downloaded, per format, so the
+// results screen can offer each file once per browser session (2026-11-14).
+// It is **not** a security control: clearing storage, another tab or a direct
+// request all get round it. The real guard against draining compute is the
+// backend's per-address export budget (`core/abuse.py`, 100 an hour). Keyed by
+// the game's permanent `public_id`, never by a room code, which is reissued.
+
+function exportDownloadKey(publicId: string, format: string): string {
+  return `export_downloaded_${publicId}_${format}`
+}
+
+export function markExportDownloaded(publicId: string, format: string): void {
+  try {
+    sessionStorage.setItem(exportDownloadKey(publicId, format), '1')
+  } catch {
+    // Storage refused (private mode, quota): the button simply stays enabled.
+  }
+}
+
+export function wasExportDownloaded(publicId: string, format: string): boolean {
+  try {
+    return sessionStorage.getItem(exportDownloadKey(publicId, format)) === '1'
+  } catch {
+    return false
+  }
+}
+
 /* ─── board view — a DISPLAY PREFERENCE, not a credential; browser-scoped ─── */
 //
 // The per-browser choice between the 2D board and the 3D warehouse (24 §2.3).
