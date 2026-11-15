@@ -173,6 +173,66 @@ export function clearHostRoom(): void {
   sessionStorage.removeItem(HOST_ROOM_KEY)
 }
 
+/* ─── host batch — the multi-game dashboard's room codes, tab-scoped ─── */
+//
+// The codes of the batch this tab made on `/multihost/new`. Only the codes:
+// each room's secret is stored with `setHostSecret`, under the key the host
+// screen reads. sessionStorage, like the rest of the host state, so the
+// dashboard survives a reload but not closing the tab, and a tab opened from
+// an invite link never inherits it.
+
+const HOST_BATCH_KEY = 'host_batch'
+
+export function setHostBatch(roomCodes: string[]): void {
+  sessionStorage.setItem(HOST_BATCH_KEY, JSON.stringify(roomCodes))
+}
+
+/** The batch's room codes, or null when this tab has none or it is unreadable. */
+export function getHostBatch(): string[] | null {
+  try {
+    const raw = sessionStorage.getItem(HOST_BATCH_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed) || !parsed.every((code) => typeof code === 'string')) return null
+    return parsed.length > 0 ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function clearHostBatch(): void {
+  sessionStorage.removeItem(HOST_BATCH_KEY)
+}
+
+/* ─── export downloads — a UX courtesy, sessionStorage ─── */
+//
+// Which finished games this tab has already downloaded, per format, so the
+// results screen can offer each file once per browser session (2026-11-14).
+// It is **not** a security control: clearing storage, another tab or a direct
+// request all get round it. The real guard against draining compute is the
+// backend's per-address export budget (`core/abuse.py`, 100 an hour). Keyed by
+// the game's permanent `public_id`, never by a room code, which is reissued.
+
+function exportDownloadKey(publicId: string, format: string): string {
+  return `export_downloaded_${publicId}_${format}`
+}
+
+export function markExportDownloaded(publicId: string, format: string): void {
+  try {
+    sessionStorage.setItem(exportDownloadKey(publicId, format), '1')
+  } catch {
+    // Storage refused (private mode, quota): the button simply stays enabled.
+  }
+}
+
+export function wasExportDownloaded(publicId: string, format: string): boolean {
+  try {
+    return sessionStorage.getItem(exportDownloadKey(publicId, format)) === '1'
+  } catch {
+    return false
+  }
+}
+
 /* ─── board view — a DISPLAY PREFERENCE, not a credential; browser-scoped ─── */
 //
 // The per-browser choice between the 2D board and the 3D warehouse (24 §2.3).

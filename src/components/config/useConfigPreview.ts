@@ -135,6 +135,20 @@ export function useConfigPreview(draft: object | null): ConfigPreviewState {
   return { preview: null, error: null, loading: true }
 }
 
+/**
+ * Remember an answer the caller already holds for `draft`, so the hooks
+ * previewing that exact draft show it without asking again. The multi-game
+ * setup form's draft path gets the preview with each validated draft
+ * (`POST /rooms/preview` with a patch), and primes it here.
+ */
+export function primePreview(draft: object, preview: ConfigPreview): void {
+  remember(JSON.stringify(draft), {
+    demand_series: preview.demand_series,
+    demand_is_example: preview.demand_is_example,
+    lead_times: preview.lead_times,
+  })
+}
+
 /** Tests only: forget every answer, so a test can serve a different one. */
 export function resetPreviewCacheForTests(): void {
   answers.clear()

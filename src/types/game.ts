@@ -185,6 +185,9 @@ export interface Limits {
   /** The bot's theta, alpha and beta lie in [0, max_bot_weight]. */
   max_bot_weight: number
   max_target_stock_multiplier: number
+  /** How many rooms one `POST /rooms/batch-create` makes: its `count` lies in this range. */
+  min_batch_rooms: number
+  max_batch_rooms: number
 }
 
 /**
@@ -200,6 +203,12 @@ export interface ConfigPreview {
   demand_is_example: boolean
   /** Weeks from each role ordering to that order arriving. */
   lead_times: Record<Role, number>
+  /**
+   * The validated draft as a stored config holds it: the request's `patch`
+   * merged in and every default filled (additive, 2026-11-14). Optional here
+   * because only the multi-game setup form reads it.
+   */
+  config?: GameConfig
 }
 
 /* ─── Engine records (07 section 2) ─── */
@@ -492,10 +501,67 @@ export interface PresetSummary {
   label: string
   description: string
   config: GameConfig
+  /** The preset `/create` and `/batch-create` use when none is named (2026-11-14). */
+  is_default?: boolean
 }
 
 export interface PresetListResponse {
   presets: PresetSummary[]
+}
+
+/* ─── REST: multi-game hosting (10 sections 3.5c, 3.5d) ─── */
+
+/**
+ * `POST /rooms/batch-create`. `preset` means what it means on `/create`;
+ * `config` is a patch over it, validated as a config save is, once, before any
+ * room exists. `count` lies in `Limits.min_batch_rooms..max_batch_rooms`.
+ */
+export interface RoomBatchCreateRequest {
+  count: number
+  preset?: string | null
+  config?: Partial<GameConfig>
+  host_display_name?: string
+}
+
+/** One `RoomCreateResponse` per room, each with its own one-time `host_secret`. */
+export interface RoomBatchCreateResponse {
+  rooms: RoomCreateResponse[]
+}
+
+/** A room this tab hosts, named with the secret that proves it. */
+export interface HostedRoom {
+  room_code: string
+  host_secret: string
+}
+
+/** `POST /rooms/summary`: a POST so the secrets never reach a URL. */
+export interface RoomSummaryRequest {
+  rooms: HostedRoom[]
+}
+
+/**
+ * One room on the multi-game dashboard. `exists: false`, with every other
+ * field null, means the room is gone or the secret is wrong — the server does
+ * not say which. `week` is the open week and is null before the game starts;
+ * `finished` is true once the room is FINISHED or ABANDONED. `can_start` and
+ * `start_blocked_reason` are the server's `RoomService.can_start`, the rule
+ * `start_game` applies.
+ */
+export interface RoomSummary {
+  room_code: string
+  exists: boolean
+  state: RoomState | null
+  seats_taken: number | null
+  seats_total: number | null
+  week: number | null
+  duration_weeks: number | null
+  finished: boolean | null
+  can_start: boolean | null
+  start_blocked_reason: string | null
+}
+
+export interface RoomSummaryResponse {
+  rooms: RoomSummary[]
 }
 
 /* ─── Socket: client → server (11 and 12, section 2) ─── */
@@ -623,6 +689,12 @@ export interface HostClaimedPayload {
 
 export interface JoinErrorPayload {
   message: string
+  /**
+   * The room a `start_game` refusal was for (additive, 2026-11-14), so the
+   * multi-game dashboard can put it on that game's card. Absent on every
+   * other `join_error`.
+   */
+  room_code?: string
 }
 
 /**
