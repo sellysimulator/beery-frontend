@@ -357,6 +357,12 @@ function sentBatch() {
 async function settingsReady() {
   const form = await screen.findByRole('form', { name: 'Game settings' });
   await waitFor(() => expect(screen.getByRole('button', { name: /^Create \d+ games$/ })).toBeEnabled());
+  // `PresetCards` fetches the presets itself, independently of the page's own
+  // `listPresets` call, so its cards can land after the Create button enables.
+  // Without this wait a slow runner (CI) finds only the *Custom* card.
+  for (const preset of PRESETS) {
+    await within(form).findByRole('button', { name: new RegExp(preset.label) });
+  }
   return within(form);
 }
 
