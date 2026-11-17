@@ -88,7 +88,8 @@ src/
                          boardViewChoice.ts — the two registered boards and the seam
     game/views/board3d/  the 3D scene. sceneModel.ts is the pure heart (see §6.14);
                          everything else either renders its output or is frozen data
-                         (sceneLayout.ts, scenePalette.ts, roleSets.ts)
+                         (sceneLayout.ts, scenePalette.ts, roleSets.ts). playerMotion.ts
+                         holds the controller's pure decisions, MovePad.tsx the touch pad
   __tests__/             all tests, flat, one file per feature + setup.ts
 ```
 
@@ -124,8 +125,8 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-14 (after the Start-all card errors): **1311 tests /
-41 files passed**, `eslint .` clean, `tsc -b` clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
+Verified green on 2026-11-16 (after the safe-area sweep): **1356 tests /
+42 files passed**, `eslint .` clean, `tsc -b` clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
 reporter.
 
 CI (`.github/workflows/firebase-hosting-{merge,pull-request}.yml`) runs, on push to `main`
@@ -247,6 +248,12 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.
     Palette is Okabe-Ito for colour-blind safety, and **colour is never the only signal** —
     backlog and alerts always carry an icon and a label too.
+    **Safe area** (2026-11-16, `game_stack.md` "edge to edge … inside the safe area"):
+    `index.html` sets `viewport-fit=cover`, `body` pads by the left/right insets, and every
+    `fixed` control (and every edge-anchored element of the 3D HUD) offsets by
+    `max(<gutter>, env(safe-area-inset-<edge>))`, e.g. `left-[max(1rem,env(safe-area-inset-left))]`;
+    a stacked one uses `calc(max(…)_+_<offset>)`. Never a bare `left-4`/`top-4` on a fixed
+    element, and size flow content with `w-full`, not `w-screen`/`100vw`.
 12. **Forms**: react-hook-form + Zod, only in the host config form (the lobby's `ConfigPanel`
     and, over a draft, `/multihost/new`; both render `ConfigSections`). **The ranges are the
     server's, never ours** (2026-11-02): `useLimits()` fetches `GET /rooms/limits` once and
@@ -312,7 +319,8 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     component instead of inside the model is untestable and is therefore a defect: jsdom has
     no WebGL, so the object is what `Board3D.test.tsx` asserts, exactly as rule 13's config
     object stands in for a Chart.js canvas. The interaction layer is the same rule from the
-    other side — pressing E at a station mounts the **existing** 2D components
+    other side — pressing E (or tapping the HUD's Open button, which calls the same
+    `openStation`) at a station mounts the **existing** 2D components
     (`DecisionForm`, `WaitingForOthers`, `SettlementRecap`, `DecisionPanel`) with the same
     props and the same callbacks, so the only emit the 3D view can produce is `submit_order`
     through `api/games.ts` (rule 7), and there is no new event, endpoint or `GameConfig`
@@ -322,6 +330,13 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat. Since
     2026-11-03 the scene does no arithmetic at all: the ledger prints
     `inventory_after_arrival` and the lane/order placards read the server's slot weeks.
+    **The 3D board is offered on every pointer** (2026-11-16, `24 §5.7`): `BoardViewToggle` no
+    longer disables it on a coarse pointer. On `(any-pointer: coarse)` the HUD shows
+    `MovePad` (six held buttons: turn ↶ ↷, walk ↑ ↓, strafe ← →) and the touch legend; drag-look
+    works by finger because the canvas wrapper is `touch-none`. Pad presses live in a set of
+    their own (`padHeld` in `Board3D`), merged with the keyboard's by `mergeHeldKeys` so
+    `stepPlayer` stays the only walk; turning is `stepYaw` at 1.7 rad/s and counts as look
+    (allowed while paused). Window blur, a hidden tab and a panel opening all release the pad.
 15. **No screen says "Week cost".** Wherever a week's cost appears (recap, decision panel,
     3D ledger and cost corner) it is two figures: "Holding & backlog"
     (`settlement.carrying_cost` / `week_holding_backlog_cost`) and "Order cost"

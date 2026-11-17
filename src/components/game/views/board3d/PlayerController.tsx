@@ -7,15 +7,18 @@
    reading the same object off `useFrame`'s state argument — is the identical
    mutation spelled so the rule cannot see it, which is worse than saying so
    here. Nothing else in this file is exempted. */
-import { useEffect, useRef, type ReactElement } from 'react'
+import { useEffect, useRef, type ReactElement, type RefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   clampPitch,
   isTypingTarget,
+  mergeHeldKeys,
   MOVEMENT_KEYS,
   nearestTargetId,
   shouldReportNearest,
   stepPlayer,
+  stepYaw,
+  type PadControl,
 } from './playerMotion'
 import { HALL, SPAWN } from './sceneLayout'
 import type { InteractTarget, InteractTargetId } from './sceneModel'
@@ -61,8 +64,20 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  * renderer*). What is left here is the part that genuinely is the renderer:
  * the listeners, the refs, and the four lines that write to `camera`.
  *
+ * ## Touch (24 §5.7)
+ *
+ * A finger gets the same controller, not a second one. Drag-look is pointer
+ * events, so it already answers a touch; the canvas wrapper carries
+ * `touch-none` so the browser does not claim the drag as a scroll or a pinch.
+ * Walking and turning come from `MovePad`, whose held buttons live in a set of
+ * their own (`pad`, owned by `Board3D`) and are read here beside the
+ * keyboard's every frame — merged for the walk, so `stepPlayer` stays the one
+ * walk authority, and through `stepYaw` for the turn. Only the pointer that
+ * started a drag steers it, so a thumb holding a pad button while a finger
+ * looks around does not make the view jump between the two.
+ *
  * `paused || gameOver` freezes movement but **not** look, so a player who
- * cannot act can still read the room. There is no idle animation and no
+ * cannot act can still read the room. The pad's turn buttons are look. There is no idle animation and no
  * head-bob, under `prefers-reduced-motion` or otherwise — 24 §7.6 says never
  * to introduce one at all, which is a cheaper promise to keep than to break.
  */
@@ -92,7 +107,17 @@ export interface PlayerControllerProps {
    * two handlers for one key open and shut the panel in the same tick.
    */
   onInteract?(id: InteractTargetId): void
+  /**
+   * The on-screen pad's held buttons (24 §5.7), owned by `Board3D` and written
+   * by `MovePad`. A ref rather than a prop value because a press must reach
+   * the next frame without a React render in between. Optional, so the
+   * controller still stands on its own with only a keyboard.
+   */
+  readonly pad?: RefObject<Set<PadControl>>
 }
+
+/** Read when no pad is wired, so the frame loop has one shape either way. */
+const NO_PAD: ReadonlySet<PadControl> = new Set()
 
 export function PlayerController({
   targets,
@@ -100,6 +125,7 @@ export function PlayerController({
   paused,
   gameOver,
   onInteract,
+  pad,
 }: PlayerControllerProps): ReactElement | null {
   const camera = useThree((state) => state.camera)
   const domElement = useThree((state) => state.gl.domElement)
@@ -107,7 +133,10 @@ export function PlayerController({
   const held = useRef(new Set<string>())
   const yaw = useRef(0)
   const pitch = useRef(0)
-  const dragging = useRef(false)
+  /** The pointer steering the look, or null. An id rather than a flag: on a
+   *  touch screen a second finger is a second pointer, and only the first
+   *  one's movement may turn the camera (24 §5.7). */
+  const dragging = useRef<number | null>(null)
   const lastPointer = useRef({ x: 0, y: 0 })
 
   /** The last id handed to `onNearObject`. The fix for Tequila defect 8 is
@@ -156,29 +185,39 @@ export function PlayerController({
     }
 
     // A tab switch mid-stride leaves the key down forever otherwise, and the
-    // player comes back to a camera walking into a wall.
-    const onBlur = (): void => held.current.clear()
+    // player comes back to a camera walking into a wall. The pad is cleared
+    // with it: a phone that locks its screen with a thumb on "forward" never
+    // delivers the `pointerup` that would have released it (24 §5.7).
+    const releaseAll = (): void => {
+      held.current.clear()
+      pad?.current.clear()
+    }
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') releaseAll()
+    }
 
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
+    window.addEventListener('blur', releaseAll)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('blur', releaseAll)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [])
+  }, [pad])
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent): void => {
-      if (event.button !== 0) return
-      dragging.current = true
+      if (event.button !== 0 || dragging.current !== null) return
+      dragging.current = event.pointerId
       lastPointer.current = { x: event.clientX, y: event.clientY }
       domElement.setPointerCapture(event.pointerId)
     }
 
     const onPointerMove = (event: PointerEvent): void => {
-      if (!dragging.current) return
+      if (dragging.current !== event.pointerId) return
       const dx = event.clientX - lastPointer.current.x
       const dy = event.clientY - lastPointer.current.y
       lastPointer.current = { x: event.clientX, y: event.clientY }
@@ -189,7 +228,8 @@ export function PlayerController({
     }
 
     const onPointerUp = (event: PointerEvent): void => {
-      dragging.current = false
+      if (dragging.current !== event.pointerId) return
+      dragging.current = null
       if (domElement.hasPointerCapture(event.pointerId)) {
         domElement.releasePointerCapture(event.pointerId)
       }
@@ -199,11 +239,15 @@ export function PlayerController({
     domElement.addEventListener('pointermove', onPointerMove)
     domElement.addEventListener('pointerup', onPointerUp)
     domElement.addEventListener('pointercancel', onPointerUp)
+    // A capture the browser takes away (a system gesture, an alert) ends the
+    // drag as surely as a lifted finger does.
+    domElement.addEventListener('lostpointercapture', onPointerUp)
     return () => {
       domElement.removeEventListener('pointerdown', onPointerDown)
       domElement.removeEventListener('pointermove', onPointerMove)
       domElement.removeEventListener('pointerup', onPointerUp)
       domElement.removeEventListener('pointercancel', onPointerUp)
+      domElement.removeEventListener('lostpointercapture', onPointerUp)
     }
   }, [domElement])
 
@@ -211,6 +255,10 @@ export function PlayerController({
   // it is `_` — 24 §5.1 spells this out because it is the shape every other
   // `useFrame` in this directory takes.
   useFrame((_, delta) => {
+    const padHeld = pad?.current ?? NO_PAD
+    // The pad's turn buttons are look, so they run before the pause check
+    // below, exactly as a drag would (24 §5.7).
+    yaw.current = stepYaw(yaw.current, padHeld, delta)
     camera.rotation.set(pitch.current, yaw.current, 0)
     camera.position.y = HALL.eyeHeight
 
@@ -221,7 +269,12 @@ export function PlayerController({
       // all `stepPlayer`'s, where a test can watch them (24 §8.1). This is the
       // one line that is genuinely the renderer's: writing the answer onto the
       // camera.
-      const next = stepPlayer(camera.position, yaw.current, held.current, delta)
+      const next = stepPlayer(
+        camera.position,
+        yaw.current,
+        mergeHeldKeys(held.current, padHeld),
+        delta,
+      )
       camera.position.x = next.x
       camera.position.z = next.z
     }

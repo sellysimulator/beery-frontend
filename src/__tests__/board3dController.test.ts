@@ -4,7 +4,9 @@
  *
  * Covers failure modes **6** (the typing guard), **9** (`setState` from
  * `useFrame`) and **10** (reduced motion), plus the movement clamp that
- * criterion 19's hall depends on.
+ * criterion 19's hall depends on, and the motion half of §5.7's touch
+ * controls: the pad's walking buttons folded into the keyboard's set, and the
+ * pad's turn.
  *
  * Harness notes:
  *  - This file imports `playerMotion.ts` and `sceneLayout.ts` and **nothing
@@ -22,16 +24,24 @@
 import { describe, it, expect, afterEach } from 'vitest';
 
 import {
+  COARSE_POINTER_QUERY,
+  MOVEMENT_KEYS,
   MOVE_SPEED,
+  PAD_WALK_KEY,
   REDUCED_MOTION_QUERY,
+  TURN_SPEED,
   clampPitch,
   isTypingTarget,
+  mergeHeldKeys,
   movementAxes,
   nearestTargetId,
   shouldAnimateIdle,
   shouldReportNearest,
   stepPlayer,
+  stepYaw,
+  turnAxis,
 } from '../components/game/views/board3d/playerMotion';
+import type { PadControl } from '../components/game/views/board3d/playerMotion';
 import {
   INTERACT_DISTANCE,
   INTERACT_ZONES,
@@ -351,5 +361,103 @@ describe('24 §5.1: pitch is clamped and yaw is not', () => {
   it('leaves a pitch inside the range untouched', () => {
     expect(clampPitch(0)).toBe(0);
     expect(clampPitch(0.4)).toBe(0.4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 24 §5.7 — the on-screen pad's motion, away from the renderer
+// ---------------------------------------------------------------------------
+
+const pad = (...controls: PadControl[]): ReadonlySet<PadControl> => new Set(controls);
+const keys = (...names: string[]): ReadonlySet<string> => new Set(names);
+
+describe('24 §5.7: the pad walks through stepPlayer, never beside it', () => {
+  it('maps each walking button to the keyboard key it stands for', () => {
+    expect(PAD_WALK_KEY).toEqual({ forward: 'w', backward: 's', 'strafe-left': 'a', 'strafe-right': 'd' });
+    // The turn buttons have no keyboard twin: the arrows walk, unchanged.
+    expect(PAD_WALK_KEY['turn-left']).toBeUndefined();
+    expect(PAD_WALK_KEY['turn-right']).toBeUndefined();
+  });
+
+  it('returns the keyboard set itself when the pad holds nothing — no allocation per frame', () => {
+    const keyboard = keys('w');
+    expect(mergeHeldKeys(keyboard, pad())).toBe(keyboard);
+  });
+
+  it('folds the pad s walking buttons in beside the keyboard s keys', () => {
+    expect([...mergeHeldKeys(keys(), pad('forward'))]).toEqual(['w']);
+    expect(new Set(mergeHeldKeys(keys('d'), pad('backward')))).toEqual(new Set(['d', 's']));
+    // Turning is not walking: a turn button adds no key at all.
+    expect(mergeHeldKeys(keys(), pad('turn-left', 'turn-right')).size).toBe(0);
+  });
+
+  it('never mutates either input — a lifted thumb must not release a held key', () => {
+    const keyboard = new Set(['a']);
+    const held = new Set<PadControl>(['forward']);
+    mergeHeldKeys(keyboard, held);
+    expect([...keyboard]).toEqual(['a']);
+    expect([...held]).toEqual(['forward']);
+  });
+
+  it('a key held on both is held once: W and the forward button walk at one speed', () => {
+    const both = stepPlayer({ x: 0, z: 0 }, 0, mergeHeldKeys(keys('w'), pad('forward')), 1 / 7);
+    const one = stepPlayer({ x: 0, z: 0 }, 0, keys('w'), 1 / 7);
+    expect(both).toEqual(one);
+    expect(one.z).toBeCloseTo(-MOVE_SPEED / 7, 10);
+  });
+
+  it('the pad s forward walks exactly as W does, including the clamp', () => {
+    const fromPad = stepPlayer({ x: 0, z: 0 }, 0, mergeHeldKeys(keys(), pad('forward')), 1 / 7);
+    expect(fromPad).toEqual(stepPlayer({ x: 0, z: 0 }, 0, keys('w'), 1 / 7));
+
+    const intoTheWall = stepPlayer({ x: 0, z: 0 }, 0, mergeHeldKeys(keys(), pad('forward')), 100);
+    expect(intoTheWall.z).toBe(MOVEMENT_BOUNDS.minZ);
+  });
+
+  it('opposite buttons cancel, as A and D do', () => {
+    const still = { x: 1, z: 2 };
+    expect(stepPlayer(still, 0, mergeHeldKeys(keys(), pad('strafe-left', 'strafe-right')), 1)).toBe(still);
+  });
+
+  it('leaves the keyboard mapping exactly as it was', () => {
+    expect(new Set(MOVEMENT_KEYS)).toEqual(
+      new Set(['w', 'arrowup', 's', 'arrowdown', 'a', 'arrowleft', 'd', 'arrowright']),
+    );
+  });
+});
+
+describe('24 §5.7: the pad turns at TURN_SPEED, and turning is look', () => {
+  it('turns at Samby s 1.7 rad/s', () => {
+    expect(TURN_SPEED).toBe(1.7);
+  });
+
+  it('turn left raises yaw and turn right lowers it, scaled by delta', () => {
+    expect(stepYaw(0, pad('turn-left'), 0.5)).toBeCloseTo(0.85, 10);
+    expect(stepYaw(0, pad('turn-right'), 0.5)).toBeCloseTo(-0.85, 10);
+    expect(stepYaw(1, pad('turn-left'), 1)).toBeCloseTo(1 + TURN_SPEED, 10);
+  });
+
+  it('positive yaw is a left turn: a quarter turn left puts forward on −x', () => {
+    // The same convention `stepPlayer` and the drag-look use, so the turn
+    // button and the walk agree on which way "left" is.
+    const yaw = stepYaw(0, pad('turn-left'), Math.PI / 2 / TURN_SPEED);
+    const walked = stepPlayer({ x: 0, z: 0 }, yaw, keys('w'), 1 / 7);
+    expect(walked.x).toBeCloseTo(-1, 10);
+    expect(walked.z).toBeCloseTo(0, 10);
+  });
+
+  it('nothing held, both held or only walking held: yaw is unchanged', () => {
+    expect(stepYaw(0.3, pad(), 1)).toBe(0.3);
+    expect(stepYaw(0.3, pad('turn-left', 'turn-right'), 1)).toBe(0.3);
+    expect(stepYaw(0.3, pad('forward', 'strafe-left'), 1)).toBe(0.3);
+    expect(turnAxis(pad('turn-left', 'turn-right'))).toBe(0);
+  });
+
+  it('yaw is unclamped — a warehouse is a room you turn round in', () => {
+    expect(stepYaw(0, pad('turn-left'), 10)).toBeCloseTo(17, 10);
+  });
+
+  it('the pad shows on any coarse pointer, not only a primary one', () => {
+    expect(COARSE_POINTER_QUERY).toBe('(any-pointer: coarse)');
   });
 });

@@ -124,6 +124,49 @@ a vulnerable Node; raise both after each Node security release.
 > not touch. Express the real constraint with a tilde (`"react": "~19.2.0"`) rather than
 > reaching for `--legacy-peer-deps`. **[HARD-WON]**
 
+> **A walkable 3D view must be playable on touch.** (2026-11-16, ported from the Samby
+> warehouse, `samby-frontend/src/features/analysis/warehouse/`.) A first-person view does not
+> refuse a coarse pointer or a narrow window; it ships these instead:
+> 1. **Drag to look** with pointer events on the canvas (or its wrapper), with pointer capture
+>    and `touch-action: none`. Never `mousemove` on `window`: a touch drag sends none, and a
+>    window listener turns the camera when a drag starts on a HUD control.
+> 2. **A six-button move pad** on `(any-pointer: coarse)`: turn left, forward, turn right /
+>    strafe left, back, strafe right. Buttons are *held*: `pointerdown` presses (with
+>    `setPointerCapture`); `pointerup`, `pointercancel`, `lostpointercapture` and `blur`
+>    release; Space/Enter drive them from a keyboard. Targets ≥ 44 px, inside the safe area
+>    (rule below). The pad is hidden while a panel is open.
+> 3. **Pad presses in their own set**, merged with the keyboard's in the pure motion step, and
+>    cleared on window blur, a hidden tab and every panel open, so no key can stay stuck down.
+>    Turning is looking: it may stay live while paused or after the game ends.
+> 4. **A tappable Open button** on a coarse pointer wherever the desktop says "Press E", doing
+>    exactly what `E` does: proximity plus a keypress is not reachable without a keyboard. A
+>    fine pointer keeps the "Press E" prompt and gets no button.
+>
+> An orbit-camera view (Lemony's street) needs none of this: drei's `OrbitControls` already
+> orbits with one finger and zooms with a pinch, so it only words its hint for touch.
+
+> **Every frontend draws edge to edge and keeps its controls inside the safe area.**
+> (2026-11-16) `index.html` sets
+> `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />`.
+> Without `viewport-fit=cover`, iOS letterboxes the page and every `env(safe-area-inset-*)`
+> reads 0, so a padding written against the notch or the home indicator silently does
+> nothing. With it, the page runs under the notch, so all three of these hold:
+> 1. **`body` pads its sides** by `env(safe-area-inset-left)` / `env(safe-area-inset-right)`
+>    in the global CSS, so flow content clears a landscape notch. Size flow content with
+>    `100%`, not `100vw` / `w-screen`, which ignore that padding and overflow.
+> 2. **Every `fixed` element anchored to a viewport edge** — and every `absolute` element
+>    anchored to an edge of a full-viewport overlay, such as a 3D HUD — offsets from that edge
+>    by `max(<gutter>, env(safe-area-inset-<edge>))`: `left-4` becomes
+>    `left-[max(1rem,env(safe-area-inset-left))]`, `bottom-6` becomes
+>    `bottom-[max(1.5rem,env(safe-area-inset-bottom))]`. Full-bleed layers (`fixed inset-0`
+>    backdrops, the canvas) stay full-bleed; what sits inside them pads instead.
+> 3. **A control stacked above another** adds its offset to the same expression,
+>    `bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)]`, so the stack keeps one
+>    baseline.
+>
+> On a desktop and on a phone without a notch every inset is 0 and the `max()` is the old
+> gutter, so the layout there does not move. **[HARD-WON]**
+
 ### Bootstrap commands
 
 ```bash

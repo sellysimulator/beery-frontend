@@ -85,6 +85,12 @@
   body {
     margin: 0;
     min-height: 100vh;
+    /* `viewport-fit=cover` (index.html) runs the page under a landscape notch;
+       the side insets keep flow content clear of it. They are 0 on a desktop.
+       Fixed and HUD controls pad themselves with max(gutter, inset) instead
+       (game_stack.md, "edge to edge … inside the safe area"). */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
     background-color: var(--color-surface);
     color: var(--color-ink);
     font-family: var(--font-sans);
