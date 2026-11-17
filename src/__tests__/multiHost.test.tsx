@@ -853,7 +853,9 @@ describe('MultiHostDashboard', () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
     await waitFor(() => expect(screen.queryByText('Could not refresh the games.')).not.toBeInTheDocument());
-    expect(api.getRoomsSummary).toHaveBeenCalledTimes(2);
+    // At least 2, not exactly: shouldAdvanceTime adds real elapsed time to the fake clock, so a
+    // slow run can cross the next 5 s tick and poll a third time.
+    expect(api.getRoomsSummary.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
 
