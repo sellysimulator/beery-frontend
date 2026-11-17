@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 1311 passed, 41 files (2026-11-14)
+npm run test:run        # vitest run — 1356 passed, 42 files (2026-11-16)
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -143,7 +143,7 @@ src/
 │   ├── shared/                 LoadingSpinner, Tooltip, AlertContainer, BackendWakeUp,
 │   │                           Avatar, ErrorBoundary, NotFound, ScreenLoading,
 │   │                           AuthGuard, BackendGuard, Select, JoinQrOverlay (full-screen
-│   │                           join QR, drawn locally by qrcode.react)
+│   │                           join QR, drawn locally by qrcode.react), useMediaQuery
 │   ├── lobby/                  the two lobbies, participant list, role cards, invite panel
 │   │                           (copy + Show QR), roomCode.ts (alphabet, inviteUrl)
 │   ├── multihost/              the dashboard's GameCard (with a start refusal on the card),
@@ -160,7 +160,9 @@ src/
 │   │   └── views/              Board2D and Board3D (lazy) — the two registered board
 │   │                           views — plus the 2D/3D toggle and the pure resolver
 │   │       └── board3d/        the scene: buildSceneModel plus the three.js components
-│   │                           that render its output and nothing else
+│   │                           that render its output and nothing else; the walk
+│   │                           (keyboard + drag-look, and on touch screens the MovePad
+│   │                           and a tappable Open button, 24 §5.7)
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export (by
 │   │                           public_id, for every viewer)

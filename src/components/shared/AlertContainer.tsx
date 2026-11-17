@@ -32,7 +32,7 @@ export function AlertContainer(): ReactElement | null {
 
   return (
     <div
-      className="fixed top-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2"
+      className="fixed top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-50 flex w-full max-w-sm flex-col gap-2"
       role="status"
       aria-live="polite"
     >

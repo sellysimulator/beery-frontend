@@ -88,7 +88,7 @@ export function PresentationMode({
       ref={rootRef}
       data-presenting="true"
       aria-label="Presentation mode"
-      className="fixed inset-0 z-40 flex flex-col gap-6 overflow-auto bg-surface px-10 py-8 text-[2rem] text-ink"
+      className="fixed inset-0 z-40 flex flex-col gap-6 overflow-auto bg-surface pb-[max(2rem,env(safe-area-inset-bottom))] pl-[max(2.5rem,env(safe-area-inset-left))] pr-[max(2.5rem,env(safe-area-inset-right))] pt-[max(2rem,env(safe-area-inset-top))] text-[2rem] text-ink"
     >
       <header className="flex flex-wrap items-baseline justify-between gap-4">
         <p className="text-[3.5rem] font-bold leading-none">

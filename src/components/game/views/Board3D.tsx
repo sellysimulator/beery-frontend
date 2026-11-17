@@ -16,7 +16,7 @@ import Board3DHud from './board3d/Board3DHud'
 import Board3DPanels, { type Board3DPanelId } from './board3d/Board3DPanels'
 import { observeContextLoss } from './board3d/contextLoss'
 import PlayerController from './board3d/PlayerController'
-import { isTypingTarget } from './board3d/playerMotion'
+import { isTypingTarget, type PadControl } from './board3d/playerMotion'
 import WarehouseScene from './board3d/WarehouseScene'
 import {
   buildSceneModel,
@@ -139,6 +139,29 @@ export function Board3D(props: BoardViewProps): ReactElement {
   })
 
   /**
+   * Open the station the player is standing at — **the one definition** of
+   * what `E` does, and of what the HUD's Open button does (24 §5.7). Two
+   * callers, one function, so a tap and a keypress cannot drift into opening
+   * different things or obeying different rules.
+   *
+   * It refuses, and says so by returning `false`, when the id is not where the
+   * player stands right now or its target is not `enabled`. `enabled` is false
+   * while paused: the prompt still reads and E is inert, which is §5.2's own
+   * wording and AC 18's other half. The standing check is for the button: it
+   * was rendered for the target in range at the last render, and a player who
+   * has walked on since must not open a panel from across the hall.
+   */
+  const openStation = useCallback((id: Board3DPanelId): boolean => {
+    const { targets, nearId: standingAt } = latest.current
+    if (standingAt !== id) return false
+    const target = targets.find((candidate) => candidate.id === id)
+    if (!target || !target.enabled) return false
+
+    setOpenPanels((current) => (current.includes(id) ? current : [...current, id]))
+    return true
+  }, [])
+
+  /**
    * `E` is owned here, at the window, and **not** passed to
    * `PlayerController.onInteract`. That prop exists so the controller can bind
    * the key when nothing above it does; two handlers for one key open and shut
@@ -154,22 +177,45 @@ export function Board3D(props: BoardViewProps): ReactElement {
       if (isTypingTarget(event.target)) return
       if (event.key.toLowerCase() !== 'e') return
 
-      const { targets, nearId: standingAt } = latest.current
+      const standingAt = latest.current.nearId
       if (standingAt === null) return
-      const target = targets.find((candidate) => candidate.id === standingAt)
-      // `enabled` is false while paused: the prompt still reads and E is inert,
-      // which is §5.2's own wording and AC 18's other half.
-      if (!target || !target.enabled) return
-
-      event.preventDefault()
-      setOpenPanels((current) =>
-        current.includes(standingAt) ? current : [...current, standingAt],
-      )
+      if (openStation(standingAt)) event.preventDefault()
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [openStation])
+
+  /**
+   * The on-screen pad's held buttons (24 §5.7). A ref, not state: a press must
+   * reach `PlayerController`'s next frame without a React render in between,
+   * and a set that changes on every press would otherwise re-render the whole
+   * board for each thumb. Kept apart from the keyboard's own set, which lives
+   * in the controller — a lifted thumb never releases a held key.
+   */
+  const padHeld = useRef(new Set<PadControl>())
+
+  const pad = useMemo(
+    () => ({
+      onPress: (control: PadControl): void => {
+        padHeld.current.add(control)
+      },
+      onRelease: (control: PadControl): void => {
+        padHeld.current.delete(control)
+      },
+    }),
+    [],
+  )
+
+  /**
+   * A panel opening lets go of every pad button (§5.7). The pad unmounts under
+   * the panel, so the `pointerup` that would have released a held button goes
+   * to an element that no longer exists, and the player would close the panel
+   * onto a camera still walking.
+   */
+  useEffect(() => {
+    if (anyPanelOpen) padHeld.current.clear()
+  }, [anyPanelOpen])
 
   const closePanel = useCallback((panel: Board3DPanelId): void => {
     setOpenPanels((current) => current.filter((id) => id !== panel))
@@ -216,13 +262,18 @@ export function Board3D(props: BoardViewProps): ReactElement {
           `tabIndex={-1}` so `Board3DPanels` can hand focus back here when a
           panel closes without putting a non-interactive region in the tab
           order — the keys this board reads are bound at the window.
+
+          `touch-none` so a finger dragging across the scene is drag-look and
+          not a page scroll, a pinch-zoom or a pull-to-refresh (§5.7). Without
+          it the browser claims the gesture before a single `pointermove`
+          reaches the controller.
         */}
         <div
           ref={canvasHost}
           role="img"
           aria-label={describeScene(model)}
           tabIndex={-1}
-          className="fixed inset-0 outline-none"
+          className="fixed inset-0 touch-none outline-none"
         >
           <Canvas
             // 24 §7.5, figure for figure. `far: 120`, not Tequila's 200 — the
@@ -266,13 +317,15 @@ export function Board3D(props: BoardViewProps): ReactElement {
                   The controller lives inside the scene because the camera it
                   drives is the scene's. It reports proximity against the
                   model's own radii, and it is given no `onInteract`: `E` is
-                  bound above.
+                  bound above. `pad` is the on-screen pad's held set, read
+                  beside the keyboard's every frame (§5.7).
                 */}
                 <PlayerController
                   targets={model.interactTargets}
                   onNearObject={setNearId}
                   paused={paused}
                   gameOver={gameOver}
+                  pad={padHeld}
                 />
               </WarehouseScene>
             </Suspense>
@@ -289,9 +342,11 @@ export function Board3D(props: BoardViewProps): ReactElement {
           view={view}
           week={week}
           durationWeeks={durationWeeks}
-          prompt={nearTarget?.prompt ?? null}
+          nearTarget={nearTarget}
+          onInteract={openStation}
           notice={notice}
           weekChanged={weekChanged}
+          pad={anyPanelOpen ? null : pad}
         />
 
         {/*

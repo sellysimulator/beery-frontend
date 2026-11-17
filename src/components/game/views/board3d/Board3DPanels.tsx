@@ -26,7 +26,13 @@ export interface Board3DPanelsProps extends BoardViewProps {
   canvasRef: RefObject<HTMLElement | null>
 }
 
-const PANEL_TITLE: Record<Board3DPanelId, string> = {
+/**
+ * Each panel's heading. Exported because the HUD's Open button names the panel
+ * it opens by this same title (24 §5.7) — one copy, so the button and the
+ * heading it opens onto cannot disagree.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const PANEL_TITLE: Record<Board3DPanelId, string> = {
   'order-desk': 'The order desk',
   'ledger-wall': 'The ledger wall',
   'team-board': 'The team board',
@@ -41,18 +47,32 @@ const PANEL_TITLE: Record<Board3DPanelId, string> = {
  * reusing the 2D components instead of summarising them in-scene. They sit at
  * `z-30`, under `PausedOverlay`'s `z-40`, because a paused game is not a game
  * you can act in.
+ *
+ * Below `lg` the berths cannot all be separate — at 375 px every panel is the
+ * full width — so there they may overlap, and the panel on top is the one
+ * most recently opened (`TOP_PANEL_LAYER`), which is also the one `Escape`
+ * closes. Heights use `dvh`, not `vh`: on a phone `100vh` counts the space
+ * behind the browser's own toolbar, and a panel sized to it hides its last
+ * row — the Submit button — under that toolbar (24 §5.7). The order desk sits
+ * one toggle-height up below `lg`, because there it spans the corner the
+ * 2D/3D toggle (`z-50`) occupies, and the toggle would cover its button.
  */
 const PANEL_CHROME =
   'rounded-lg border border-border-strong bg-surface-raised p-4 shadow-lg overflow-y-auto'
 
 const PANEL_POSITION: Record<Board3DPanelId, string> = {
   'order-desk':
-    'fixed bottom-6 left-1/2 z-30 w-[min(32rem,calc(100vw-2rem))] max-h-[calc(100vh-9rem)] -translate-x-1/2',
+    'fixed bottom-[calc(max(1rem,env(safe-area-inset-bottom))_+_3.5rem)] left-1/2 w-[min(32rem,calc(100vw-2rem))] max-h-[calc(100dvh-6rem)] -translate-x-1/2 lg:bottom-[max(1.5rem,env(safe-area-inset-bottom))] lg:max-h-[calc(100dvh-9rem)]',
   'ledger-wall':
-    'fixed left-4 top-24 z-30 w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100vh-12rem)]',
+    'fixed left-[max(1rem,env(safe-area-inset-left))] top-[max(1rem,env(safe-area-inset-top))] w-[min(26rem,calc(100vw-2rem))] max-h-[calc(100dvh-6rem)] sm:top-[calc(max(1rem,env(safe-area-inset-top))_+_5rem)] sm:max-h-[calc(100dvh-12rem)]',
   'team-board':
-    'fixed right-4 top-24 z-30 w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-12rem)]',
+    'fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100dvh-6rem)] sm:top-[calc(max(1rem,env(safe-area-inset-top))_+_5rem)] sm:max-h-[calc(100dvh-12rem)]',
 }
+
+/** The layer of an open panel: the most recently opened one above the rest,
+ *  all of them under `PausedOverlay`'s `z-40` (§5.3, §5.7). */
+const TOP_PANEL_LAYER = 'z-[35]'
+const PANEL_LAYER = 'z-30'
 
 /**
  * What the focus move of §5.3 counts as "the panel's first focusable element".
@@ -137,7 +157,9 @@ export function Board3DPanels({
   }, [topPanel, canvasRef])
 
   const panelClass = (panel: Board3DPanelId): string =>
-    open.includes(panel) ? `${PANEL_POSITION[panel]} ${PANEL_CHROME}` : 'sr-only'
+    open.includes(panel)
+      ? `${PANEL_POSITION[panel]} ${panel === topPanel ? TOP_PANEL_LAYER : PANEL_LAYER} ${PANEL_CHROME}`
+      : 'sr-only'
 
   /**
    * The panel's chrome — heading and Close — renders only while it is open. A
@@ -150,7 +172,7 @@ export function Board3DPanels({
         <h2 className="text-sm font-semibold text-ink-muted">{PANEL_TITLE[panel]}</h2>
         <button
           type="button"
-          className="rounded-md border border-border-strong px-2 py-1 text-sm hover:border-brand hover:text-brand"
+          className="rounded-md border border-border-strong px-2 py-1 text-sm hover:border-brand hover:text-brand any-pointer-coarse:min-h-11 any-pointer-coarse:px-4"
           onClick={() => onClose(panel)}
         >
           Close

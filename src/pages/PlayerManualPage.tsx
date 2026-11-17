@@ -180,6 +180,41 @@ const BODY: ManualPageSpec[] = [
     ),
   },
   {
+    // `beer-game-manual.md` "The 3D warehouse (optional)". Both input methods
+    // are described because both work (24 §5.7): the warehouse stopped being
+    // keyboard-and-mouse-only when it gained its touch controls.
+    id: 'the-3d-warehouse',
+    heading: 'The 3D warehouse (optional)',
+    content: (
+      <>
+        <p>
+          Your screen starts as a flat board. The button in the bottom-right corner,{' '}
+          <strong>Switch to the 3D warehouse</strong>, turns it into a warehouse you walk around
+          in: your stock is crates on the floor, your incoming shipments are lanes of crates on
+          their way. The numbers are exactly the same. Switch back whenever you like; your week is
+          not lost.
+        </p>
+        <ul className="flex list-disc flex-col gap-2 pl-6">
+          <li>
+            <strong>On a laptop:</strong> W A S D or the arrow keys to walk, drag with the mouse to
+            look around. At the order desk, the ledger wall or the team board, press E (or click{' '}
+            <strong>Open</strong>) to open it. Esc closes it.
+          </li>
+          <li>
+            <strong>On a phone or tablet:</strong> drag the scene with a finger to look around. The
+            arrow pad in the bottom-left corner walks you forward and back, steps you sideways, and
+            the two curved arrows turn you. Walk up to the order desk, the ledger wall or the team
+            board and tap <strong>Open</strong>; <strong>Close</strong> shuts it.
+          </li>
+        </ul>
+        <p>
+          You place your order at the order desk. If the 3D view makes you queasy or your device
+          struggles with it, switch back to the flat board: nothing changes but the picture.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'the-rules',
     heading: 'The rules',
     content: (

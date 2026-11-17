@@ -2,7 +2,9 @@
  * `24-frontend-3d-board.md §8` — the 3D board, asserted as an object.
  *
  * Covers §9's acceptance criteria 6, 7, 8 (structurally), 9, 10, 11, 12, 13,
- * 15, 16, 17, 20 and 22, and §10's failure modes 1, 2, 3, 4, 5, 7 and 10.
+ * 15, 16, 17, 20, 22 and 24, and §10's failure modes 1, 2, 3, 4, 5, 7 and 10.
+ * The on-screen movement pad of §5.7 has its own file, `MovePad.test.tsx`;
+ * the HUD's half of §5.7 (the Open button and the touch legend) is here.
  *
  * THE GOVERNING CONSTRAINT (§8.1, §8.2): jsdom has no WebGL. This file imports
  * **only** pure modules and DOM components. It never imports `Board3D.tsx` or
@@ -42,10 +44,10 @@
  *    `DOWNSTREAM_LABEL`, `ROLE_LABEL`), never against a literal. A literal
  *    that happens to match today is a literal that drifts tomorrow (§10 FM 5).
  */
-import { describe, it, expect, afterEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { ROLE_ORDER } from '../types/game'
@@ -98,8 +100,14 @@ import {
   SUPPLY_LANE_X,
   UNITS_PER_CRATE,
 } from '../components/game/views/board3d/sceneLayout'
-import Board3DHud from '../components/game/views/board3d/Board3DHud'
-import Board3DPanels from '../components/game/views/board3d/Board3DPanels'
+import Board3DHud, {
+  interactLabel,
+  PROMPT_COPY,
+  TOUCH_PROMPT_COPY,
+} from '../components/game/views/board3d/Board3DHud'
+import Board3DPanels, { PANEL_TITLE } from '../components/game/views/board3d/Board3DPanels'
+import { COARSE_POINTER_QUERY } from '../components/game/views/board3d/playerMotion'
+import type { InteractTarget } from '../components/game/views/board3d/sceneModel'
 import ModelAttribution from '../components/game/views/board3d/ModelAttribution'
 
 // ---------------------------------------------------------------------------
@@ -1373,16 +1381,22 @@ describe('BoardViewToggle: a real button whose label names the destination', () 
     expect(onChange).toHaveBeenCalledWith('3D')
   })
 
-  it('AC 22: a coarse pointer disables it with the reason stated, never absent', () => {
-    matchOnly('(pointer: coarse)')
-    render(<BoardViewToggle choice="2D" onChange={() => {}} />)
+  it('AC 22: a coarse pointer is offered 3D like any other — the warehouse has touch controls', async () => {
+    // Until §5.7 a coarse pointer got this button disabled with "needs a
+    // keyboard and a mouse". The pad, drag-look and the Open button made that
+    // sentence false, so the toggle no longer reads the pointer at all.
+    matchOnly('(pointer: coarse)', COARSE_POINTER_QUERY)
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<BoardViewToggle choice="2D" onChange={onChange} />)
 
-    const button = screen.getByRole('button')
-    expect(button).toBeDisabled()
-    // An absent control is one nobody can ask about, and a player on a tablet
-    // beside a classmate on a laptop needs to be told why their screen differs.
-    expect(screen.getByText('The 3D warehouse needs a keyboard and a mouse.')).toBeInTheDocument()
-    expect(button).toHaveAttribute('aria-describedby')
+    const button = screen.getByRole('button', { name: /switch to the 3d warehouse/i })
+    expect(button).not.toBeDisabled()
+    expect(button).not.toHaveAttribute('aria-describedby')
+    expect(screen.queryByText(/needs a keyboard and a mouse/i)).not.toBeInTheDocument()
+
+    await user.click(button)
+    expect(onChange).toHaveBeenCalledWith('3D')
   })
 
   it('FM 10: reduced motion still OFFERS 3D, but not silently', () => {
@@ -1493,6 +1507,37 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
       expect(document.querySelector(`[data-panel="${panel}"]`)).not.toBeNull()
     }
   })
+
+  it('§5.7: the most recently opened panel is layered on top, where a phone overlaps them', () => {
+    // At 375 px every berth is the full width, so two open panels overlap and
+    // DOM order alone would bury whichever one was opened last.
+    renderPanels(['team-board', 'ledger-wall'])
+    const ledger = document.querySelector('[data-panel="ledger-wall"]')?.className ?? ''
+    const team = document.querySelector('[data-panel="team-board"]')?.className ?? ''
+    expect(ledger).toContain('z-[35]')
+    expect(team).toContain('z-30')
+    expect(team).not.toContain('z-[35]')
+  })
+
+  it('§5.7: index.html opts into viewport-fit=cover, or every safe-area inset reads 0', () => {
+    // Without it iOS letterboxes the page and the HUD's, the panels' and the
+    // toggle's max(gutter, env(safe-area-inset-*)) offsets silently do nothing
+    // (game_stack.md, safe area).
+    const html = readFileSync(join(projectRoot(), 'index.html'), 'utf8')
+    expect(html).toMatch(/<meta\s+name="viewport"\s+content="[^"]*viewport-fit=cover[^"]*"/)
+  })
+
+  it('§5.7: open panels size to the dynamic viewport, never to 100vh', () => {
+    // On a phone `100vh` includes the space behind the browser's toolbar, and
+    // a panel sized to it hides its last row — the Submit button — under it.
+    renderPanels(['ledger-wall', 'order-desk', 'team-board'])
+    for (const panel of ['order-desk', 'ledger-wall', 'team-board']) {
+      const className = document.querySelector(`[data-panel="${panel}"]`)?.className ?? ''
+      expect(className).toContain('overflow-y-auto')
+      expect(className).toMatch(/max-h-\[calc\(100dvh/)
+      expect(className).not.toContain('100vh')
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -1506,9 +1551,11 @@ describe('Board3DHud: words are DOM, never in-scene', () => {
         view={viewFor('RETAILER')}
         week={7}
         durationWeeks={36}
-        prompt={null}
+        nearTarget={null}
+        onInteract={() => {}}
         notice={null}
         weekChanged={false}
+        pad={null}
         {...over}
       />,
     )
@@ -1534,7 +1581,7 @@ describe('Board3DHud: words are DOM, never in-scene', () => {
 
   it('the interact prompt is polite and carries the model s own wording', () => {
     const prompt = deskPrompt(propsFor('FACTORY'))
-    renderHud({ prompt })
+    renderHud({ nearTarget: deskTarget({ prompt }) })
 
     const carrier = screen
       .getAllByRole('status')
@@ -1563,6 +1610,155 @@ describe('Board3DHud: words are DOM, never in-scene', () => {
     expect(document.body.textContent).toContain('Week 7 of 36')
     expect(document.body.textContent).toContain('W A S D')
     expect(document.body.textContent).toContain('Esc')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// §5.7 — the HUD's touch half: the Open button, the touch legend, the pad slot
+// ---------------------------------------------------------------------------
+
+/** The order-desk target as the model hands it over, enabled unless told. */
+function deskTarget(over: Partial<InteractTarget> = {}): InteractTarget {
+  return {
+    id: 'order-desk',
+    position: [0, 0, 4],
+    radius: 3.6,
+    prompt: deskPrompt(propsFor('RETAILER')),
+    enabled: true,
+    ...over,
+  }
+}
+
+describe('Board3DHud §5.7: a tap opens what E opens', () => {
+  // The button is touch-only (§5.7): every test here is on a coarse pointer
+  // unless it says otherwise.
+  beforeEach(() => matchOnly(COARSE_POINTER_QUERY))
+
+  function renderHud(over: Partial<Parameters<typeof Board3DHud>[0]> = {}) {
+    return render(
+      <Board3DHud
+        view={viewFor('RETAILER')}
+        week={7}
+        durationWeeks={36}
+        nearTarget={null}
+        onInteract={() => {}}
+        notice={null}
+        weekChanged={false}
+        pad={null}
+        {...over}
+      />,
+    )
+  }
+
+  it('offers no Open button with nothing in range', () => {
+    renderHud()
+    expect(screen.queryByRole('button', { name: /^open/i })).not.toBeInTheDocument()
+  })
+
+  it('in range of an enabled station, the button names that station and opens it', async () => {
+    const user = userEvent.setup()
+    const onInteract = vi.fn()
+    renderHud({ nearTarget: deskTarget(), onInteract })
+
+    const button = screen.getByRole('button', { name: interactLabel('order-desk') })
+    // The panel's own heading, so the button and what it opens agree.
+    expect(button.textContent).toContain(PANEL_TITLE['order-desk'])
+
+    await user.click(button)
+    expect(onInteract).toHaveBeenCalledTimes(1)
+    expect(onInteract).toHaveBeenCalledWith('order-desk')
+  })
+
+  it('names each station by its panel title', () => {
+    for (const id of ['order-desk', 'ledger-wall', 'team-board'] as const) {
+      const { unmount } = renderHud({ nearTarget: deskTarget({ id }) })
+      expect(screen.getByRole('button', { name: `Open · ${PANEL_TITLE[id]}` })).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('AC 18: a disabled target (paused) shows its prompt but offers no button', () => {
+    const prompt = 'Paused. The host has paused the game.'
+    renderHud({ nearTarget: deskTarget({ enabled: false, prompt }) })
+
+    expect(
+      screen.getAllByRole('status').some((node) => node.textContent?.includes(prompt)),
+    ).toBe(true)
+    expect(screen.queryByRole('button', { name: /^open/i })).not.toBeInTheDocument()
+  })
+
+  it('a fine pointer gets no button — the prompt and E are enough', () => {
+    window.matchMedia = REAL_MATCH_MEDIA
+    renderHud({ nearTarget: deskTarget() })
+    expect(screen.queryByRole('button', { name: /^open/i })).not.toBeInTheDocument()
+  })
+
+  it('Board3D.tsx gives the button the SAME function it binds to E', () => {
+    // Read, not imported (§8.1). One definition of "open the station I stand
+    // at", two callers: a second `setOpenPanels` append for the button would
+    // be a second set of rules for what a tap may open.
+    const source = readFileSync(
+      join(projectRoot(), 'src', 'components', 'game', 'views', 'Board3D.tsx'),
+      'utf8',
+    )
+    expect(source).toMatch(/onInteract=\{openStation\}/)
+    expect(source).toMatch(/if\s*\(openStation\(standingAt\)\)\s*event\.preventDefault\(\)/)
+    expect(source.match(/\[\.\.\.current,\s*id\]/g) ?? []).toHaveLength(1)
+    expect(source).toMatch(/touch-none/)
+  })
+})
+
+describe('Board3DHud §5.7: the legend and the pad follow the pointer', () => {
+  function renderHud(over: Partial<Parameters<typeof Board3DHud>[0]> = {}) {
+    return render(
+      <Board3DHud
+        view={viewFor('RETAILER')}
+        week={7}
+        durationWeeks={36}
+        nearTarget={null}
+        onInteract={() => {}}
+        notice={null}
+        weekChanged={false}
+        pad={{ onPress: () => {}, onRelease: () => {} }}
+        {...over}
+      />,
+    )
+  }
+
+  it('a fine pointer keeps the keyboard legend, unchanged, and gets no pad', () => {
+    renderHud()
+    const body = document.body.textContent ?? ''
+    for (const line of Object.values(PROMPT_COPY)) expect(body).toContain(line)
+    for (const line of Object.values(TOUCH_PROMPT_COPY)) expect(body).not.toContain(line)
+    expect(screen.queryByRole('group', { name: 'Movement controls' })).not.toBeInTheDocument()
+  })
+
+  it('a coarse pointer gets the touch legend instead of W A S D, and the pad', () => {
+    matchOnly(COARSE_POINTER_QUERY)
+    renderHud()
+    const body = document.body.textContent ?? ''
+    for (const line of Object.values(TOUCH_PROMPT_COPY)) expect(body).toContain(line)
+    expect(body).not.toContain('W A S D')
+    expect(screen.getByRole('group', { name: 'Movement controls' })).toBeInTheDocument()
+  })
+
+  it('a coarse pointer with a panel open (pad = null) draws no pad', () => {
+    matchOnly(COARSE_POINTER_QUERY)
+    renderHud({ pad: null })
+    expect(screen.queryByRole('group', { name: 'Movement controls' })).not.toBeInTheDocument()
+  })
+
+  it('the pad reports presses to the callbacks it was handed', () => {
+    matchOnly(COARSE_POINTER_QUERY)
+    const onPress = vi.fn()
+    const onRelease = vi.fn()
+    renderHud({ pad: { onPress, onRelease } })
+
+    const forward = screen.getByRole('button', { name: 'Move forward' })
+    fireEvent.pointerDown(forward)
+    fireEvent.pointerUp(forward)
+    expect(onPress).toHaveBeenCalledWith('forward')
+    expect(onRelease).toHaveBeenCalledWith('forward')
   })
 })
 

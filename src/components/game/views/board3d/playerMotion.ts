@@ -32,6 +32,11 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  * out. A clamp that only ever runs inside `useFrame` is a clamp no test has
  * ever seen hold.
  *
+ * The touch controls of 24 §5.7 add three more decisions here and no second
+ * walk: `mergeHeldKeys` folds the on-screen pad's walking buttons into the
+ * keyboard's set so `stepPlayer` stays the one walk authority, and
+ * `turnAxis` / `stepYaw` turn the camera while a turn button is held.
+ *
  * Nothing in this module imports three.js, `@react-three/fiber` or React. The
  * one import that reaches `sceneModel.ts` is `import type`, erased at compile
  * time under `verbatimModuleSyntax`, so this file costs a test run nothing but
@@ -70,6 +75,96 @@ export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([
  * copy of it.
  */
 export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
+
+/**
+ * The media query that puts the on-screen movement pad on screen (24 §5.7).
+ *
+ * `any-pointer`, not `pointer`: `pointer` reports only the *primary* input, so
+ * a tablet with a keyboard cover or a touch laptop with a trackpad would be
+ * asked which one it is and answer with the wrong one. Any coarse pointer at
+ * all means a finger may be the thing holding the device, and a pad that is
+ * there and unused costs a corner of the screen; a pad that is missing costs
+ * the game.
+ */
+export const COARSE_POINTER_QUERY = '(any-pointer: coarse)'
+
+/** 24 §5.7. Radians per second while a turn button is held — Samby's 1.7, a
+ *  full turn in under four seconds, slow enough to stop on a sign. */
+export const TURN_SPEED = 1.7
+
+/**
+ * The six buttons of the on-screen pad (24 §5.7), in the order they render:
+ * turn, walk, turn on the top row; strafe, walk back, strafe on the bottom.
+ *
+ * These are **not** keyboard keys and are kept in a set of their own, owned by
+ * `Board3D` and read by `PlayerController` beside the keyboard's. Samby keeps
+ * `touchKeys` apart from `keys` for the same reason: a finger lifting a pad
+ * button must never release a key the keyboard is still holding, and a window
+ * `blur` that clears the keyboard must be free to clear the pad too without
+ * either knowing what the other holds.
+ */
+export type PadControl =
+  | 'turn-left'
+  | 'forward'
+  | 'turn-right'
+  | 'strafe-left'
+  | 'backward'
+  | 'strafe-right'
+
+/**
+ * Which keyboard key each walking button stands for, so `stepPlayer` stays the
+ * one walk authority (24 §5.1). The pad does not get a second integration with
+ * its own speed and its own diagonal; it presses `W` on the player's behalf.
+ * The two turn buttons have no keyboard twin — the arrows walk, and that
+ * mapping is unchanged — so they are `turnAxis`'s, not this table's.
+ */
+export const PAD_WALK_KEY: Readonly<Partial<Record<PadControl, string>>> = {
+  forward: 'w',
+  backward: 's',
+  'strafe-left': 'a',
+  'strafe-right': 'd',
+}
+
+/**
+ * The keyboard's held keys with the pad's walking buttons folded in.
+ *
+ * Returns the keyboard set itself, unchanged, when the pad holds nothing — the
+ * common case on a laptop, and a frame that allocates nothing for it. A key
+ * held on both is held once: a set, so `W` and the forward button together
+ * walk at the speed of either, never twice it.
+ */
+export function mergeHeldKeys(
+  keyboard: ReadonlySet<string>,
+  pad: ReadonlySet<PadControl>,
+): ReadonlySet<string> {
+  if (pad.size === 0) return keyboard
+  const merged = new Set(keyboard)
+  for (const control of pad) {
+    const key = PAD_WALK_KEY[control]
+    if (key !== undefined) merged.add(key)
+  }
+  return merged
+}
+
+/** `+1` turning left, `-1` turning right, `0` for neither or both — opposite
+ *  buttons cancel, exactly as `A` and `D` do in `movementAxes`. */
+export function turnAxis(pad: ReadonlySet<PadControl>): number {
+  return (pad.has('turn-left') ? 1 : 0) - (pad.has('turn-right') ? 1 : 0)
+}
+
+/**
+ * One frame of turning from the pad: the next yaw.
+ *
+ * Positive yaw turns left, matching the camera's `YXZ` composition and the
+ * drag-look's own sign (dragging right lowers yaw and turns right). Yaw stays
+ * unclamped, as 24 §5.1 has it. Turning is **look**, not movement, so the
+ * controller applies it while paused or after the game ends too — the same
+ * rule that keeps drag-look alive then.
+ */
+export function stepYaw(yaw: number, pad: ReadonlySet<PadControl>, delta: number): number {
+  const axis = turnAxis(pad)
+  return axis === 0 ? yaw : yaw + axis * TURN_SPEED * delta
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)

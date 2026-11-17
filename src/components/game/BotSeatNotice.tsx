@@ -21,7 +21,7 @@ export function BotSeatNotice({ onReclaim }: BotSeatNoticeProps): ReactElement {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-4"
+      className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))]"
     >
       <div className="flex max-w-xl flex-col gap-3 rounded-lg border-2 border-warning bg-surface-raised px-5 py-4 shadow-lg sm:flex-row sm:items-center">
         <div className="flex flex-col gap-1">
