@@ -142,7 +142,9 @@ export interface ResultsResponse {
   duration_weeks: number
   ended_early: boolean
   currency_symbol: string
+  /** ISO 8601 in UTC with a `Z` suffix; `new Date()` reads it as UTC. */
   started_at: string
+  /** ISO 8601 in UTC with a `Z` suffix. */
   finished_at: string
   demand_series: number[]
   chain_total_cost: number

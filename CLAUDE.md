@@ -22,7 +22,7 @@ This repo is the **client only**:
 | Piece | Where | What |
 |---|---|---|
 | `Beery_Frontend` (here) | Firebase Hosting, site `beersim`, project `beery-30d23` | React 19 + Vite 7 SPA |
-| `Beery_Backend` | Render, `https://beery-backend.onrender.com` | FastAPI + Socket.IO, MySQL + Redis. Entry point `app.main:application`, dev port **8080** |
+| `Beery_Backend` | Render, `https://beery-backend.onrender.com` | FastAPI + Socket.IO, PostgreSQL + optional Redis. Timestamps arrive as ISO-8601 UTC with `Z`. Entry point `app.main:application`, dev port **8080** |
 | `Novus/game_stack.md` | repo root, one level above `Beery/` | The shared "host + room" base stack every Novus game (Beery, Lemony, Pulky, Selly/Tequila, Supply) is built from |
 
 `Novus/game_stack.md` is the **single source of truth**; `Beery/game_stack.md` and
