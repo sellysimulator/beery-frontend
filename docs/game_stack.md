@@ -912,10 +912,10 @@ which is exactly the raw UID the new schema exists to stop broadcasting.
 ### Database
 
 PostgreSQL 17 on one managed **Aiven PostgreSQL** service shared by every Novus game, reached
-over TLS. Each game has its own database on it (named after the game: `selly`, `lemony`,
-`pulky`, `beery`) and its own login role, which owns that database and is the only app role
-allowed to connect to it. The `alembic upgrade head` that builds a game's schema runs as that
-role, so the role owns every table. Sync
+over TLS. Each game has its own database on it (`sellydb`, `lemonydb`, `pulkydb`, `beerydb`;
+Aiven's own `defaultdb` holds no game). Every game connects as the service's one user,
+`avnadmin`; there are no per-game roles, so isolation between the games is by database name
+only. Sync
 SQLAlchemy 2.0 with psycopg 3, `DeclarativeBase` + `TimestampMixin`. Credentials come from
 separate env vars that `config.py` assembles into a URL-encoded
 `postgresql+psycopg://user:pass@host:port/db` (encode them: a `@` or `%` in a password otherwise
