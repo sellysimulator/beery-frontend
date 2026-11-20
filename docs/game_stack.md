@@ -942,7 +942,7 @@ Lemony, whose live play goes through the database while Redis is off.
 |---|---|
 | The four games in normal running (3 + 3 + 3 + 4) | 13 |
 | The second instance Render runs while one game deploys | at most +4 = 17 |
-| That deploy's `preDeployCommand` migration | +1 = 18 |
+| That deploy's startup migration (`alembic upgrade head` in the Dockerfile CMD) | +1 = 18 |
 | One operator `psql` session | +1 = 19 of 20 |
 
 So **deploy one game at a time**. A backend run locally against the shared service is one more
@@ -1030,10 +1030,13 @@ alembic upgrade head
 `settings.db_url` + `settings.db_connect_args` straight to `create_engine`. Never route the URL
 through `config.set_main_option`: configparser treats a `%` in the password as interpolation.
 
-Render runs migrations as the **`preDeployCommand: alembic upgrade head`** in `render.yaml`,
-and `autoDeployTrigger: checksPass` makes a deploy wait for CI. A failed migration therefore
-fails the deploy before the new code serves traffic. Back up before a migration that drops or
-rewrites data (`pg_dump -Fc`).
+**Migrations run at container startup.** The services are on Render's free plan, which has no
+pre-deploy command, so the Dockerfile CMD runs `alembic upgrade head && exec uvicorn …`. A
+failed migration exits before uvicorn starts, the new instance never passes its health check,
+and Render keeps the previous deploy live. Run one instance, so Alembic never races itself.
+Auto-Deploy is `After CI checks pass`, set in the Render dashboard (`render.yaml` records it as
+`autoDeployTrigger: checksPass`, but the services are not Blueprint-linked, so Render does not
+read the file). Back up before a migration that drops or rewrites data (`pg_dump -Fc`).
 
 **The DDL is generated and checked in.** `Novus/scripts/db/gen_ddl.py --backend <Game>_Backend`
 runs `alembic upgrade head` against a throwaway `postgres:17` container and writes the
@@ -1137,11 +1140,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 EXPOSE ${PORT:-8080}
 ENV FORWARDED_ALLOW_IPS=*
-CMD ["sh", "-c", "uvicorn app.main:application --host 0.0.0.0 --port ${PORT:-8080} \
+# Free Render instances have no pre-deploy step: migrate, then serve.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:application --host 0.0.0.0 --port ${PORT:-8080} \
      --http h11 --proxy-headers --forwarded-allow-ips=${FORWARDED_ALLOW_IPS}"]
 ```
 
-`--http h11` is required for a reliable WebSocket 101 upgrade. `--forwarded-allow-ips` is an
+`alembic upgrade head` runs first, so the container needs its database at startup (CI only
+builds the image). `exec` makes uvicorn PID 1, so it gets Render's stop signal. `--http h11` is required for a reliable WebSocket 101 upgrade. `--forwarded-allow-ips` is an
 **env var, not a hardcoded `*`**, so a platform that publishes proxy IPs can narrow it; `*`
 remains the default because Render does not publish fixed proxy addresses and the container is
 only reachable through their proxy. Ensure `.dockerignore` excludes `.env`.
@@ -1220,7 +1225,7 @@ be written down in that game's plan rather than silently resolved in code.
 - [ ] **`REDIS_URL` points at a live instance.** Managed free-tier Redis databases get reclaimed
       when idle; the hostname then returns `NXDOMAIN` and every room operation fails. All room
       state lives there — this takes the whole game down.
-- [ ] Schema: `render.yaml` runs `alembic upgrade head` as the `preDeployCommand`, and
+- [ ] Schema: the Dockerfile CMD runs `alembic upgrade head` before uvicorn, and
       `db/schema.postgres.sql` matches it (`python scripts/db/gen_ddl.py --backend <Game>_Backend --check`).
 - [ ] Startup logs show Firebase verification is **active**, not the CRITICAL warning.
 - [ ] Smoke test in the deployed environment: sign in → create → join from a second browser →
