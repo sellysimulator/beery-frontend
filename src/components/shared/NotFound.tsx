@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 /**
  * The fallback for `*`. Also what every path renders while `src/pages/` is
- * empty, which is the state section 16 ships in.
+ * empty.
  */
 export function NotFound(): ReactElement {
   return (

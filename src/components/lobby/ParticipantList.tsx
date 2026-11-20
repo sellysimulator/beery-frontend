@@ -11,7 +11,7 @@ const NO_ROLE = ''
  * The seat picker's options for one participant.
  *
  * A role somebody else holds is listed but disabled, with the holder's name:
- * the server refuses to hand a held seat to a second person (`11 §3.5`), and
+ * the server refuses to hand a held seat to a second person, and
  * a picker that offered it anyway would turn that refusal into an error the
  * host had no way to see coming. Unseating the holder first frees it.
  */

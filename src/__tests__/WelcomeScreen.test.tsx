@@ -1,18 +1,19 @@
 /**
- * `17-frontend-lobby.md §2.1` — `/`, the public welcome screen.
+ * `/`, the public welcome screen (spec §9.10).
  *
- * Covers acceptance criteria 1, 2 and 27 (the guest-path half).
+ * Covers: the screen renders with no backend, the guest path, and the guest
+ * path's half of the display name.
  *
  * Harness notes:
- *  - The page is reached through the route descriptor it exports (§3.0), which
- *    is the only entry point this section declares. Nothing here imports a
+ *  - The page is reached through the route descriptor it exports, which
+ *    is the only entry point the page declares. Nothing here imports a
  *    component by name.
  *  - `socket.io-client` and `firebase/*` are replaced by recorders so the page
  *    is exercised as real, un-mocked code while nothing touches transport.
  *  - `src/api/http.ts` is replaced by a recorder whose *only* job here is to
- *    prove criterion 1's "with no backend": if the welcome screen ever calls
+ *    prove "with no backend": if the welcome screen ever calls
  *    the API, the recorder has a call on it.
- *  - `§3` of section 16 fixes the composition — `App` mounts no router and no
+ *  - The composition is fixed — `App` mounts no router and no
  *    provider — so every render below supplies `<MemoryRouter>` and the auth
  *    provider itself, exactly as `main.tsx` does.
  */
@@ -162,14 +163,14 @@ vi.mock('../api/health', () => healthRec);
 function descriptorsOf(mod: unknown, label: string): RouteDescriptor[] {
   const route = (mod as { route?: RouteDescriptor | RouteDescriptor[] }).route;
   if (!route) {
-    throw new Error(`${label} exports no \`route\` descriptor (17 §3.0, 16 §3 registry).`);
+    throw new Error(`${label} exports no \`route\` descriptor.`);
   }
   return Array.isArray(route) ? route : [route];
 }
 
 function welcomeDescriptor(): RouteDescriptor {
   const found = descriptorsOf(WelcomeScreenModule, 'WelcomeScreen.tsx').find((d) => d.path === '/');
-  if (!found) throw new Error('WelcomeScreen.tsx declares no descriptor for `/` (17 §3.0).');
+  if (!found) throw new Error('WelcomeScreen.tsx declares no descriptor for `/`.');
   return found;
 }
 
@@ -253,11 +254,11 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 1 — the two identity choices, both manual links, no backend
+// The two identity choices, both manual links, no backend
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 1: WelcomeScreen renders with no backend', () => {
-  it('declares a public route descriptor for `/` (17 §3.0)', () => {
+describe('WelcomeScreen renders with no backend', () => {
+  it('declares a public route descriptor for `/`', () => {
     const descriptor = welcomeDescriptor();
     expect(descriptor.path).toBe('/');
     expect(descriptor.guard).toBe('public');
@@ -266,7 +267,7 @@ describe('CRITERION 1: WelcomeScreen renders with no backend', () => {
   it('renders both identity choices', () => {
     renderWelcome();
 
-    // §2.1: "Two identity choices and nothing else."
+    // "Two identity choices and nothing else."
     expect(screen.getByRole('button', { name: /sign in with google/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue as .*guest/i })).toBeInTheDocument();
   });
@@ -289,7 +290,7 @@ describe('CRITERION 1: WelcomeScreen renders with no backend', () => {
   it('explains what the game is in prose, not marketing boilerplate', () => {
     renderWelcome();
 
-    // §2.1: "One short paragraph explaining what the game is".
+    // "One short paragraph explaining what the game is".
     const text = (document.body.textContent ?? '').replace(/\s+/g, ' ').trim();
     expect(text.length).toBeGreaterThan(80);
   });
@@ -350,10 +351,10 @@ describe('a visitor who is already signed in is not asked to sign in again', () 
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 2 — the guest path
+// The guest path
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 2: continuing as a guest', () => {
+describe('continuing as a guest', () => {
   it('mints a guest id and lands on /home when there is no `state.from`', async () => {
     const user = userEvent.setup();
     renderWelcome('/');
@@ -362,15 +363,15 @@ describe('CRITERION 2: continuing as a guest', () => {
 
     await user.click(screen.getByRole('button', { name: /continue as .*guest/i }));
 
-    // 00-conventions §2: the guest identity is `guest_<uuid4>`, minted once.
+    // The guest identity is `guest_<uuid4>`, minted once (spec §3).
     expect(getGuestId()).toBeTruthy();
     expect(currentPath()).toBe('/home');
   });
 
   it('returns to `state.from` when a guard bounced the visitor here', async () => {
     const user = userEvent.setup();
-    // §2.1 freezes `state.from` as a react-router `Location` object, exactly as
-    // 16 §4.8's `AuthGuard` forwards it — not a bare pathname — so that the
+    // `state.from` is a react-router `Location` object, exactly as
+    // `AuthGuard` forwards it — not a bare pathname — so that the
     // query string and the hash survive the round trip.
     renderWelcome({
       pathname: '/',
@@ -406,7 +407,7 @@ describe('CRITERION 2: continuing as a guest', () => {
 
     await user.click(screen.getByRole('button', { name: /sign in with google/i }));
 
-    // `signInWithGoogle()` is section 16's; all this asserts is that the
+    // `signInWithGoogle()` lives in the auth layer; all this asserts is that the
     // welcome screen calls it instead of navigating on its own authority.
     expect(rec.signInCalls).toBeGreaterThan(0);
   });
@@ -418,14 +419,14 @@ describe('CRITERION 2: continuing as a guest', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 27 — the guest path's half of the display name
+// The guest path's half of the display name
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 27: the guest path collects and persists a name', () => {
+describe('the guest path collects and persists a name', () => {
   /**
-   * §2.1: the name field is part of the guest choice — "two identity choices
-   * and nothing else" constrains the choices, not the fields inside them.
-   * §2.4b freezes its accessible name as `Your name`.
+   * The name field is part of the guest choice — "two identity choices and
+   * nothing else" constrains the choices, not the fields inside them. Its
+   * accessible name is `Your name`.
    */
   function guestNameInput(): HTMLInputElement {
     return screen.getByRole('textbox', { name: /^Your name$/i }) as HTMLInputElement;
@@ -440,13 +441,13 @@ describe('CRITERION 27: the guest path collects and persists a name', () => {
     await user.type(guestNameInput(), 'Cara');
     await user.click(screen.getByRole('button', { name: /continue as .*guest/i }));
 
-    // §2.1: "so a guest who follows an invite link straight into a room already
-    // has one" — which is section 17's `join` emit, and section 16's
+    // "so a guest who follows an invite link straight into a room already
+    // has one" — which is the lobby's `join` emit, and
     // `rejoinAfterConnect` after that.
     await waitFor(() => expect(getDisplayName()).toBe('Cara'));
   });
 
-  it('keeps the name in localStorage, where it survives the reload AC 27 is about', async () => {
+  it('keeps the name in localStorage, where it survives a reload', async () => {
     const user = userEvent.setup();
     renderWelcome();
 

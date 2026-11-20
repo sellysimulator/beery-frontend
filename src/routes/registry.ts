@@ -38,8 +38,8 @@ function isRouteDescriptor(value: unknown): value is RouteDescriptor {
  *
  * `collectRoutes({})` is the empty case, and stays assertable for the life of
  * the project. The live `discoverRoutes()` cannot serve that purpose because
- * `import.meta.glob` is expanded at transform time: once section 17 ships
- * pages, it can never return `[]` again.
+ * `import.meta.glob` is expanded at transform time: once `src/pages/` holds a
+ * page, it can never return `[]` again.
  */
 export function collectRoutes(modules: Record<string, unknown>): RouteDescriptor[] {
   const routes: RouteDescriptor[] = []

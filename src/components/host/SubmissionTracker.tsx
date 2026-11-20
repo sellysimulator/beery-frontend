@@ -12,17 +12,17 @@ export interface SubmissionEntry {
 export interface SubmissionTrackerProps {
   /** One entry per role, in `ROLE_ORDER`. */
   entries: SubmissionEntry[]
-  /** Projector styling: larger type, thicker rules (§2.4, §3.5). */
+  /** Projector styling: larger type, thicker rules. */
   presenting?: boolean
 }
 
 /**
- * Four names, ticked as they decide (§2.4).
+ * Four names, ticked as they decide.
  *
  * **Names and tick state, and nothing else.** This is the one component on the
  * projector that is about the people in the room, and the room can read it:
  * putting a quantity here would tell every player what their neighbour just
- * ordered, which is the game (§2.4, AC 17, FM 1).
+ * ordered, which is the game (spec §9.6).
  *
  * A tick is never the only signal either — the state is spelled out in words
  * beside it, because a green dot at the back of a lecture hall is a guess.

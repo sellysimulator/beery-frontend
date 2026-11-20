@@ -12,8 +12,8 @@ import { NumberField, SliderField } from './fields'
  * re-orders to cover a shortfall it has already covered and panics its way
  * into the bullwhip; at 1 it counts every unit in transit and swings far less.
  *
- * It does not make the bot steady, and the copy must not say so (2026-11-03,
- * `08 §3.1`). The bot aims for a stock of `target_stock_multiplier` times its
+ * It does not make the bot steady, and the copy must not say so (spec §8.5).
+ * The bot aims for a stock of `target_stock_multiplier` times its
  * starting inventory, keeps no target for its pipeline, and its supply line is
  * only the beer already shipped to it, not orders its supplier has yet to
  * ship. So even at 1, with flat demand, it orders well above demand at first

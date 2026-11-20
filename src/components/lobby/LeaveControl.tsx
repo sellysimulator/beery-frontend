@@ -25,13 +25,12 @@ export interface LeaveControlProps {
  * seat to the next person to claim it is worse than one extra click.
  *
  * It is offered ONLY before the game starts. The server refuses `leave` once
- * the room is running (`11 §3.3`) and answers with `join_error`, so the
+ * the room is running and answers with `join_error`, so the
  * refusal path is still handled here — a stale tab can reach the button a
  * moment after the host presses start.
  *
  * Nothing here navigates. The ack arrives on the socket, `socketHandlers`
- * turns it into `leftRoom`, and the shell redirects — one reader of the wire
- * (`16 §3`).
+ * turns it into `leftRoom`, and the shell redirects — one reader of the wire.
  */
 export function LeaveControl({ roomCode }: LeaveControlProps): ReactElement {
   const joinError = useGameStore((state) => state.joinError)

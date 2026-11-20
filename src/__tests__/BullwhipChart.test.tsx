@@ -1,22 +1,21 @@
 /**
- * `21-frontend-results.md §2.2` and `§2.2a` — `BullwhipChart`, the reveal.
- *
- * Covers acceptance criteria 4, 5, 6, 7 and 24, and failure modes 1, 2 and 8.
+ * `BullwhipChart`, the reveal (spec §9.8).
  *
  * Harness notes:
- *  - **`chart.js` and `react-chartjs-2` are never mocked** (failure mode 13).
- *    `§2.2a` freezes the two seams a jsdom test may use instead: the pure
- *    builder `buildBullwhipConfig`, and the chart's visually hidden per-week
- *    table. Everything below is asserted through one of those two.
+ *  - **`chart.js` and `react-chartjs-2` are never mocked.** A jsdom test uses
+ *    two seams instead: the pure builder `buildBullwhipConfig`, and the chart's
+ *    visually hidden per-week table. Everything below is asserted through one
+ *    of those two.
  *  - `chartSetup.ts` is wrapped — not replaced — so the *real* builder runs and
- *    its argument and result are recorded. That is what makes criterion 24
- *    checkable: the configuration the test asserts on is the very object the
- *    component was handed, and the hidden table is compared against it.
+ *    its argument and result are recorded. That is what makes it checkable that
+ *    the chart renders the builder's result unaltered: the configuration the
+ *    test asserts on is the very object the component was handed, and the
+ *    hidden table is compared against it.
  *  - `ResultsView` is not declared anywhere in a frozen public surface, so no
  *    test constructs one. Every view here is the one the screen itself built
- *    from `15 §2`'s `ResultsResponse`, captured through that wrapper.
+ *    from the `ResultsResponse`, captured through that wrapper.
  *  - `src/api/http.ts` is replaced by a recorder and `src/auth/AuthContext.tsx`
- *    by a stub of the value `16 §3` freezes; the screen is otherwise real.
+ *    by a stub; the screen is otherwise real.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ReactNode } from 'react';
@@ -36,7 +35,7 @@ import * as BullwhipChartModule from '../components/results/BullwhipChart';
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 // ---------------------------------------------------------------------------
-// Harness — the chartSetup wrapper (§2.2a seam 1)
+// Harness — the chartSetup wrapper (the builder seam)
 // ---------------------------------------------------------------------------
 
 interface Dataset {
@@ -66,7 +65,7 @@ vi.mock('../components/charts/chartSetup', async (importOriginal) => {
   const build = actual.buildBullwhipConfig;
   if (typeof build !== 'function') {
     throw new Error(
-      '21 §2.2a: `src/components/charts/chartSetup.ts` must export ' +
+      '`src/components/charts/chartSetup.ts` must export ' +
         '`buildBullwhipConfig(view: ResultsView): ChartConfiguration<"line">`.',
     );
   }
@@ -293,7 +292,7 @@ function latestConfig(): ChartLikeConfig {
   const last = chartRec.calls[chartRec.calls.length - 1];
   if (!last) {
     throw new Error(
-      '21 §2.2a and criterion 24: the chart must be handed `buildBullwhipConfig(view)`; ' +
+      'The chart must be handed `buildBullwhipConfig(view)`; ' +
         `it was never called. The screen rendered: ${bodyText()}`,
     );
   }
@@ -322,7 +321,7 @@ function demandDataset(): Dataset {
   const found = all.filter((d) => /demand/i.test(labelOf(d)));
   if (found.length !== 1) {
     throw new Error(
-      `§2.2 requires exactly one true-customer-demand series; the configuration has ` +
+      `Expected exactly one true-customer-demand series; the configuration has ` +
         `${found.length}. Its labels are: ${all.map(labelOf).join(' | ')}`,
     );
   }
@@ -335,7 +334,7 @@ function orderDataset(role: Role): Dataset {
   );
   if (found.length !== 1) {
     throw new Error(
-      `§2.2 requires exactly one ${role} order series; the configuration has ${found.length}. ` +
+      `Expected exactly one ${role} order series; the configuration has ${found.length}. ` +
         `Its labels are: ${datasets().map(labelOf).join(' | ')}`,
     );
   }
@@ -346,7 +345,7 @@ function orderDatasets(): Dataset[] {
   return ROLE_ORDER.map(orderDataset);
 }
 
-/** Only the Y scales: `§2.2a` freezes "one entry whose axis is `y`". */
+/** Only the Y scales: the chart has "one entry whose axis is `y`". */
 function yScales(): Array<[string, { axis?: unknown; beginAtZero?: unknown }]> {
   const scales = latestConfig().options?.scales ?? {};
   return Object.entries(scales).filter(([key, value]) => {
@@ -392,7 +391,7 @@ function chartTable(): HTMLElement {
   );
   if (!found) {
     throw new Error(
-      '§2.2a requires the chart to render a visually hidden table as well, one row per week ' +
+      'The chart must render a visually hidden table as well, one row per week ' +
         `with a column for true demand and one per role. The screen rendered: ${bodyText()}`,
     );
   }
@@ -420,10 +419,10 @@ function tableHasSeries(values: number[]): boolean {
 
 function descriptor(): RouteDescriptor {
   const exported = (ResultsPageModule as { route?: RouteDescriptor | RouteDescriptor[] }).route;
-  if (!exported) throw new Error('ResultsPage.tsx exports no `route` descriptor (21 §3.0).');
+  if (!exported) throw new Error('ResultsPage.tsx exports no `route` descriptor.');
   const all = Array.isArray(exported) ? exported : [exported];
   const found = all.find((d) => d.path.startsWith('/results'));
-  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route (21 §3.0).');
+  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route.');
   return found;
 }
 
@@ -479,10 +478,10 @@ describe('BullwhipChart is a component of its own', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 24 — the builder's result is what is rendered
+// The builder's result is what is rendered
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 24: the chart is handed buildBullwhipConfig’s result, unaltered', () => {
+describe('the chart is handed buildBullwhipConfig’s result, unaltered', () => {
   it('builds the configuration from the view, once the screen has one', async () => {
     await renderChart();
 
@@ -532,10 +531,10 @@ describe('CRITERION 24: the chart is handed buildBullwhipConfig’s result, unal
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 4 and failure modes 1 and 2 — one Y axis, starting at zero
+// One Y axis, starting at zero
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 4 and FAILURE MODES 1 and 2: five series, one Y axis, from zero', () => {
+describe('five series, one Y axis, from zero', () => {
   it('declares exactly five datasets', async () => {
     await renderChart();
 
@@ -571,10 +570,10 @@ describe('CRITERION 4 and FAILURE MODES 1 and 2: five series, one Y axis, from z
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 5 and 6, failure mode 8 — the series are told apart
+// The series are told apart
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 5: true customer demand is drawn on top and stands apart', () => {
+describe('true customer demand is drawn on top and stands apart', () => {
   it('puts the demand dataset last, so Chart.js draws it over the orders', async () => {
     await renderChart();
 
@@ -599,7 +598,7 @@ describe('CRITERION 5: true customer demand is drawn on top and stands apart', (
   });
 });
 
-describe('CRITERION 6 and FAILURE MODE 8: colour and dash, not colour alone', () => {
+describe('colour and dash, not colour alone', () => {
   it('gives the four order series pairwise distinct colours', async () => {
     await renderChart();
 
@@ -628,18 +627,18 @@ describe('CRITERION 6 and FAILURE MODE 8: colour and dash, not colour alone', ()
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 7 — the legend brings the series in one at a time
+// The legend brings the series in one at a time
 // ---------------------------------------------------------------------------
 
 /**
- * `§2.2a`'s third seam: the legend is **real DOM** — one `role="switch"` per
+ * The third seam: the legend is **real DOM** — one `role="switch"` per
  * series, named after it — and a toggle filters the *view handed to*
  * `buildBullwhipConfig` without editing the configuration the builder already
  * returned. That is what makes the debrief's "Retailer first, then upstream"
  * reachable by a test and by a keyboard, neither of which can touch a legend
  * Chart.js draws inside the canvas.
  */
-describe('CRITERION 7: the DOM legend toggles one series at a time', () => {
+describe('the DOM legend toggles one series at a time', () => {
   function switches(): HTMLElement[] {
     return Array.from(document.querySelectorAll<HTMLElement>('[role="switch"]'));
   }
@@ -665,7 +664,7 @@ describe('CRITERION 7: the DOM legend toggles one series at a time', () => {
     const found = switches().filter((el) => series.test(nameOf(el)));
     if (found.length !== 1) {
       throw new Error(
-        `§2.2a requires one role="switch" per series, named after it; ${found.length} name ` +
+        `Expected one role="switch" per series, named after it; ${found.length} name ` +
           `${what}. The legend offers: ${switches().map(nameOf).join(' | ') || '(no switches)'}`,
       );
     }
@@ -734,7 +733,7 @@ describe('CRITERION 7: the DOM legend toggles one series at a time', () => {
       expect(datasets()).toHaveLength(4);
     });
 
-    // The builder ran again on a filtered view (§2.2a) rather than the
+    // The builder ran again on a filtered view rather than the
     // component reaching into what it was handed.
     expect(before.data?.datasets ?? []).toHaveLength(5);
     expect(latestConfig()).not.toBe(before);
@@ -793,10 +792,10 @@ describe('CRITERION 7: the DOM legend toggles one series at a time', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * The DOM switches are the legend (§2.2a). Chart.js's canvas legend used to be
- * left on as well, so the screen showed two legends, and the one people click
- * drew solid swatches: the dash that separates the roles without colour (§2.2)
- * was only in the copy nobody could reach.
+ * The DOM switches are the legend. Chart.js's canvas legend stays off: with
+ * both on, the screen shows two legends, and the one people click draws solid
+ * swatches, so the dash that separates the roles without colour is only in
+ * the copy nobody can reach.
  */
 describe('the legend is the DOM switches alone, and it shows each role’s dash', () => {
   function switches(): HTMLElement[] {

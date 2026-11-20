@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { getBoardView, setBoardView, type BoardViewChoice } from '../../../utils/storage'
 
 /**
- * Which board this browser draws, and how that is decided (24 §2.2).
+ * Which board this browser draws, and how that is decided (spec §9.7).
  *
  * The resolution order is:
  *
@@ -30,11 +30,11 @@ function asChoice(value: string | null | undefined): BoardViewChoice | null {
  * with.
  *
  * A value that is neither `'2D'` nor `'3D'` — in storage OR in the env — is
- * treated as **unset**, not as an error, and falls through (24 §2.2). That is
+ * treated as **unset**, not as an error, and falls through. That is
  * not leniency for its own sake: the resolution order already has an answer for
  * "no preference", so a throw here would only turn a stale key into a broken
  * game screen. An unknown env value falling through to `Board2D` is what
- * `19 §2.8` already required of the seam before this section existed.
+ * the board view seam (**D15**) requires anyway.
  */
 export function resolveBoardView(
   stored: string | null | undefined,
@@ -46,15 +46,15 @@ export function resolveBoardView(
 /**
  * The live choice, plus the setter the toggle calls.
  *
- * State, not a module constant, because the choice is now runtime-mutable
- * (24 §2.1). It is read from storage once, on mount: a second tab that flips
+ * State, not a module constant, because the choice is runtime-mutable.
+ * It is read from storage once, on mount: a second tab that flips
  * the toggle is not something this screen tries to follow mid-game, and
  * `localStorage` is here so that the *next* load in that tab agrees, not so
  * that two tabs stay in lockstep.
  *
  * The setter writes through to storage before it moves the state, so a player
  * whose browser then loses its WebGL context — and gets sent back to 2D by the
- * boundary of 24 §7.6 — is reasoning about a storage value that was always the
+ * error boundary — is reasoning about a storage value that was always the
  * one on screen.
  */
 export function useBoardViewChoice(): [BoardViewChoice, (choice: BoardViewChoice) => void] {

@@ -1,23 +1,21 @@
 /**
- * `18-frontend-host-config.md §2.6` — the customer-demand editor and its live
- * preview, rendered through the panel's frozen entry point.
+ * The customer-demand editor and its live preview (spec §9.10), rendered
+ * through the panel's entry point.
  *
- * Covers acceptance criteria 7, 8, 9, 10 and 11, and failure modes 2, 9 and 10.
- *
- * The preview is read the way `§2.6` prescribes: the element carrying
+ * The preview is read through its test handle: the element carrying
  * `data-testid="demand-preview"` also carries `data-series`, the comma-separated
  * integers it drew, because a canvas is not assertable under jsdom.
  *
- * Since 2026-11-03 those integers are the server's (`POST /rooms/preview`,
- * `10 §3.5b`): the panel keeps no generator, so these tests serve the answer
- * and check that the panel sends the draft and draws exactly what comes back.
- * `§2.6`'s normative table is asserted against the real generator in the
- * backend's `tests/test_core/test_preview.py`.
+ * Those integers are the server's (`POST /rooms/preview`): the panel keeps no
+ * generator, so these tests serve the answer and check that the panel sends the
+ * draft and draws exactly what comes back. The generators' own output is
+ * asserted against the real generator in the backend's
+ * `tests/test_core/test_preview.py`.
  *
- * There is no separately importable `DemandEditor`: `18 §2` freezes
- * `src/components/config/ConfigPanel.tsx` as this section's only entry point and
- * says the preview's generator "lives under `src/components/config/`; nothing
- * else imports it". So this file drives the editor through the panel.
+ * There is no separately importable `DemandEditor`:
+ * `src/components/config/ConfigPanel.tsx` is the config screen's only entry
+ * point and the preview's code lives under `src/components/config/`, imported
+ * by nothing else. So this file drives the editor through the panel.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
@@ -370,8 +368,8 @@ async function chooseKind(user: ReturnType<typeof userEvent.setup>, kind: Kind):
     return;
   }
   throw new Error(
-    `No way to choose the ${kind} generator. 18 §2 names the picker but freezes no ` +
-      'accessible name or test id for it (contrast §2.6, which does freeze ' +
+    `No way to choose the ${kind} generator. The panel fixes no ` +
+      'accessible name or test id for the picker (unlike the preview, which carries ' +
       '`data-testid="demand-preview"`).',
   );
 }
@@ -389,8 +387,8 @@ function customInput(): HTMLElement {
   const box = screen.queryByRole('textbox', { name: /(value|series|demand|paste|list|csv)/i });
   if (box) return box;
   throw new Error(
-    'No input for a pasted CUSTOM demand series (18 §2, acceptance criterion 8). The ' +
-      'document freezes no handle for it.',
+    'No input for a pasted CUSTOM demand series. The panel fixes no handle ' +
+      'for it.',
   );
 }
 
@@ -399,7 +397,7 @@ function previewSeries(): string {
   const series = preview.getAttribute('data-series');
   expect(
     series,
-    '§2.6 requires `data-series` on `data-testid="demand-preview"` — a canvas is not assertable',
+    'expected `data-series` on `data-testid="demand-preview"` — a canvas is not assertable',
   ).not.toBeNull();
   return (series ?? '').replace(/\s+/g, '');
 }
@@ -424,8 +422,8 @@ function parsedCount(duration: number): number {
     if (match) return Number(match[1]);
   }
   throw new Error(
-    `The demand editor does not report the parsed count against duration_weeks=${duration} ` +
-      '(18 §2, acceptance criterion 8). The document does not fix the copy, so this ' +
+    `The demand editor does not report the parsed count against duration_weeks=${duration}. ` +
+      'The copy is not fixed, so this ' +
       'harness accepts "N of D", "N / D" and "N out of D".',
   );
 }
@@ -488,7 +486,7 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// §2.6 — the preview: the server's numbers, drawn as sent (2026-11-03)
+// The preview: the server's numbers, drawn as sent
 // ---------------------------------------------------------------------------
 
 type PreviewBody = { config: GameConfig };
@@ -518,8 +516,8 @@ function hundreds(weeks: number): string {
   return Array.from({ length: weeks }, (_unused, index) => (index + 1) * 100).join(',');
 }
 
-describe('demand preview (§2.6)', () => {
-  it('draws exactly the series the server sends for the stored config [AC 10]', async () => {
+describe('demand preview', () => {
+  it('draws exactly the series the server sends for the stored config', async () => {
     const demand: DemandConfig = { kind: 'RAMP', initial_value: 4, slope_per_week: 2, start_week: 3, cap: 12 };
     await mountPanel(config(8, demand));
 
@@ -552,7 +550,7 @@ describe('demand preview (§2.6)', () => {
     expect(screen.getByTestId('demand-preview').getAttribute('data-series')).toBeNull();
   });
 
-  it('follows duration_weeks when it changes [AC 10]', async () => {
+  it('follows duration_weeks when it changes', async () => {
     await mountPanel(config(8, { kind: 'CONSTANT', value: 4 }));
     await waitFor(() => expect(previewSeries()).toBe(hundreds(8)));
 
@@ -572,7 +570,7 @@ describe('demand preview (§2.6)', () => {
     expect(previewRequests().map((body) => body.config.duration_weeks)).toEqual([12]);
   });
 
-  it('labels the series an example draw when the server says so [AC 11]', async () => {
+  it('labels the series an example draw when the server says so', async () => {
     await mountPanel(
       config(8, { kind: 'STOCHASTIC', distribution: 'NORMAL', mean: 8, stdev: 2, min: 0, max: 20 }),
     );
@@ -591,11 +589,11 @@ describe('demand preview (§2.6)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §2 / §3.1a — switching the generator
+// Switching the generator
 // ---------------------------------------------------------------------------
 
-describe('switching the generator (§2)', () => {
-  it('waits for the server’s defaults, then shows the new kind’s block [AC 7]', async () => {
+describe('switching the generator', () => {
+  it('waits for the server’s defaults, then shows the new kind’s block', async () => {
     const user = await mountPanel(
       config(12, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }),
     );
@@ -626,7 +624,7 @@ describe('switching the generator (§2)', () => {
     await waitFor(() => expect(previewRequests().at(-1)?.config.demand).toEqual({ kind: 'SEASONAL' }));
   });
 
-  it('carries no field of the previous kind in the payload [FM 2]', async () => {
+  it('carries no field of the previous kind in the payload', async () => {
     const user = await mountPanel(
       config(12, { kind: 'STEP', initial_value: 4, step_week: 5, step_value: 8 }),
     );
@@ -641,15 +639,15 @@ describe('switching the generator (§2)', () => {
     expect(Object.keys(demand)).not.toContain('initial_value');
   });
 
-  it('sends the kind alone, and the server fills the defaults [§3.1a]', async () => {
+  it('sends the kind alone, and the server fills the defaults', async () => {
     const user = await mountPanel(config(12, { kind: 'CONSTANT', value: 4 }));
     clearWire();
 
     await chooseKind(user, 'RAMP');
     await waitForDemandSave();
 
-    // 2026-11-03: the panel used to send its own copy of 03 §2's RampDemand
-    // defaults. A changed kind replaces the stored demand, and
+    // The panel sends no RampDemand defaults of its own. A changed kind
+    // replaces the stored demand, and
     // `GameConfig.from_host_input` fills every field the patch leaves out.
     expect(lastSavedDemand()).toEqual({ kind: 'RAMP' });
   });
@@ -675,13 +673,13 @@ describe('switching the generator (§2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §2 — CUSTOM
+// CUSTOM
 // ---------------------------------------------------------------------------
 
-describe('CUSTOM demand (§2)', () => {
+describe('CUSTOM demand', () => {
   const EIGHT = [4, 4, 8, 4, 4, 8, 4, 8];
 
-  it('parses a comma-separated list [AC 8]', async () => {
+  it('parses a comma-separated list', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
     clearWire();
 
@@ -691,7 +689,7 @@ describe('CUSTOM demand (§2)', () => {
     expect(lastSavedDemand().values).toEqual(EIGHT);
   });
 
-  it('parses a newline-separated list [AC 8]', async () => {
+  it('parses a newline-separated list', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
     clearWire();
 
@@ -701,7 +699,7 @@ describe('CUSTOM demand (§2)', () => {
     expect(lastSavedDemand().values).toEqual(EIGHT);
   });
 
-  it('parses a dropped CSV file [AC 8]', async () => {
+  it('parses a dropped CSV file', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
     clearWire();
 
@@ -711,14 +709,14 @@ describe('CUSTOM demand (§2)', () => {
     expect(lastSavedDemand().values).toEqual(EIGHT);
   });
 
-  it('reports the parsed count against duration_weeks [AC 8]', async () => {
+  it('reports the parsed count against duration_weeks', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
 
     await pasteCustom(user, '4,4,8,4,4,8,4');
     await waitFor(() => expect(parsedCount(8)).toBe(7));
   });
 
-  it('ignores a trailing newline rather than counting it as a value [FM 9]', async () => {
+  it('ignores a trailing newline rather than counting it as a value', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
     clearWire();
 
@@ -732,25 +730,25 @@ describe('CUSTOM demand (§2)', () => {
     expect(values).toHaveLength(8);
   });
 
-  it('parses "4,4,8,\\n" as three values, not four [FM 9]', async () => {
+  it('parses "4,4,8,\\n" as three values, not four', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
 
     await pasteCustom(user, '4,4,8,\n');
     await waitFor(() => expect(parsedCount(8)).toBe(3));
   });
 
-  it('blocks submission when the series is shorter than duration_weeks [AC 9]', async () => {
+  it('blocks submission when the series is shorter than duration_weeks', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
     clearWire();
 
     await pasteCustom(user, '4,4,8,\n');
-    // Well past the 400 ms debounce of §3.1 and the blur save.
+    // Well past the 400 ms debounce and the blur save.
     await new Promise((resolve) => setTimeout(resolve, 900));
 
     expect(
       saveCount(),
       'a CUSTOM series shorter than duration_weeks is the one demand error the server ' +
-        'rejects rather than clamps (§2), so the form must not submit it',
+        'rejects rather than clamps, so the form must not submit it',
     ).toBe(0);
 
     const messages = Array.from(
@@ -758,11 +756,11 @@ describe('CUSTOM demand (§2)', () => {
     ).map((el) => textOf(el));
     expect(
       messages.length > 0 || /short|at least|fewer|needs \d+|missing/i.test(bodyText()),
-      'AC 9 requires an inline message explaining the block',
+      'a blocked submission needs an inline message explaining the block',
     ).toBe(true);
   });
 
-  it('submits again once the series is long enough [AC 9]', async () => {
+  it('submits again once the series is long enough', async () => {
     const user = await mountPanel(config(8, { kind: 'CUSTOM', values: [...EIGHT] }));
     clearWire();
 

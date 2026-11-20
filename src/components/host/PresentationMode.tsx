@@ -22,9 +22,9 @@ export interface PresentationModeProps {
 }
 
 /**
- * The projector view (§2.4).
+ * The projector view (spec §9.6).
  *
- * **The mode is state; full screen is a side effect of entering it** (§3.4a).
+ * **The mode is state; full screen is a side effect of entering it**.
  * jsdom implements no Fullscreen API and a browser refuses the request outside
  * a user gesture, so a presentation mode that *depends* on it is one that
  * cannot be entered — and cannot be tested. Entering renders this view and
@@ -35,7 +35,7 @@ export interface PresentationModeProps {
  *
  * It shows **no cost, no order quantity and no future demand**, anywhere. The
  * whole room is looking at this screen, and the players in it must not learn
- * what their neighbours ordered (§2.4, FM 1 and 2), nor where customer demand
+ * what their neighbours ordered, nor where customer demand
  * is going: the demand curve stops at the current week, the last one the
  * Retailer has already seen (`revealedDemand`). The host console's own curve,
  * underneath, keeps the whole series. What the projector does show is the
@@ -43,8 +43,7 @@ export interface PresentationModeProps {
  * effect becomes visible *during* the game rather than in the debrief.
  *
  * It opens no socket of its own and keeps no second copy of state: every
- * figure is the same `store.hostState` the console beneath it is rendering
- * (§3.4, FM 8).
+ * figure is the same `store.hostState` the console beneath it is rendering.
  */
 export function PresentationMode({
   week,

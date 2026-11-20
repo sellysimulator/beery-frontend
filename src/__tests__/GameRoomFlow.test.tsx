@@ -1,25 +1,26 @@
 /**
- * `19-frontend-game-room.md §2.1`, `§2.4`, `§2.6`, `§2.7`, `§3.2`, `§3.3` —
- * `GameRoomPlaying`, the whole playing screen.
+ * `GameRoomPlaying`, the whole playing screen (spec §9.1–§9.4).
  *
- * Covers acceptance criteria 1, 2, 14, 15, 16, 17, 21, 22 and 24, and failure
- * modes 1, 2, 9 and 11.
+ * Covers: the role banner, no timer, the supply line before the decision, the
+ * locked state and "Change my order", TOO_MANY_SUBMISSIONS, no other player's
+ * order visible, the player's own history, the paused overlay, rebuilding from
+ * a single `your_state`, and the 2D/3D board toggle.
  *
- * Criterion 17 goes through `useGameStore().lastError` (`§2.4`, `16 §3`), and
- * criterion 21 through the chart's visually hidden table (`§2.6a`).
+ * TOO_MANY_SUBMISSIONS goes through `useGameStore().lastError`, and the
+ * history through the chart's visually hidden table.
  *
  * Harness notes:
  *  - `socket.io-client` is replaced by a recorder, so `src/api/socket.ts`,
  *    `src/api/socketHandlers.ts` and `src/api/games.ts` run as real,
  *    un-mocked code while nothing touches transport. Server -> client events
  *    are delivered by calling what was registered, exactly as the transport
- *    would; client -> server emits are asserted as wire payloads (`12 §2`).
- *  - The charting library is **not** mocked. `§2.6a` makes the chart's
- *    visually hidden three-series table the section's surface for it, and the
- *    canvas is wrapped so a missing 2D context degrades to that table, so
- *    criterion 21 reads the table.
- *  - Game state is driven through section 16's frozen store actions
- *    (`16 §3`); the screen takes no props (`17 §2.0`).
+ *    would; client -> server emits are asserted as wire payloads (spec §11.2).
+ *  - The charting library is **not** mocked. The chart's visually hidden
+ *    three-series table is the test surface for it, and the canvas is wrapped
+ *    so a missing 2D context degrades to that table, so the history tests
+ *    read the table.
+ *  - Game state is driven through the store's frozen actions; the screen
+ *    takes no props.
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
@@ -278,7 +279,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     min_order_quantity: 0,
     max_order_quantity: 500,
     show_supply_line_prominently: true,
-    // `07 §3.8`: the Factory's unstarted production, `null` for the others.
+    // The Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
     order_arrival_week: week + 4,
@@ -372,8 +373,8 @@ function dispatch(event: string, payload?: unknown): void {
   const listeners = [...(rec.listeners.get(event) ?? [])];
   if (listeners.length === 0) {
     throw new Error(
-      `Nothing is listening for "${event}". 12 §2 makes it a server -> client event, and ` +
-        'nothing on the playing screen or in section 16’s handlers registered for it.',
+      `Nothing is listening for "${event}". It is a server -> client event, and ` +
+        'nothing on the playing screen or in the socket handlers registered for it.',
     );
   }
   act(() => {
@@ -401,7 +402,7 @@ function orderInput(): HTMLInputElement | null {
 
 function requireOrderInput(): HTMLInputElement {
   const input = orderInput();
-  if (!input) throw new Error('§2.3 requires one numeric input for the order quantity.');
+  if (!input) throw new Error('The decision form requires one numeric input for the order quantity.');
   return input;
 }
 
@@ -424,8 +425,8 @@ function isNumericText(text: string): boolean {
 }
 
 /**
- * `§2.6a` and criterion 21: the history renders its series as tables, and
- * those tables, not the canvases, are this section's surface for the charts.
+ * The history renders its series as tables, and those tables, not the
+ * canvases, are the test surface for the charts.
  * They are the tables that are not the settlement recap. There are two (the
  * stock panel's and the orders panel's), so a "week" row is read across both.
  */
@@ -486,7 +487,7 @@ function tickList(): HTMLElement {
   );
   if (!found) {
     throw new Error(
-      '§2.4 requires a live tick-list naming every role beside the waiting message; ' +
+      'The waiting state needs a live tick-list naming every role beside the waiting message; ' +
         `the screen rendered: ${bodyText()}`,
     );
   }
@@ -535,10 +536,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 1 — the RoleBanner
+// The RoleBanner
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 1: the banner names the role and both neighbours', () => {
+describe('the banner names the role and both neighbours', () => {
   const chain: Array<[Role, RegExp, RegExp]> = [
     ['RETAILER', /buy[\s\S]{0,40}?wholesaler/i, /sell[\s\S]{0,40}?customer/i],
     ['WHOLESALER', /buy[\s\S]{0,40}?distributor/i, /sell[\s\S]{0,40}?retailer/i],
@@ -572,10 +573,10 @@ describe('CRITERION 1: the banner names the role and both neighbours', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 2 — D6, no timer
+// D6, no timer
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 2: nothing on the screen is a timer (D6)', () => {
+describe('nothing on the screen is a timer (D6)', () => {
   it('renders no countdown, deadline or remaining-time text', () => {
     renderPlaying('RETAILER');
 
@@ -595,10 +596,10 @@ describe('CRITERION 2: nothing on the screen is a timer (D6)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 2 — the supply line comes first
+// The supply line comes first
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 2: the supply line precedes the decision input', () => {
+describe('the supply line precedes the decision input', () => {
   it('puts the supply line above the order input in document order', () => {
     renderPlaying('RETAILER');
 
@@ -610,15 +611,15 @@ describe('FAILURE MODE 2: the supply line precedes the decision input', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 14, 15, 16 and failure modes 1 and 9 — the locked state
+// The locked state
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 14: after submitting, the locked state replaces the form', () => {
+describe('after submitting, the locked state replaces the form', () => {
   async function submitAndLock() {
     const user = userEvent.setup();
     renderPlaying('RETAILER');
     await submitOrder(user, '7');
-    // The server echoes the new truth (§3.1): this role has submitted, and
+    // The server echoes the new truth: this role has submitted, and
     // the Distributor and the Factory have not.
     deliverState(
       viewFor('RETAILER', {
@@ -644,13 +645,13 @@ describe('CRITERION 14: after submitting, the locked state replaces the form', (
     for (const role of ROLE_ORDER) expect(list).toMatch(new RegExp(role, 'i'));
   });
 
-  it('offers "Change my order" (§7 Phase B lets a player change until the window closes)', async () => {
+  it('offers "Change my order" (spec §7 Phase B lets a player change until the window closes)', async () => {
     await submitAndLock();
 
     expect(controlMatching(/change my order/i, 'Change my order')).toBeTruthy();
   });
 
-  it('FAILURE MODE 9: each role carries a submitted-or-awaiting state of its own', async () => {
+  it('each role carries a submitted-or-awaiting state of its own', async () => {
     await submitAndLock();
 
     // Two roles have submitted and two have not, so the two states must read
@@ -661,7 +662,7 @@ describe('CRITERION 14: after submitting, the locked state replaces the form', (
     for (const role of ROLE_ORDER) expect(tickState(role)).not.toBe('');
   });
 
-  it('CRITERION 15: no row in the tick-list carries a quantity', async () => {
+  it('no row in the tick-list carries a quantity', async () => {
     await submitAndLock();
 
     // A standalone number token. An alias such as "P1" is a name, not a
@@ -671,16 +672,16 @@ describe('CRITERION 14: after submitting, the locked state replaces the form', (
     }
   });
 
-  it('CRITERION 15: the whole tick-list carries no order quantity', async () => {
+  it('the whole tick-list carries no order quantity', async () => {
     await submitAndLock();
 
-    // 7 is this player's own order; §2.4 says the list is names only, for
+    // 7 is this player's own order; the list is names only, for
     // every role including the one reading it.
     expect(textOf(tickList())).not.toMatch(/\b7\b/);
   });
 });
 
-describe('CRITERION 16: "Change my order" reopens the form, pre-filled', () => {
+describe('"Change my order" reopens the form, pre-filled', () => {
   it('returns to the form with the submitted quantity already in it', async () => {
     const user = userEvent.setup();
     renderPlaying('RETAILER');
@@ -712,11 +713,11 @@ describe('CRITERION 16: "Change my order" reopens the form, pre-filled', () => {
   });
 });
 
-describe('CRITERION 17: TOO_MANY_SUBMISSIONS is explained, and the lock stays', () => {
+describe('TOO_MANY_SUBMISSIONS is explained, and the lock stays', () => {
   /**
-   * The code reaches this screen through `useGameStore().lastError` (§2.4,
-   * `16 §3`). The `error` event is still delivered over the recorded socket,
-   * because that is the real route: section 16's handler is what writes the
+   * The code reaches this screen through `useGameStore().lastError`. The
+   * `error` event is still delivered over the recorded socket, because that
+   * is the real route: the socket handler is what writes the
    * store, and driving the store's writer rather than the store keeps the
    * whole channel under test.
    */
@@ -734,7 +735,7 @@ describe('CRITERION 17: TOO_MANY_SUBMISSIONS is explained, and the lock stays', 
   }
 
   it('reads the code from the store, registering no listener of its own', () => {
-    // §2.4: "This screen must not register its own `socket.on('error')`
+    // "This screen must not register its own `socket.on('error')`
     // listener" — StrictMode double-registers one and a reconnect leaves it
     // stale, which is why the store is the wire's single reader.
     const before = (rec.listeners.get('error') ?? []).length;
@@ -753,7 +754,7 @@ describe('CRITERION 17: TOO_MANY_SUBMISSIONS is explained, and the lock stays', 
     });
   });
 
-  it('renders the message §2.4 fixes', async () => {
+  it('renders the fixed message', async () => {
     await lockThenRefuse();
 
     expect(bodyText()).toMatch(
@@ -784,7 +785,7 @@ describe('CRITERION 17: TOO_MANY_SUBMISSIONS is explained, and the lock stays', 
   });
 });
 
-describe('FAILURE MODE 1: no other player’s order is ever visible', () => {
+describe('no other player’s order is ever visible', () => {
   it('shows none of the other three quantities at any point in the week', async () => {
     const user = userEvent.setup();
     const others = ['313', '517', '719'];
@@ -801,7 +802,7 @@ describe('FAILURE MODE 1: no other player’s order is ever visible', () => {
     );
     seen.push(bodyText());
 
-    // The other three submit. `order_submitted` is identity only (12 §2).
+    // The other three submit. `order_submitted` is identity only (spec §11.2).
     const roles: Role[] = ['WHOLESALER', 'DISTRIBUTOR', 'FACTORY'];
     roles.forEach((role, index) => {
       act(() => {
@@ -842,10 +843,10 @@ describe('FAILURE MODE 1: no other player’s order is ever visible', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 21 — the player's own history, and nobody else's
+// The player's own history, and nobody else's
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 21: the history exposes the player’s own figures, as tables', () => {
+describe('the history exposes the player’s own figures, as tables', () => {
   // The fixture holds these two constant: `incoming_order` 8, `supply_line_after` 10.
   const OWN_INCOMING = OWN_INVENTORY.map(() => 8);
   const OWN_SUPPLY_LINE = OWN_INVENTORY.map(() => 10);
@@ -902,8 +903,8 @@ describe('CRITERION 21: the history exposes the player’s own figures, as table
     }
   });
 
-  it('leaves the tables in the accessibility tree, which is what §2.6a is for', () => {
-    // Visually hidden, not hidden: §3.4 needs a screen reader to read them.
+  it('leaves the tables in the accessibility tree, which is what they are for', () => {
+    // Visually hidden, not hidden: a screen reader has to read them.
     renderPlaying('RETAILER');
 
     for (const table of historyTables()) {
@@ -915,10 +916,10 @@ describe('CRITERION 21: the history exposes the player’s own figures, as table
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 22 — the paused overlay
+// The paused overlay
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 22: PausedOverlay states the server’s reason and disables the form', () => {
+describe('PausedOverlay states the server’s reason and disables the form', () => {
   const reason = 'Waiting for the Distributor to reconnect.';
 
   function pause(): void {
@@ -981,16 +982,16 @@ describe('CRITERION 22: PausedOverlay states the server’s reason and disables 
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 24 and failure mode 11 — nothing important lives in useState
+// Nothing important lives in useState
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 24: the screen rebuilds from a single your_state', () => {
+describe('the screen rebuilds from a single your_state', () => {
   /**
    * `own_history` is empty for the text comparisons. jsdom has no 2D canvas
    * context, so whether the chart throws and the wrapper degrades with its
-   * notice (§2.6a) differs between a first mount and a remount in the same
+   * notice differs between a first mount and a remount in the same
    * test — an artefact of the environment, not of the screen's state. The
-   * chart's own content is compared through its §2.6a table instead, which
+   * chart's own content is compared through its hidden table instead, which
    * is deterministic.
    */
   function resyncView(over: Partial<PlayerView> = {}): PlayerView {
@@ -1004,7 +1005,7 @@ describe('CRITERION 24: the screen rebuilds from a single your_state', () => {
     const before = bodyText();
     first.unmount();
 
-    // A refresh: the store starts empty and the server resyncs (§3.3).
+    // A refresh: the store starts empty and the server resyncs.
     act(() => {
       useGameStore.getState().reset();
     });
@@ -1037,7 +1038,7 @@ describe('CRITERION 24: the screen rebuilds from a single your_state', () => {
   });
 });
 
-describe('FAILURE MODE 11: unmounting and remounting changes nothing', () => {
+describe('unmounting and remounting changes nothing', () => {
   it('re-renders identically with the store left intact', () => {
     startGame(6);
     deliverState(viewFor('RETAILER', { own_history: [] }));
@@ -1085,16 +1086,16 @@ describe('FAILURE MODE 11: unmounting and remounting changes nothing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// `24-frontend-3d-board.md` §8.3 — two additions, and no existing test changed
+// The 3D board — two additions, and no existing test changed
 // ---------------------------------------------------------------------------
 
 /**
- * Section 24 put a second board behind the seam `19 §2.8` was holding open.
+ * The 3D board is a second board behind the board view seam (D15).
  * Everything above this line is the 2D board, and every one of those tests is
- * unchanged on purpose: **the regression that matters most is that section 24
- * changed nothing for a player who never asks for the warehouse** (24 AC 1).
+ * unchanged on purpose: **the regression that matters most is that the 3D
+ * board changes nothing for a player who never asks for the warehouse**.
  *
- * The toggle test deliberately never lets `Board3D` mount. `24 §8.2`'s whole
+ * The toggle test deliberately never lets `Board3D` mount. The whole
  * discipline is that jsdom has no WebGL and the 3D board is therefore asserted
  * as a `SceneModel` object in `Board3D.test.tsx`, never as pixels; this
  * recorder harness has no WebGL either, so the lazy chunk is replaced for the
@@ -1102,8 +1103,8 @@ describe('FAILURE MODE 11: unmounting and remounting changes nothing', () => {
  * — a real button, and `'3D'` in localStorage afterwards — which is exactly
  * the half that cannot be seen from a pure module.
  */
-describe('24 AC 1 / AC 2 / AC 3: the board seam has a second entry and the default is unmoved', () => {
-  it('AC 1: with no stored preference and no env var, the screen is still the 2D board', () => {
+describe('the board seam has a second entry and the default is unmoved', () => {
+  it('with no stored preference and no env var, the screen is still the 2D board', () => {
     // setup.ts clears both storage areas before every test, and no test in
     // this file sets VITE_BOARD_VIEW, so this is the untouched default path.
     expect(window.localStorage.getItem('board_view')).toBeNull();
@@ -1170,7 +1171,7 @@ describe('24 AC 1 / AC 2 / AC 3: the board seam has a second entry and the defau
     }
   });
 
-  it('AC 2 / AC 3: the toggle is a real button, and pressing it stores "3D"', async () => {
+  it('the toggle is a real button, and pressing it stores "3D"', async () => {
     // The lazy chunk, stubbed. `vi.doMock` is not hoisted, so it applies to
     // the dynamic `import()` inside `GameRoomPlaying`'s `lazy()` call — which
     // has not run yet, because nothing in this file has ever asked for 3D.
@@ -1185,8 +1186,7 @@ describe('24 AC 1 / AC 2 / AC 3: the board seam has a second entry and the defau
       renderPlaying('RETAILER');
 
       const toggle = controlMatching(/switch to the 3d warehouse/i, 'the 2D/3D toggle');
-      // A real `<button>`, keyboard-operable — not a div with a click handler
-      // (24 §2.4, AC 2).
+      // A real `<button>`, keyboard-operable — not a div with a click handler.
       expect(toggle.tagName).toBe('BUTTON');
       expect(isDisabled(toggle)).toBe(false);
 
@@ -1194,7 +1194,7 @@ describe('24 AC 1 / AC 2 / AC 3: the board seam has a second entry and the defau
 
       // localStorage, deliberately, and nothing in sessionStorage: section 7
       // of `CLAUDE.md` reserves that area for authority, and a rendering
-      // preference grants nothing (24 §2.3, AC 3).
+      // preference grants nothing.
       expect(window.localStorage.getItem('board_view')).toBe('3D');
       expect(window.sessionStorage.getItem('board_view')).toBeNull();
     } finally {
@@ -1238,7 +1238,7 @@ describe('game over: the player can open the results', () => {
 });
 
 // ---------------------------------------------------------------------------
-// A seat the host swapped to a bot can be taken back (2026-11-03)
+// A seat the host swapped to a bot can be taken back
 // ---------------------------------------------------------------------------
 
 describe('A player the host swapped for a bot can take the role back', () => {

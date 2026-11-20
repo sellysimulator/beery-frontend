@@ -12,14 +12,12 @@ import { useConfigSave } from './useConfigSave'
  * The host configuration panel: the form where a teaching intention becomes a
  * game.
  *
- * It takes no props and reads the store directly, like every screen
- * (`00-conventions.md` section 4). Section 17's host lobby resolves this module
- * by path and name through `shellScreens.ts`, which is the seam that lets this
- * section land without either of us editing the other's file (**D19**).
+ * It takes no props and reads the store directly, like every screen. The host
+ * lobby resolves this module by path and name through `shellScreens.ts`.
  *
  * Three rules shape everything below:
  *
- * - **The store is the source of truth** (`18 section 3.0`). Every input renders
+ * - **The store is the source of truth**. Every input renders
  *   from `useGameStore().config`; React Hook Form holds the keystrokes of the
  *   field being edited and nothing else. What the field shows once a save
  *   lands is what the game will actually play.
@@ -27,12 +25,11 @@ import { useConfigSave } from './useConfigSave'
  *   comes from `GET /rooms/limits` (`useLimits`), the same object the server
  *   validates against, so the two cannot disagree. A value outside its range
  *   is refused with a message beside the field and is not sent; the server
- *   refuses one that arrives anyway. Nothing is clamped (2026-11-02). Until the
+ *   refuses one that arrives anyway. Nothing is clamped. Until the
  *   ranges have arrived the panel shows a loading line, never a guessed range.
  *   The demand preview and the lead times are the server's too
  *   (`POST /rooms/preview`, `useConfigPreview`), and so are a new generator's
- *   defaults: the panel holds no generator, no delay arithmetic and no default
- *   (2026-11-03).
+ *   defaults: the panel holds no generator, no delay arithmetic and no default.
  * - **Authority is `host_secret`.** Every save carries it, over the socket when
  *   connected and over `PUT /rooms/{code}/config` when not. A client-side "I am
  *   the host" boolean is never sent (**D3**).
@@ -41,7 +38,7 @@ import { useConfigSave } from './useConfigSave'
  * no room; the form state is `useConfigForm`. This panel supplies the room:
  * the store's config, `useConfigSave`, the locked summary and the missing-key
  * notice. The multi-game setup page supplies a local draft instead
- * (`useDraftConfig`) and renders the same sections (2026-11-14).
+ * (`useDraftConfig`) and renders the same sections.
  */
 export function ConfigPanel(): ReactElement {
   const roomCode = useGameStore((state) => state.roomCode)

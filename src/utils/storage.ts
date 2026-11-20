@@ -1,8 +1,8 @@
 /**
  * Browser persistence for the three identifiers plus the host UI hint.
  *
- * `00-conventions.md` section 2 keeps `alias`, `session_token` and `identity`
- * strictly apart; this module is the only place any of them touches storage.
+ * `alias`, `session_token` and `identity` are kept strictly apart (spec §14);
+ * this module is the only place any of them touches storage.
  *
  * Scope matters:
  *   - `alias` and `session_token` -> localStorage, so a reload or a second tab
@@ -90,14 +90,14 @@ export function clearHostSecret(roomCode: string): void {
 /* ─── display name — DISPLAY DATA, not a credential; browser-scoped ─── */
 //
 // It lives here with every other browser-storage accessor rather than in a
-// per-section helper because BOTH emitters need it: section 17's shells on
-// mount, and this section's `rejoinAfterConnect` on every reconnect. The server
-// sanitises and truncates it (11 section 2) and it grants nothing, so it is
+// per-screen helper because BOTH emitters need it: the lobby shells on
+// mount, and `rejoinAfterConnect` on every reconnect. The server
+// sanitises and truncates it (spec §4.2) and it grants nothing, so it is
 // deliberately not tab-scoped and not treated as a secret.
 
 const DISPLAY_NAME_KEY = 'display_name'
 
-/** `00-decisions.md` section 5. Exported so section 17's inputs can set `maxLength`. */
+/** The cap in spec §6.6. Exported so the name inputs can set `maxLength`. */
 export const MAX_DISPLAY_NAME_LENGTH = 24
 
 // Word separators: they must become a space, or the words around them join.
@@ -137,7 +137,7 @@ export function getDisplayName(): string | null {
  * One choke point, on the write side, because more than one screen collects a
  * name and a rule applied at each collection point is a rule the next
  * collection point forgets. The server sanitises and truncates regardless
- * (11 section 2), so this is not a security boundary — it is about what the
+ * (spec §4.2), so this is not a security boundary — it is about what the
  * user sees echoed back and what goes out on the wire.
  */
 export function setDisplayName(name: string): void {
@@ -207,7 +207,7 @@ export function clearHostBatch(): void {
 /* ─── export downloads — a UX courtesy, sessionStorage ─── */
 //
 // Which finished games this tab has already downloaded, per format, so the
-// results screen can offer each file once per browser session (2026-11-14).
+// results screen can offer each file once per browser session.
 // It is **not** a security control: clearing storage, another tab or a direct
 // request all get round it. The real guard against draining compute is the
 // backend's per-address export budget (`core/abuse.py`, 100 an hour). Keyed by
@@ -235,7 +235,7 @@ export function wasExportDownloaded(publicId: string, format: string): boolean {
 
 /* ─── board view — a DISPLAY PREFERENCE, not a credential; browser-scoped ─── */
 //
-// The per-browser choice between the 2D board and the 3D warehouse (24 §2.3).
+// The per-browser choice between the 2D board and the 3D warehouse (spec §9.7).
 // It follows the `display_name` precedent exactly: display data, not a
 // credential, so it lives here with every other storage accessor rather than
 // beside the toggle that writes it.
@@ -243,7 +243,7 @@ export function wasExportDownloaded(publicId: string, format: string): boolean {
 // localStorage, deliberately. It is the one preference a player should not have
 // to re-make in a second tab, and it grants nothing — so it is NOT
 // sessionStorage, which section 7 of `CLAUDE.md` reserves for authority
-// (`host_secret`, `host_room`). 24 §2.5 (**D20**) is why the choice lives in a
+// (`host_secret`, `host_room`). **D20** is why the choice lives in a
 // browser at all instead of in `GameConfig`: this changes how the game is
 // drawn, not how it plays, and the player whose laptop cannot hold 60 fps is
 // not the host.
@@ -256,7 +256,7 @@ export type BoardViewChoice = '2D' | '3D'
  * The stored board choice, or null when this browser has never chosen.
  *
  * Null when unset OR unrecognised — both fall through to `VITE_BOARD_VIEW`
- * (24 §2.2). An unrecognised value is somebody's stale key or a hand-edited
+ * (spec §9.7). An unrecognised value is somebody's stale key or a hand-edited
  * one, and the resolution order already has an answer for "no preference", so
  * there is nothing an error would buy. The narrowing happens here, once, so
  * that `resolveBoardView()` receives a value it can trust.

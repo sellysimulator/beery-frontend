@@ -1,15 +1,12 @@
 /**
  * The application shell: the pinned toolchain, the frozen string unions, the
- * page-discovery route registry (16 §4.8), the two guards, `AuthContext`
- * (§4.2), `BackendStatusContext` (§4.7) and `Avatar` (§4.10).
+ * page-discovery route registry, the two guards, `AuthContext`,
+ * `BackendStatusContext` and `Avatar`.
  *
- * Covers acceptance criteria 1, 2, 2b, 3, 6, 7, 17, 18, 19, 20, 21, 22, 23 and
- * failure modes 3, 11, 12.
+ * `package.json` and `.gitignore` are read here as DATA — the manifest and
+ * `firebase.ts` tests are assertions *about* those files.
  *
- * `package.json` and `.gitignore` are read here as DATA — criteria 2, 3, 22 and
- * failure modes 11 and 12 are assertions *about* those files.
- *
- * §3 fixes the composition: `App` renders only the `<Routes>` and mounts no
+ * The composition is fixed: `App` renders only the `<Routes>` and mounts no
  * router and no provider, so every render below supplies `<MemoryRouter>` and
  * the providers itself, exactly as `main.tsx` does.
  */
@@ -153,7 +150,7 @@ vi.mock('../api/http', () => ({
   errorMessage: (_err: unknown, fallback: string) => fallback,
 }));
 
-/** §3: the provider calls `checkHealth()` from `src/api/health.ts`. */
+/** The provider calls `checkHealth()` from `src/api/health.ts`. */
 const healthRec = vi.hoisted(() => ({ checkHealth: vi.fn(async () => true) }));
 vi.mock('../api/health', () => healthRec);
 
@@ -244,10 +241,10 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// The manifest (criteria 2, 3, 22; failure modes 11, 12)
+// The manifest
 // ---------------------------------------------------------------------------
 
-describe('toolchain manifest (16 §2 — FROZEN)', () => {
+describe('toolchain manifest (FROZEN)', () => {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
@@ -269,7 +266,7 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     uuid: '^13.0.0',
     'chart.js': '^4.5.1',
     'react-chartjs-2': '^5.3.1',
-    // The 3D board (24 §6.4), matching Tequila version for version — the
+    // The 3D board, matching Tequila version for version — the
     // combination `game_stack.md` has actually been exercised against. It is a
     // lazy chunk that is never in the entry graph, so it costs the 2D player
     // nothing at runtime.
@@ -296,7 +293,7 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     // `npm ci` installs devDependencies in CI anyway, and `tsc` resolves them
     // through node resolution regardless of `tsconfig.app.json`'s
     // `types: ["vite/client"]` — so this is its correct home. A deliberate
-    // divergence (24 §6.4); do not "fix" it back.
+    // divergence; do not "fix" it back.
     '@types/three': '^0.184.0',
     eslint: '^9.39.1',
     '@eslint/js': '^9.39.1',
@@ -306,7 +303,7 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     globals: '^16.5.0',
   };
 
-  it('FAILURE MODE 12 / CRITERION 2: React is pinned with a tilde, not a caret', () => {
+  it('React is pinned with a tilde, not a caret', () => {
     // `^19.2.0` lets npm pull a React that @react-three/fiber refuses (its peer
     // range is >=19 <19.3), and the install then fails with ERESOLVE naming a
     // package nobody touched. D15 keeps that seam open.  [HARD-WON]
@@ -319,26 +316,26 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     expect(pkg.devDependencies?.typescript).not.toMatch(/^\^/);
   });
 
-  it('CRITERION 2: every dependency matches §2 version for version', () => {
+  it('every dependency matches the pinned manifest version for version', () => {
     for (const [name, range] of Object.entries(DEPENDENCIES)) {
       expect(`${name}@${pkg.dependencies?.[name]}`).toBe(`${name}@${range}`);
     }
   });
 
-  it('CRITERION 2: every devDependency matches §2 version for version', () => {
+  it('every devDependency matches the pinned manifest version for version', () => {
     for (const [name, range] of Object.entries(DEV_DEPENDENCIES)) {
       expect(`${name}@${pkg.devDependencies?.[name]}`).toBe(`${name}@${range}`);
     }
   });
 
-  it('CRITERION 2: the scaffold Vite 8 / TypeScript 6 combination is gone (D16)', () => {
+  it('does not use the scaffold Vite 8 / TypeScript 6 combination (D16)', () => {
     expect(pkg.devDependencies?.vite).not.toMatch(/8\./);
     expect(pkg.devDependencies?.typescript).not.toMatch(/^[~^]?6\./);
     expect(pkg.dependencies).not.toHaveProperty('vite');
   });
 
-  it('CRITERION 1: engines and .nvmrc name patched, supported Node lines', () => {
-    // §2's floor is Vite 7's (20.19 / 22.12), but Node 20 reached end of life on 30 April
+  it('engines and .nvmrc name patched, supported Node lines', () => {
+    // Vite 7's floor is 20.19 / 22.12, but Node 20 reached end of life on 30 April
     // 2026 and gets no security fixes. engines names the patched release of each supported
     // line, and .nvmrc, which CI builds and deploys on, pins one of them.
     expect(pkg.engines?.node).toBeDefined();
@@ -349,12 +346,12 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     expect(readFileSync(nvmrc, 'utf8').trim()).toMatch(/^v?(22|24|26)\.\d+\.\d+$/);
   });
 
-  it('CRITERION 1: a build script exists', () => {
+  it('a build script exists', () => {
     expect(typeof pkg.scripts?.build).toBe('string');
     expect(pkg.scripts?.build).toMatch(/vite build/);
   });
 
-  it('24 CRITERION 4: vite.config.ts keeps the whole 3D tree in one lazy `three` chunk', () => {
+  it('vite.config.ts keeps the whole 3D tree in one lazy `three` chunk', () => {
     // Read as DATA, like `package.json` above: this is an assertion *about* the
     // build configuration, not a behaviour of the app.
     //
@@ -364,8 +361,8 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     // (@react-three/fiber's renderer) are not, and whichever of them falls
     // through to `vendor` drags a slice of the 3D tree into the entry graph —
     // silently, because the build stays green and only the network tab shows
-    // it. 24 §6.4 and AC 4 say `three` may appear in no chunk the entry HTML
-    // loads, so these two are the canaries for that.  [HARD-WON]
+    // it. `three` may appear in no chunk the entry HTML loads (`CLAUDE.md` §5),
+    // so these two are the canaries for that.  [HARD-WON]
     const config = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8');
     const bucket = /return 'three'/.test(config);
     expect(`three-bucket:${bucket}`).toBe('three-bucket:true');
@@ -374,7 +371,7 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
     }
   });
 
-  it('CRITERION 3: Tailwind is CSS-first — there is no tailwind.config.*', () => {
+  it('Tailwind is CSS-first — there is no tailwind.config.*', () => {
     for (const name of [
       'tailwind.config.js',
       'tailwind.config.ts',
@@ -390,13 +387,13 @@ describe('toolchain manifest (16 §2 — FROZEN)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CRITERION 2b: the five string unions, member for member
+// The five string unions, member for member
 // ---------------------------------------------------------------------------
 
 /**
  * Each map is checked twice over. TypeScript checks it **exactly**: a member
  * the union lacks is an excess property, and a member the union has but the map
- * omits is a missing property — so `tsc -b` (criterion 21) fails either way.
+ * omits is a missing property — so `tsc -b` fails either way.
  * The runtime assertions below then say *which* member is wrong, because a type
  * error alone is a poor bug report.
  */
@@ -438,7 +435,7 @@ const DISTRIBUTION_MEMBERS: Record<Distribution, true> = {
   UNIFORM: true,
 };
 
-describe('CRITERION 2b: the frozen string unions of src/types/game.ts', () => {
+describe('the frozen string unions of src/types/game.ts', () => {
   const cases: Array<[string, Record<string, true>, string[]]> = [
     ['Role', ROLE_MEMBERS, ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR', 'FACTORY']],
     ['RoleAssignmentMode', ROLE_ASSIGNMENT_MODE_MEMBERS, ['HOST_ASSIGNS', 'PLAYER_CHOOSES', 'RANDOM']],
@@ -452,7 +449,7 @@ describe('CRITERION 2b: the frozen string unions of src/types/game.ts', () => {
   ];
 
   for (const [name, members, expected] of cases) {
-    it(`${name} has exactly the ${expected.length} members §3 freezes`, () => {
+    it(`${name} has exactly the ${expected.length} frozen members`, () => {
       expect(Object.keys(members).sort()).toEqual([...expected].sort());
     });
   }
@@ -468,9 +465,9 @@ describe('CRITERION 2b: the frozen string unions of src/types/game.ts', () => {
 
   it('the unions are narrow — the member check above is not vacuous', () => {
     // If any of these were widened to `string`, the Record maps above would
-    // accept anything and criterion 2b would pass while asserting nothing. A
+    // accept anything and the member checks would pass while asserting nothing. A
     // widened union makes each @ts-expect-error below unused, which `tsc -b`
-    // reports as an error — so criterion 21 catches it.
+    // reports as an error — so the `tsc -b` gate catches it.
 
     // @ts-expect-error — 'RANDOM' is a RoleAssignmentMode member, never a DemandKind.
     const notADemandKind: DemandKind = 'RANDOM';
@@ -498,10 +495,10 @@ describe('CRITERION 2b: the frozen string unions of src/types/game.ts', () => {
 });
 
 // ---------------------------------------------------------------------------
-// firebase.ts is committed (criterion 22; failure mode 11)
+// firebase.ts is committed
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 22 / FAILURE MODE 11: firebase.ts is committed, not gitignored', () => {
+describe('firebase.ts is committed, not gitignored', () => {
   /** Minimal gitignore matcher — enough for the literal forms that bite here. */
   function ignores(patterns: string[], path: string): boolean {
     let ignored = false;
@@ -551,7 +548,7 @@ describe('CRITERION 22 / FAILURE MODE 11: firebase.ts is committed, not gitignor
 });
 
 // ---------------------------------------------------------------------------
-// Toolchain gates (criteria 1, 21)
+// Toolchain gates
 // ---------------------------------------------------------------------------
 
 describe('toolchain gates', () => {
@@ -565,19 +562,19 @@ describe('toolchain gates', () => {
     }
   };
 
-  it('CRITERION 21: tsc -b is clean across all three projects', () => {
+  it('tsc -b is clean across all three projects', () => {
     const result = run('npx', ['--no-install', 'tsc', '-b', '--force']);
     expect(result.output).toBe('');
     expect(result.ok).toBe(true);
   }, 300_000);
 
-  it('CRITERION 21: eslint . is clean', () => {
+  it('eslint . is clean', () => {
     const result = run('npx', ['--no-install', 'eslint', '.']);
     expect(result.output).toBe('');
     expect(result.ok).toBe(true);
   }, 300_000);
 
-  it('CRITERION 1: npm run build succeeds and produces dist/index.html', () => {
+  it('npm run build succeeds and produces dist/index.html', () => {
     const result = run('npm', ['run', 'build']);
     expect(result.ok ? 'built' : result.output).toBe('built');
     expect(existsSync(join(ROOT, 'dist', 'index.html'))).toBe(true);
@@ -585,17 +582,17 @@ describe('toolchain gates', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The route registry with src/pages/ empty or absent (criterion 19)
+// The route registry with src/pages/ empty or absent
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 19: an empty module record produces an empty route table', () => {
+describe('an empty module record produces an empty route table', () => {
   /**
    * Asserted through `collectRoutes`, never `discoverRoutes()`.
    *
-   * `import.meta.glob` is expanded at TRANSFORM time, so once section 17 ships
-   * its pages the live registry can never return `[]` again — an assertion
-   * against it would be true for exactly one wave and false forever after.
-   * `collectRoutes({})` stays assertable for the life of the project (§3).
+   * `import.meta.glob` is expanded at TRANSFORM time, so once any page ships
+   * the live registry can never return `[]` again — an assertion against it
+   * would be false forever after.
+   * `collectRoutes({})` stays assertable for the life of the project.
    */
   it('collectRoutes({}) returns []', () => {
     expect(collectRoutes({})).toEqual([]);
@@ -661,10 +658,10 @@ describe('CRITERION 19: an empty module record produces an empty route table', (
 });
 
 // ---------------------------------------------------------------------------
-// A page dropped into src/pages/ (criterion 20, registry half)
+// A page dropped into src/pages/ (registry half)
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 20: a module dropped into src/pages/ is discovered', () => {
+describe('a module dropped into src/pages/ is discovered', () => {
   const PUBLIC_PAGE = join(PAGES_DIR, '__TmpProbePublic.tsx');
   const AUTH_PAGE = join(PAGES_DIR, '__TmpProbeSecret.tsx');
   let createdPagesDir = false;
@@ -739,17 +736,17 @@ describe('CRITERION 20: a module dropped into src/pages/ is discovered', () => {
     expect(byPath['/__tmp-probe-secret'].guard).toBe('auth');
   });
 
-  it('places the probes in module-name order among the discovered routes (§4.8)', () => {
+  it('places the probes in module-name order among the discovered routes', () => {
     const probes = discovered.map((r) => r.path).filter((p) => p.startsWith('/__tmp-probe'));
     expect(probes).toEqual(['/__tmp-probe-public', '/__tmp-probe-secret']);
   });
 });
 
 // ---------------------------------------------------------------------------
-// App wires descriptors behind their guards (criterion 20, App half)
+// App wires descriptors behind their guards (App half)
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 20 (App half): descriptors are routed behind their guards', () => {
+describe('(App half) descriptors are routed behind their guards', () => {
   const publicProbe: RouteDescriptor = {
     path: '/__probe',
     guard: 'public',
@@ -806,10 +803,10 @@ describe('CRITERION 20 (App half): descriptors are routed behind their guards', 
 });
 
 // ---------------------------------------------------------------------------
-// AuthGuard (criterion 17)
+// AuthGuard
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 17: AuthGuard redirects an unidentified visitor', () => {
+describe('AuthGuard redirects an unidentified visitor', () => {
   function renderGuarded(path: string) {
     return render(
       createElement(
@@ -859,10 +856,10 @@ describe('CRITERION 17: AuthGuard redirects an unidentified visitor', () => {
 });
 
 // ---------------------------------------------------------------------------
-// BackendGuard (criterion 18)
+// BackendGuard
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 18: BackendGuard gates on health', () => {
+describe('BackendGuard gates on health', () => {
   function renderGuarded() {
     return render(
       createElement(
@@ -874,7 +871,7 @@ describe('CRITERION 18: BackendGuard gates on health', () => {
   }
 
   it('renders BackendWakeUp while health fails, and the content once it succeeds', async () => {
-    // A free-tier host cold-starts in 30–60s; §3 fixes the poll at 3000 ms
+    // A free-tier host cold-starts in 30–60s; the poll is fixed at 3000 ms
     // while the status is not ok, so this runs on fake timers rather than
     // waiting out a real interval.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
@@ -945,10 +942,10 @@ describe('CRITERION 18: BackendGuard gates on health', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AuthContext (criteria 6, 7)
+// AuthContext
 // ---------------------------------------------------------------------------
 
-describe('AuthContext drives the socket connection (16 §4.2)', () => {
+describe('AuthContext drives the socket connection', () => {
   const captured: { value: ReturnType<typeof useAuth> | null } = { value: null };
 
   function Probe() {
@@ -964,7 +961,7 @@ describe('AuthContext drives the socket connection (16 §4.2)', () => {
     return render(createElement(AuthProvider, null, createElement(Probe)));
   }
 
-  it('CRITERION 6: connects after the first resolution and reconnects on a later one', () => {
+  it('connects after the first resolution and reconnects on a later one', () => {
     mountAuth();
 
     expect(rec.authCallbacks.length).toBeGreaterThan(0);
@@ -995,7 +992,7 @@ describe('AuthContext drives the socket connection (16 §4.2)', () => {
     expect(typeof value?.logout).toBe('function');
   });
 
-  it('CRITERION 7: continueAsGuest mints a guest_<uuid4>, persists it and reconnects', () => {
+  it('continueAsGuest mints a guest_<uuid4>, persists it and reconnects', () => {
     mountAuth();
     resolveAuthState(null);
     const before = rec.connectCalls;
@@ -1019,10 +1016,10 @@ describe('AuthContext drives the socket connection (16 §4.2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// StrictMode (failure mode 3)
+// StrictMode
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 3: StrictMode must not double-apply events', () => {
+describe('StrictMode must not double-apply events', () => {
   it('mounting the app registers no extra socket listeners, and one week_closed applies once', async () => {
     vi.resetModules();
     vi.doMock('../routes/registry', () => ({ discoverRoutes: () => [] }));
@@ -1070,10 +1067,10 @@ describe('FAILURE MODE 3: StrictMode must not double-apply events', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Avatar (criterion 23)
+// Avatar
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 23: Avatar survives a 429 from googleusercontent', () => {
+describe('Avatar survives a 429 from googleusercontent', () => {
   const PHOTO = 'https://lh3.googleusercontent.com/a/whatever=s96-c';
 
   it('sets referrerPolicy="no-referrer" on the image', () => {

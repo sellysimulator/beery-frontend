@@ -1,7 +1,7 @@
 /**
- * `21-frontend-results.md §2.4` — `ExportControls`, the full record's download.
+ * `ExportControls`, the full record's download (spec §9.5).
  *
- * Since 2026-11-14 the export is open to anyone who can see the results
+ * The export is open to anyone who can see the results
  * screen: host or player, signed in or guest, everybody downloads by the
  * game's permanent id (`GET /api/v1/games/id/{public_id}/export`) with no host
  * secret. Each format can be downloaded once per game per browser session
@@ -11,8 +11,8 @@
  * Harness notes:
  *  - `src/api/http.ts` is replaced by a recorder, so the export request is
  *    asserted as a wire call.
- *  - `src/auth/AuthContext.tsx` is stubbed with the value `16 §3` freezes.
- *  - `chart.js` and `react-chartjs-2` are **not** mocked (failure mode 13).
+ *  - `src/auth/AuthContext.tsx` is stubbed with a fixed context value.
+ *  - `chart.js` and `react-chartjs-2` are **not** mocked.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ReactNode } from 'react';
@@ -292,7 +292,7 @@ function control(re: RegExp, what: string): HTMLElement {
 }
 
 function exportRegionText(): string {
-  const holder = control(/csv/i, 'the CSV export control (§2.4)').closest('[data-print]');
+  const holder = control(/csv/i, 'the CSV export control').closest('[data-print]');
   return norm((holder ?? document.body).textContent ?? '');
 }
 
@@ -315,10 +315,10 @@ function headerValue(config: unknown, name: string): string | null {
 
 function descriptor(): RouteDescriptor {
   const exported = (ResultsPageModule as { route?: RouteDescriptor | RouteDescriptor[] }).route;
-  if (!exported) throw new Error('ResultsPage.tsx exports no `route` descriptor (21 §3.0).');
+  if (!exported) throw new Error('ResultsPage.tsx exports no `route` descriptor.');
   const all = Array.isArray(exported) ? exported : [exported];
   const found = all.find((d) => d.path.startsWith('/results'));
-  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route (21 §3.0).');
+  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route.');
   return found;
 }
 
@@ -370,7 +370,7 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Open to every viewer of the results screen (2026-11-14)
+// Open to every viewer of the results screen
 // ---------------------------------------------------------------------------
 
 describe('the export is open to anyone who can see the results', () => {
@@ -428,7 +428,7 @@ describe('the export is open to anyone who can see the results', () => {
     expect(httpRec.get.mock.calls.some((call) => /hosted-games/.test(String(call[0])))).toBe(false);
   });
 
-  it('is print-omitted, like every other control (§3.3)', async () => {
+  it('is print-omitted, like every other control', async () => {
     await renderResults();
 
     const holder = control(/csv/i, 'the CSV export control').closest('[data-print]');

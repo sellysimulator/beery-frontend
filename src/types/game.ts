@@ -1,10 +1,8 @@
 /**
  * TypeScript mirrors of the Beery wire contract.
  *
- * Enums mirror `03-game-config.md §2`, config models the same chapter, the
- * engine views `07-game-engine.md §2/§3.8/§3.9`, socket payloads
- * `11-socket-lobby.md §2` and `12-socket-play.md §2`, and REST bodies
- * `10-rooms-rest-api.md §2`.
+ * Enums and config models mirror spec §6, the engine views spec §8.6 and
+ * spec §9.6, socket payloads spec §11.2, and REST bodies spec §11.1.
  *
  * Money and quantities are both `number`; quantities are integral. A field the
  * backend types as `X | None` is `X | null` here, never `undefined`, because it
@@ -12,11 +10,10 @@
  * the payload, which is a different thing.
  *
  * Nothing here ever carries `identity`. Only `JoinedPayload` carries a
- * `session_token` and only `HostClaimedPayload` a `host_secret`
- * (`00-conventions.md` section 2).
+ * `session_token` and only `HostClaimedPayload` a `host_secret`.
  */
 
-/* ─── Enumerations (03 section 2, app/core/enums.py) ─── */
+/* ─── Enumerations (app/core/enums.py) ─── */
 
 export type Role = 'RETAILER' | 'WHOLESALER' | 'DISTRIBUTOR' | 'FACTORY'
 
@@ -45,7 +42,7 @@ export type Distribution = 'NORMAL' | 'POISSON' | 'UNIFORM'
 /** `GamePhase` in `app/core/game_engine.py`. */
 export type GamePhase = 'AWAITING_START' | 'DECISION' | 'FINISHED'
 
-/* ─── Configuration (03 section 2, app/core/config_models.py) ─── */
+/* ─── Configuration (app/core/config_models.py) ─── */
 
 export interface RoleConfig {
   initial_inventory: number
@@ -162,7 +159,7 @@ export interface GameConfig {
 /**
  * Every range the host form checks, as `GET /rooms/limits` serves it
  * (`app/core/limits.py`). The backend is the only copy: the form builds its
- * checks from this response and keeps no number of its own (2026-11-02).
+ * checks from this response and keeps no number of its own.
  */
 export interface Limits {
   /** Orders, demand quantities, and both optional caps (where 0 means "unlimited"). */
@@ -191,10 +188,9 @@ export interface Limits {
 }
 
 /**
- * What a draft config will play, from `POST /rooms/preview` (`10 §3.5b`,
- * `app/core/preview.py`). The server runs the engine's own demand generator
- * and lead-time function on the draft; the host form keeps no copy of either
- * (2026-11-03).
+ * What a draft config will play, from `POST /rooms/preview`
+ * (`app/core/preview.py`). The server runs the engine's own demand generator
+ * and lead-time function on the draft; the host form keeps no copy of either.
  */
 export interface ConfigPreview {
   /** Weeks 1..duration_weeks of customer demand, index 0 = week 1. */
@@ -205,13 +201,13 @@ export interface ConfigPreview {
   lead_times: Record<Role, number>
   /**
    * The validated draft as a stored config holds it: the request's `patch`
-   * merged in and every default filled (additive, 2026-11-14). Optional here
+   * merged in and every default filled. Optional here
    * because only the multi-game setup form reads it.
    */
   config?: GameConfig
 }
 
-/* ─── Engine records (07 section 2) ─── */
+/* ─── Engine records ─── */
 
 /** One role's complete record for one week. */
 export interface WeekRecord {
@@ -237,7 +233,7 @@ export interface WeekRecord {
   orders_in_flight_after: number
   order: number
   was_bot: boolean
-  /** The host closed the week without this role's order (`07 §3.6`). */
+  /** The host closed the week without this role's order (spec §7). */
   was_forced: boolean
   holding_cost: number
   backlog_cost: number
@@ -246,7 +242,7 @@ export interface WeekRecord {
   /**
    * Holding + backlog + fixed order + purchase cost for the week. Never shown
    * as one "week cost": the screens show holding & backlog and the order cost
-   * as two figures. Was `week_cost` until 2026-11-02.
+   * as two figures, which is why it is not named `week_cost`.
    */
   total_week_cost: number
   cumulative_cost: number
@@ -258,7 +254,7 @@ export interface WeekRecord {
 
 /**
  * Phase A's result for one role, as `player_view().settlement` carries it.
- * Mirrors `app/core/records.py` (`06-role-agents.md` section 2). Every field is
+ * Mirrors `app/core/records.py`. Every field is
  * what a player is shown in the settlement recap.
  */
 export interface WeekSettlement {
@@ -269,7 +265,7 @@ export interface WeekSettlement {
   arrived: number
   /**
    * Stock after receiving and before shipping, read off the engine's own
-   * settlement step (2026-11-03). The recap prints it; it never adds
+   * settlement step. The recap prints it; it never adds
    * `opening_inventory + arrived` itself.
    */
   inventory_after_arrival: number
@@ -308,7 +304,7 @@ export interface GameStats {
   per_role: Record<Role, RoleStats>
 }
 
-/* ─── Engine views (07 sections 3.8 and 3.9) ─── */
+/* ─── Engine views ─── */
 
 export interface NeighbourView {
   inventory: number
@@ -341,14 +337,14 @@ export interface PlayerView {
   supply_line: number
   supply_line_slots: number[]
   /**
-   * Weeks until each slot of `supply_line_slots` arrives, aligned with it
-   * (2026-11-03). The board labels a slot from this, never from its position.
+   * Weeks until each slot of `supply_line_slots` arrives, aligned with it.
+   * The board labels a slot from this, never from its position.
    */
   supply_line_slot_weeks: number[]
   /**
    * What this role has ordered and its supplier has not yet received — the
    * SUPPLIER's order pipeline, never this role's own, which would show the
-   * player next week's incoming demand (`07 §3.8`).
+   * player next week's incoming demand (spec §8.8).
    */
   orders_in_flight: number
   /** The same pipeline as a list. `0` and `[]` for FACTORY, which has no supplier. */
@@ -414,13 +410,13 @@ export interface HostRoleView {
    * The role's OWN incoming-order pipeline — orders travelling towards it, the
    * same figure as `WeekRecord.orders_in_flight_after`. The host view is
    * unredacted, so this is not the quantity `PlayerView` sends under the same
-   * name (`07 §3.9`).
+   * name (spec §9.6).
    */
   orders_in_flight: number
   last_order: number | null
   incoming_order: number
   accumulated_cost: number
-  /** `0` away from the FACTORY, never null (`07 §3.9`). */
+  /** `0` away from the FACTORY, never null (spec §9.6). */
   production_queue: number
   /** Whether the role has submitted — never the quantity. */
   has_submitted: boolean
@@ -436,8 +432,8 @@ export interface HostView {
   duration_weeks: number
   /**
    * Complete weeks so far: what the results will report, and what ending the
-   * game now keeps, since the open week is dropped (`07 §3.5`). `week` is one
-   * higher while a week is open. Added 2026-11-03.
+   * game now keeps, since the open week is dropped (spec §7). `week` is one
+   * higher while a week is open.
    */
   weeks_played: number
   phase: GamePhase
@@ -459,7 +455,7 @@ export interface HostView {
   order_history?: Record<Role, number[]>
 }
 
-/* ─── REST: rooms (10 section 2) ─── */
+/* ─── REST: rooms ─── */
 
 export interface RoomCreateRequest {
   host_display_name?: string
@@ -501,7 +497,7 @@ export interface PresetSummary {
   label: string
   description: string
   config: GameConfig
-  /** The preset `/create` and `/batch-create` use when none is named (2026-11-14). */
+  /** The preset `/create` and `/batch-create` use when none is named. */
   is_default?: boolean
 }
 
@@ -509,7 +505,7 @@ export interface PresetListResponse {
   presets: PresetSummary[]
 }
 
-/* ─── REST: multi-game hosting (10 sections 3.5c, 3.5d) ─── */
+/* ─── REST: multi-game hosting ─── */
 
 /**
  * `POST /rooms/batch-create`. `preset` means what it means on `/create`;
@@ -564,7 +560,7 @@ export interface RoomSummaryResponse {
   rooms: RoomSummary[]
 }
 
-/* ─── Socket: client → server (11 and 12, section 2) ─── */
+/* ─── Socket: client → server ─── */
 
 export interface JoinWaitingEmit {
   room_id: string
@@ -660,7 +656,7 @@ export interface RequestStateEmit {
   room_id: string
 }
 
-/* ─── Socket: server → client, lobby (11 section 2) ─── */
+/* ─── Socket: server → client, lobby ─── */
 
 export interface Participant {
   alias: string
@@ -690,7 +686,7 @@ export interface HostClaimedPayload {
 export interface JoinErrorPayload {
   message: string
   /**
-   * The room a `start_game` refusal was for (additive, 2026-11-14), so the
+   * The room a `start_game` refusal was for, so the
    * multi-game dashboard can put it on that game's card. Absent on every
    * other `join_error`.
    */
@@ -702,7 +698,7 @@ export interface JoinErrorPayload {
  * seat was given up in, and nothing else: the server has already dropped this
  * `sid` from the room and re-broadcast `lobby_update` to everyone still in it.
  *
- * `leave` is refused once the game has started (`11 §3.3`), and the refusal
+ * `leave` is refused once the game has started, and the refusal
  * arrives as `join_error` rather than as an ack, so a screen that never offers
  * the control after the start never sees one.
  */
@@ -736,7 +732,7 @@ export interface RolesAssignedPayload {
 }
 
 /**
- * `public_config()` (`11 section 3.6`): what every player may see once the game
+ * `public_config()`: what every player may see once the game
  * runs. The same paths as `GameConfig`, without a single cost, delay or demand
  * field.
  */
@@ -754,7 +750,7 @@ export interface GameStartedPayload {
   config_public: PublicConfig
 }
 
-/* ─── Socket: server → client, play (12 section 2) ─── */
+/* ─── Socket: server → client, play ─── */
 
 /**
  * `own_history` is absent from the per-round `your_state`, the one after a

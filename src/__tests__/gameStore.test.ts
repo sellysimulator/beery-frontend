@@ -1,13 +1,14 @@
 /**
- * `useGameStore` from `src/store/gameStore.ts` (16 §3).
+ * `useGameStore` from `src/store/gameStore.ts`.
  *
- * §3 freezes the `GameState` field list, the initial value of every field, the
- * `Alert` shape and the whole `GameActions` interface, so this file drives the
- * store through its own actions and asserts the state contract directly.
+ * The store's contract is the `GameState` field list, the initial value of
+ * every field, the `Alert` shape and the whole `GameActions` interface, so this
+ * file drives the store through its own actions and asserts the state contract
+ * directly.
  *
- * Covers acceptance criteria 11 and 12 at the store layer (`socketHandlers.test.ts`
- * covers them again through the wire), plus 00-conventions §2.5: the store holds
- * `myAlias` — never a `session_token`, a `host_secret` or an `identity`.
+ * Covers the seq gate at the store layer (`socketHandlers.test.ts` covers it
+ * again through the wire), plus the identifier rule: the store holds `myAlias` —
+ * never a `session_token`, a `host_secret` or an `identity`.
  *
  * Payload literals below are plain object literals on purpose: each applier's
  * parameter type is frozen, so `tsc -b` checks the fixture against the payload
@@ -75,7 +76,7 @@ describe('gameStore — the declared GameState surface', () => {
     expect(typeof useGameStore.subscribe).toBe('function');
   });
 
-  it('carries every field §3 declares', () => {
+  it('carries every field GameState declares', () => {
     const state = useGameStore.getState() as unknown as Record<string, unknown>;
     for (const field of DECLARED_FIELDS) {
       expect(Object.prototype.hasOwnProperty.call(state, field)).toBe(true);
@@ -126,7 +127,7 @@ describe('gameStore — the declared GameState surface', () => {
   });
 });
 
-describe('gameStore — the three identifiers (00-conventions §2)', () => {
+describe('gameStore — the three identifiers', () => {
   it('holds no field named for a secret or for the server-only identity', () => {
     for (const key of Object.keys(useGameStore.getState())) {
       for (const bad of FORBIDDEN_SUBSTRINGS) {
@@ -136,7 +137,7 @@ describe('gameStore — the three identifiers (00-conventions §2)', () => {
   });
 
   it('applyJoined puts the alias in the store and keeps the session_token out of it', () => {
-    // `joined` is the one applier with no `seq` (§3).
+    // `joined` is the one applier with no `seq`.
     useGameStore.getState().applyJoined({
       alias: 'P3',
       session_token: 'tok-secret',
@@ -168,11 +169,11 @@ describe('gameStore — the three identifiers (00-conventions §2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The seq gate lives in the appliers (criteria 11, 12)
+// The seq gate lives in the appliers
 // ---------------------------------------------------------------------------
 
-describe('the seq gate (16 §3, §4.4)', () => {
-  it('CRITERION 12: a higher seq applies and advances lastSeq', () => {
+describe('the seq gate', () => {
+  it('a higher seq applies and advances lastSeq', () => {
     const before = snapshot();
 
     useGameStore.getState().applyWeekClosed({
@@ -188,7 +189,7 @@ describe('the seq gate (16 §3, §4.4)', () => {
     expect(snapshot()).not.toBe(before);
   });
 
-  it('CRITERION 11: a lower seq is a no-op, leaving the whole state untouched', () => {
+  it('a lower seq is a no-op, leaving the whole state untouched', () => {
     useGameStore.getState().applyWeekClosed({ seq: 5, week: 3, next_week: 4, awaiting_roles: ['RETAILER'] });
     const afterFive = snapshot();
 
@@ -203,7 +204,7 @@ describe('the seq gate (16 §3, §4.4)', () => {
     expect(useGameStore.getState().lastSeq).toBe(5);
   });
 
-  it('CRITERION 11: an equal seq is dropped as a duplicate', () => {
+  it('an equal seq is dropped as a duplicate', () => {
     useGameStore.getState().applyWeekClosed({ seq: 5, week: 3, next_week: 4, awaiting_roles: ['RETAILER'] });
     const afterFive = snapshot();
 
@@ -379,7 +380,7 @@ describe('play appliers', () => {
       is_bot: false,
     });
 
-    // 12 §2: `order_submitted` is "identity only, never a quantity".
+    // `order_submitted` is "identity only, never a quantity" (spec §11.2).
     expect(useGameStore.getState().lastSeq).toBe(10);
     expect(snapshot().toLowerCase()).not.toContain('"order"');
   });
@@ -502,7 +503,7 @@ function perRoundState(role: Role, week: number): YourStatePayload {
   return state;
 }
 
-describe('own_history arrives a record at a time (12 section 3.3)', () => {
+describe('own_history arrives a record at a time', () => {
   it('a per-round your_state without own_history keeps the history the store holds', () => {
     const store = useGameStore.getState();
     store.applyYourState({ ...yourState('RETAILER', 2, [weekRecord('RETAILER', 1)]), seq: 1 });
@@ -541,7 +542,7 @@ describe('own_history arrives a record at a time (12 section 3.3)', () => {
   });
 });
 
-describe('game_started reaches the host too (11 section 3.6)', () => {
+describe('game_started reaches the host too', () => {
   it('does not replace the host’s full config with the public subset', () => {
     const full: GameConfig = {
       duration_weeks: 20,
@@ -608,7 +609,7 @@ function roleConfig(): RoleConfig {
   };
 }
 
-describe('join_error (D18 recovery depends on this, 17 §2.4)', () => {
+describe('join_error (D18 recovery depends on this)', () => {
   it('applyJoinError records the message', () => {
     useGameStore.getState().applyJoinError({ message: 'You are not the host of this room.' });
 
@@ -648,8 +649,8 @@ describe('join_error (D18 recovery depends on this, 17 §2.4)', () => {
   });
 
   it('null before the first reply is distinguishable from a refusal', () => {
-    // Section 17 tells "refused" apart from "not answered yet" by this field
-    // alone; before the first reply the two states look identical from the
+    // The host lobby tells "refused" apart from "not answered yet" by this
+    // field alone; before the first reply the two states look identical from the
     // route plus isHost.
     expect(useGameStore.getState().joinError).toBeNull();
 

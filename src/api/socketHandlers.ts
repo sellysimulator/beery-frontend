@@ -253,7 +253,7 @@ socket.on('connect_error', (error: Error) => {
   connectErrorAlertId = store().addAlert({ kind: kind === 'auth' ? 'error' : 'info', message })
 })
 
-/* ─── lobby (section 11) ─── */
+/* ─── lobby ─── */
 
 socket.on('joined', (payload: JoinedPayload) => {
   if (!payload?.alias) return
@@ -275,7 +275,7 @@ socket.on('host_claimed', (payload: HostClaimedPayload) => {
 })
 
 socket.on('join_error', (payload: JoinErrorPayload) => {
-  // A `start_game` refusal names its room (2026-11-14). For a room of the
+  // A `start_game` refusal names its room. For a room of the
   // multi-game dashboard's batch it goes on that game's card, not into a
   // global alert or `joinError`. Anything else keeps the behaviour below.
   const refusedRoom = payload?.room_code
@@ -338,7 +338,7 @@ socket.on('game_started', (payload: GameStartedPayload) => {
   store().applyGameStarted(payload)
 })
 
-/* ─── play (section 12) ─── */
+/* ─── play ─── */
 
 socket.on('your_state', (payload: YourStatePayload) => {
   store().applyYourState(payload)

@@ -1,39 +1,36 @@
 /**
- * `18-frontend-host-config.md` — the host configuration panel.
+ * The host configuration panel (spec §9.10).
  *
- * Covers acceptance criteria 1, 2, 3, 4, 5, 6, 12, 13, 14, 15, 16, 17, 18 and
- * 19, and failure modes 1, 3, 4, 5, 6, 7 and 8. Acceptance criteria 7 to 11 and
- * failure modes 2, 9 and 10 live in `DemandEditor.test.tsx`; the Zod ranges of
- * `§3.2` live in `configSchema.test.ts`.
+ * The demand editor is tested in `DemandEditor.test.tsx`; the Zod ranges live
+ * in `configSchema.test.ts`.
  *
  * Harness notes
  * -------------
  * `socket.io-client` is replaced by a recorder, exactly as `LobbyHost.test.tsx`
  * does, so every `config_update` this panel sends is inspected as it goes on the
- * wire (`11 §2` freezes the event name and its `{room_id, host_secret, config}`
+ * wire (spec §11.2 fixes the event name and its `{room_id, host_secret, config}`
  * payload). `src/api/http.ts`'s axios instance is replaced the same way, so the
- * `PUT /rooms/{code}/config` fallback of `§3.1` is inspected as a request rather
- * than as a call into section 10's client — which is what lets this file stay
- * black-box about whichever helper the panel routes through.
+ * `PUT /rooms/{code}/config` fallback is inspected as a request rather than as a
+ * call into the REST client — which is what lets this file stay black-box about
+ * whichever helper the panel routes through.
  *
- * `errorMessage` is deliberately **not** stubbed: failure mode 8 is the claim
- * that a real FastAPI 422 body renders as a string, and a stubbed formatter
- * would make that unfalsifiable.
+ * `errorMessage` is deliberately **not** stubbed: one test claims that a real
+ * FastAPI 422 body renders as a string, and a stubbed formatter would make that
+ * unfalsifiable.
  *
- * The store is driven through section 16's declared appliers
- * (`applyConfigUpdated`, `applyLobbyUpdate`) rather than through the wire, since
- * `16 §3` makes the store the single source of truth and `§3.0` of this section
- * makes it the thing every input renders from.
+ * The store is driven through its declared appliers (`applyConfigUpdated`,
+ * `applyLobbyUpdate`) rather than through the wire, since the store is the
+ * single source of truth and the thing every input renders from.
  *
  * Locating controls
  * -----------------
- * This section freezes exactly one DOM handle — `data-testid="demand-preview"`
- * and its `data-series` (`§2.6`). It has no equivalent of `17 §2.4b`'s frozen
- * accessible names, so `field()` below accepts any of the conventional handles
- * (a form control `name` carrying the wire path from `03 §2`, `data-field`,
+ * The panel has exactly one fixed DOM handle — `data-testid="demand-preview"`
+ * and its `data-series`. It has no equivalent of the lobby's fixed accessible
+ * names, so `field()` below accepts any of the conventional handles (a form
+ * control `name` carrying the config field's wire path, `data-field`,
  * `data-testid`, `id`, or an accessible name containing the field's own
- * vocabulary). That breadth is a harness accommodation for a gap in the
- * document, not an assertion about the implementation.
+ * vocabulary). That breadth is a harness accommodation, not an assertion about
+ * the implementation.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act, fireEvent, waitFor, within } from '@testing-library/react';
@@ -162,7 +159,7 @@ vi.mock('../api/http', async (importOriginal) => {
 vi.mock('../api/health', () => ({ checkHealth: vi.fn(async () => true) }));
 
 // ---------------------------------------------------------------------------
-// Fixtures — `03-game-config.md §2`'s declared defaults
+// Fixtures — the declared config defaults (spec §6)
 // ---------------------------------------------------------------------------
 
 const ROOM = 'ABC234';
@@ -230,7 +227,7 @@ function baseConfig(over: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-/** `10 §2`'s `PresetListResponse`. The card copy is `18 §2`'s table. */
+/** A `PresetListResponse`, carrying each preset card's copy. */
 const PRESETS = {
   presets: [
     {
@@ -264,7 +261,7 @@ const PRESETS = {
 };
 
 /**
- * `POST /rooms/preview`'s answer (`10 §3.5b`). Test data, not a second source:
+ * `POST /rooms/preview`'s answer. Test data, not a second source:
  * the lead times are deliberately not what any sum of the fixture's delays
  * gives, so a row that added up its own columns would show different numbers.
  */
@@ -282,7 +279,7 @@ const EMPTY_ROLE_TO_ALIAS: Record<Role, string | null> = {
 };
 
 // ---------------------------------------------------------------------------
-// Store driving — section 16's declared appliers only
+// Store driving — the store's declared appliers only
 // ---------------------------------------------------------------------------
 
 let seq = 0;
@@ -485,8 +482,8 @@ function roleScope(role: Role): ParentNode | null {
  * A top-level (`duration_weeks`) or nested (`visibility.show_all_inventories`,
  * `roles.FACTORY.production_delay_weeks`) field, or null when it is absent.
  *
- * A role-scoped lookup never falls back to the un-scoped form, because failure
- * mode 5 and acceptance criteria 5 and 6 turn on one column not showing a field
+ * A role-scoped lookup never falls back to the un-scoped form, because the
+ * Factory and Retailer column tests turn on one column not showing a field
  * that another column does show.
  */
 function findField(path: string): HTMLElement | null {
@@ -522,9 +519,9 @@ function field(path: string): HTMLElement {
   const found = findField(path);
   if (!found) {
     throw new Error(
-      `No control for \`${path}\`. 18 §2 names the fields but freezes no accessible ` +
-        'name or test id for them (contrast 17 §2.4b), so this harness accepts a `name`, ' +
-        '`data-field`, `data-testid` or `id` carrying the wire path from 03 §2, or an ' +
+      `No control for \`${path}\`. The panel fixes no accessible ` +
+        'name or test id for its fields, so this harness accepts a `name`, ' +
+        '`data-field`, `data-testid` or `id` carrying the wire path, or an ' +
         'accessible name containing the field\'s own words.',
     );
   }
@@ -579,18 +576,18 @@ function clickable(label: RegExp, scope: HTMLElement = document.body): HTMLEleme
 /**
  * The presets section — the smallest element holding all three card labels.
  * Scoping matters because the demand generator picker also offers a *Custom*
- * choice, and acceptance criterion 3 is about the preset one.
+ * choice, and the switch-to-Custom test is about the preset one.
  */
 function presetRegion(): HTMLElement {
   const anchor = screen.queryAllByText(/Classic MIT/i).at(0);
-  if (!anchor) throw new Error('No Classic MIT preset card (18 §2).');
+  if (!anchor) throw new Error('No Classic MIT preset card.');
   let node: HTMLElement | null = anchor as HTMLElement;
   while (node) {
     const text = textOf(node);
     if (/Classic MIT/i.test(text) && /Fast Game/i.test(text) && /Chaos/i.test(text)) return node;
     node = node.parentElement;
   }
-  throw new Error('The three preset cards do not share a container (18 §2).');
+  throw new Error('The three preset cards do not share a container.');
 }
 
 /** The *Apply to all* control belonging to the section that holds `el`. */
@@ -604,13 +601,13 @@ function applyToAllFor(el: HTMLElement): HTMLElement {
     if (buttons.length > 1) return buttons[0];
     node = node.parentElement;
   }
-  throw new Error('No *Apply to all* control (18 §2, acceptance criterion 4).');
+  throw new Error('No *Apply to all* control.');
 }
 
 async function setNumber(user: ReturnType<typeof userEvent.setup>, el: HTMLElement, value: string) {
   await user.clear(el);
   await user.type(el, value);
-  await user.tab(); // §3.1: save immediately on blur of a numeric input
+  await user.tab(); // save immediately on blur of a numeric input
 }
 
 // ---------------------------------------------------------------------------
@@ -630,11 +627,11 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// §2 — layout
+// Layout
 // ---------------------------------------------------------------------------
 
-describe('layout (§2)', () => {
-  it('renders all six sections plus the conditional bot section [AC 1]', async () => {
+describe('layout', () => {
+  it('renders all six sections plus the conditional bot section', async () => {
     await mountPanel({ config: baseConfig({ bot_fill_empty_roles: true }) });
 
     const text = bodyText();
@@ -651,7 +648,7 @@ describe('layout (§2)', () => {
     }
   });
 
-  it('shows the four per-role columns [AC 1]', async () => {
+  it('shows the four per-role columns', async () => {
     await mountPanel();
     const text = bodyText();
     expect(text).toMatch(/retailer/i);
@@ -662,11 +659,11 @@ describe('layout (§2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §2 — presets
+// Presets
 // ---------------------------------------------------------------------------
 
-describe('preset cards (§2)', () => {
-  it('populates every field and sets preset_name when a preset is chosen [AC 2]', async () => {
+describe('preset cards', () => {
+  it('populates every field and sets preset_name when a preset is chosen', async () => {
     const user = await mountPanel({ config: baseConfig({ duration_weeks: 36 }) });
     await waitFor(() => expect(bodyText()).toMatch(/Fast Game/i));
     clearWire();
@@ -683,7 +680,7 @@ describe('preset cards (§2)', () => {
     await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('20'));
   });
 
-  it('renders the server’s label and description verbatim, with no copy of its own (2026-11-03)', async () => {
+  it('renders the server’s label and description verbatim, with no copy of its own', async () => {
     // The figures are written by the server from each preset's config. A card
     // that kept its own text would still say "36 weeks" here.
     rest.presets = {
@@ -700,7 +697,7 @@ describe('preset cards (§2)', () => {
     expect(bodyText()).not.toMatch(/36 weeks/);
   });
 
-  it('renders each preset card with the copy the API supplies [AC 2]', async () => {
+  it('renders each preset card with the copy the API supplies', async () => {
     await mountPanel();
     await waitFor(() => expect(bodyText()).toMatch(/Classic MIT/i));
     const text = bodyText();
@@ -710,7 +707,7 @@ describe('preset cards (§2)', () => {
     expect(text).toMatch(/the one that produces the textbook result/i);
   });
 
-  it('clears preset_name and switches to Custom once a field is edited [AC 3, FM 3]', async () => {
+  it('clears preset_name and switches to Custom once a field is edited', async () => {
     const user = await mountPanel({ config: baseConfig({ preset_name: 'CLASSIC_MIT' }) });
     await waitFor(() => expect(bodyText()).toMatch(/Classic MIT/i));
     clearWire();
@@ -722,10 +719,10 @@ describe('preset cards (§2)', () => {
     expect(saved.duration_weeks).toBe(24);
     expect(
       saved.preset_name,
-      'a host must not believe they are running Classic MIT when they are not (§2)',
+      'a host must not believe they are running Classic MIT when they are not',
     ).toBeNull();
 
-    // §3.0: the panel renders from the stored config, so the card follows the
+    // The panel renders from the stored config, so the card follows the
     // server's echo of the cleared `preset_name`, not the keystroke.
     applyConfig(baseConfig({ preset_name: null, duration_weeks: 24 }));
 
@@ -737,7 +734,7 @@ describe('preset cards (§2)', () => {
     expect(
       classicSelected === null && customSelected === null,
       'no preset card expresses selection (aria-pressed / aria-checked / aria-current / ' +
-        'data-selected); AC 3 requires the UI to switch to *Custom*',
+        'data-selected); editing a field must switch the UI to *Custom*',
     ).toBe(false);
     await waitFor(() => {
       expect(selectionOf(clickable(/Classic MIT/i, presetRegion()))).not.toBe(true);
@@ -747,11 +744,11 @@ describe('preset cards (§2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §2 — per-role editors
+// Per-role editors
 // ---------------------------------------------------------------------------
 
-describe('per-role editors (§2)', () => {
-  it('copies the Retailer column into the other three on *Apply to all* [AC 4]', async () => {
+describe('per-role editors', () => {
+  it('copies the Retailer column into the other three on *Apply to all*', async () => {
     const user = await mountPanel();
     const retailerInventory = field('roles.RETAILER.initial_inventory');
 
@@ -780,7 +777,7 @@ describe('per-role editors (§2)', () => {
     }
   });
 
-  it('shows production fields and hides shipping_delay_weeks for the Factory [AC 5, FM 5]', async () => {
+  it('shows production fields and hides shipping_delay_weeks for the Factory', async () => {
     await mountPanel();
 
     // The positive half keeps the negative half meaningful: if the harness could
@@ -791,11 +788,11 @@ describe('per-role editors (§2)', () => {
 
     expect(
       findField('roles.FACTORY.shipping_delay_weeks'),
-      'the Factory column must show production_delay_weeks in place of shipping_delay_weeks (§2)',
+      'the Factory column must show production_delay_weeks in place of shipping_delay_weeks',
     ).toBeNull();
   });
 
-  it('omits the Retailer information delay from the DOM entirely [AC 6, FM 5]', async () => {
+  it('omits the Retailer information delay from the DOM entirely', async () => {
     await mountPanel();
 
     expect(findField('roles.RETAILER.initial_inventory')).not.toBeNull();
@@ -804,11 +801,11 @@ describe('per-role editors (§2)', () => {
     const hidden = findField('roles.RETAILER.information_delay_weeks');
     expect(
       hidden,
-      'the Retailer\'s information_delay_weeks is unused and must be absent, not disabled (§2)',
+      'the Retailer\'s information_delay_weeks is unused and must be absent, not disabled',
     ).toBeNull();
   });
 
-  it('does not blank the other roles when one role field changes [FM 4]', async () => {
+  it('does not blank the other roles when one role field changes', async () => {
     const user = await mountPanel();
     clearWire();
 
@@ -818,7 +815,7 @@ describe('per-role editors (§2)', () => {
     const roles = (lastSavedConfig().roles ?? {}) as Record<string, Json | null>;
     for (const role of ['WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as const) {
       const sent = roles[role];
-      if (sent === undefined) continue; // an omitted role is the deep-merge contract (§3.1a)
+      if (sent === undefined) continue; // an omitted role is the deep-merge contract (spec §6.6)
       expect(sent, `${role} was sent as null, which blanks it server-side`).not.toBeNull();
       expect(
         (sent as Json).holding_cost_per_unit_week,
@@ -846,12 +843,12 @@ describe('per-role editors (§2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §3.0 / §3.1 — the save path and the clamp
+// The save path and the clamp
 // ---------------------------------------------------------------------------
 
-describe('save path (§3.1)', () => {
-  it('refuses 500 weeks beside the field and never sends it [AC 12, FM 1]', async () => {
-    // Amended 2026-11-02: nothing is clamped. The range comes from the
+describe('save path', () => {
+  it('refuses 500 weeks beside the field and never sends it', async () => {
+    // Nothing is clamped. The range comes from the
     // server's own limits (`GET /rooms/limits`), the message says it, and the
     // value never reaches the wire, where the server would refuse it too.
     const user = await mountPanel();
@@ -878,7 +875,7 @@ describe('save path (§3.1)', () => {
     expect(field('demand.step_week').getAttribute('min')).toBe('2');
   });
 
-  it('emits config_update over the socket when connected [AC 14]', async () => {
+  it('emits config_update over the socket when connected', async () => {
     const user = await mountPanel({ connected: true });
     clearWire();
 
@@ -892,7 +889,7 @@ describe('save path (§3.1)', () => {
     expect(restSaves(), 'the REST route is a fallback, not a second channel').toHaveLength(0);
   });
 
-  it('falls back to PUT /rooms/{code}/config when the socket is down [AC 14]', async () => {
+  it('falls back to PUT /rooms/{code}/config when the socket is down', async () => {
     rest.configResponse = { room_code: ROOM, state: 'CONFIGURING', config: baseConfig({ duration_weeks: 24 }) };
     const user = await mountPanel({ connected: false });
     clearWire();
@@ -907,7 +904,7 @@ describe('save path (§3.1)', () => {
     expect((calls[0][1] as Json).config).toMatchObject({ duration_weeks: 24 });
   });
 
-  it('renders the value the REST response carries [AC 12, AC 14]', async () => {
+  it('renders the value the REST response carries', async () => {
     rest.configResponse = {
       room_code: ROOM,
       state: 'CONFIGURING',
@@ -921,14 +918,14 @@ describe('save path (§3.1)', () => {
     await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('24'), { timeout: 2000 });
   });
 
-  it('debounces typing into a numeric field [AC 15, FM 7]', async () => {
+  it('debounces typing into a numeric field', async () => {
     const user = await mountPanel();
     clearWire();
 
     const seedField = field('random_seed');
     seedField.focus();
     await user.type(seedField, '1234567890');
-    // Well past the 400 ms debounce window of §3.1.
+    // Well past the 400 ms debounce window.
     await new Promise((resolve) => setTimeout(resolve, 900));
 
     expect(
@@ -937,7 +934,7 @@ describe('save path (§3.1)', () => {
     ).toBeLessThanOrEqual(2);
   });
 
-  it('saves immediately when a switch is toggled [AC 15]', async () => {
+  it('saves immediately when a switch is toggled', async () => {
     const user = await mountPanel();
     clearWire();
 
@@ -947,14 +944,14 @@ describe('save path (§3.1)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §3.2 — the 422
+// The 422
 // ---------------------------------------------------------------------------
 
-describe('server rejection (§3.2)', () => {
-  it('renders a real FastAPI 422 as a string and highlights the field [AC 13, FM 8]', async () => {
+describe('server rejection', () => {
+  it('renders a real FastAPI 422 as a string and highlights the field', async () => {
     // The shape FastAPI actually returns: `detail` is an array of objects, not a
     // string. Rendering it directly throws `Objects are not valid as a React
-    // child` (00-conventions §3).
+    // child`.
     rest.putRejection = {
       isAxiosError: true,
       name: 'AxiosError',
@@ -990,18 +987,18 @@ describe('server rejection (§3.2)', () => {
     await waitFor(() =>
       expect(
         document.querySelector('[aria-invalid="true"]'),
-        'the field named in `detail` must be marked invalid (§3.2)',
+        'the field named in `detail` must be marked invalid',
       ).not.toBeNull(),
     );
   });
 });
 
 // ---------------------------------------------------------------------------
-// §3.3 — locked after start
+// Locked after start
 // ---------------------------------------------------------------------------
 
-describe('locked after start (§3.3)', () => {
-  it('renders read-only with the locked banner while RUNNING [AC 16]', async () => {
+describe('locked after start', () => {
+  it('renders read-only with the locked banner while RUNNING', async () => {
     await mountPanel({ state: 'RUNNING' });
 
     expect(bodyText()).toMatch(
@@ -1017,11 +1014,11 @@ describe('locked after start (§3.3)', () => {
     });
     expect(
       editable.map((c) => accessibleName(c)),
-      '§3.3 asks for a read-only summary, not merely disabled inputs',
+      'a locked panel is a read-only summary, not merely disabled inputs',
     ).toHaveLength(0);
   });
 
-  it('emits nothing for any interaction while RUNNING [FM 6]', async () => {
+  it('emits nothing for any interaction while RUNNING', async () => {
     const user = await mountPanel({ state: 'RUNNING' });
     clearWire();
 
@@ -1042,11 +1039,11 @@ describe('locked after start (§3.3)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §2 — visibility levers and the bot slider
+// Visibility levers and the bot slider
 // ---------------------------------------------------------------------------
 
-describe('visibility levers (§2)', () => {
-  it('renders every switch with its explanatory line [AC 17]', async () => {
+describe('visibility levers', () => {
+  it('renders every switch with its explanatory line', async () => {
     await mountPanel();
     const text = bodyText();
 
@@ -1065,8 +1062,8 @@ describe('visibility levers (§2)', () => {
   });
 });
 
-describe('labels that say what the engine does (2026-11-02)', () => {
-  it('has no negative-orders switch: the option was removed', async () => {
+describe('labels that say what the engine does', () => {
+  it('has no negative-orders switch: orders have a floor of 0', async () => {
     await mountPanel();
     expect(findField('visibility.allow_negative_orders')).toBeNull();
     expect(bodyText()).not.toMatch(/negative order/i);
@@ -1099,8 +1096,8 @@ describe('labels that say what the engine does (2026-11-02)', () => {
   });
 });
 
-describe('bot difficulty (§2)', () => {
-  it('renders bot.beta as a labelled slider from 0 to 1 [AC 18]', async () => {
+describe('bot difficulty', () => {
+  it('renders bot.beta as a labelled slider from 0 to 1', async () => {
     await mountPanel({ config: baseConfig({ bot_fill_empty_roles: true }) });
 
     const slider = screen.getByRole('slider', {
@@ -1110,7 +1107,7 @@ describe('bot difficulty (§2)', () => {
     expect(slider.getAttribute('max') ?? slider.getAttribute('aria-valuemax')).toBe('1');
   });
 
-  it('describes what beta changes and never promises a steady bot (08 §3.1, 2026-11-03)', async () => {
+  it('describes what beta changes and never promises a steady bot', async () => {
     // At beta 1 the bot still orders 9 to 14 on flat demand of 4: it aims for
     // 3x its starting stock and cannot see orders its supplier has not
     // shipped. The copy says so instead of calling it "steady".
@@ -1124,22 +1121,22 @@ describe('bot difficulty (§2)', () => {
     expect(text).toMatch(/orders its supplier has not shipped yet are invisible to it/i);
   });
 
-  it('hides the bot section when bot fill is off and no bot is seated [§2]', async () => {
+  it('hides the bot section when bot fill is off and no bot is seated', async () => {
     await mountPanel({ config: baseConfig({ bot_fill_empty_roles: false }) });
 
     expect(
       screen.queryByRole('slider', { name: /How much do bots count/i }),
-      'the bot section is conditional on bot_fill_empty_roles (§2)',
+      'the bot section is conditional on bot_fill_empty_roles',
     ).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// §3.4 — keyboard
+// Keyboard
 // ---------------------------------------------------------------------------
 
-describe('keyboard operation (§3.4)', () => {
-  it('reaches every part of the form with Tab alone [AC 19]', async () => {
+describe('keyboard operation', () => {
+  it('reaches every part of the form with Tab alone', async () => {
     const user = await mountPanel({ config: baseConfig({ bot_fill_empty_roles: true }) });
 
     const targets = new Map<string, HTMLElement>([
@@ -1171,7 +1168,7 @@ describe('keyboard operation (§3.4)', () => {
     }
   });
 
-  it('toggles a switch from the keyboard and saves [AC 15, AC 19]', async () => {
+  it('toggles a switch from the keyboard and saves', async () => {
     const user = await mountPanel();
     clearWire();
 
@@ -1206,10 +1203,10 @@ describe('mouse wheel over a focused number field', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2026-11-03 — the lead times are the server's (`POST /rooms/preview`)
+// The lead times are the server's (`POST /rooms/preview`)
 // ---------------------------------------------------------------------------
 
-describe('lead times (10 §3.5b, 18 §2.6)', () => {
+describe('lead times', () => {
   function leadCell(role: Role): HTMLElement {
     const row = screen.getByTestId('lead-time-row');
     const cell = row.querySelector<HTMLElement>(`[data-role="${role}"]`);

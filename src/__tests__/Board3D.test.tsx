@@ -1,48 +1,45 @@
 /**
- * `24-frontend-3d-board.md §8` — the 3D board, asserted as an object.
+ * The 3D board (spec §9.7), asserted as an object.
  *
- * Covers §9's acceptance criteria 6, 7, 8 (structurally), 9, 10, 11, 12, 13,
- * 15, 16, 17, 20, 22 and 24, and §10's failure modes 1, 2, 3, 4, 5, 7 and 10.
- * The on-screen movement pad of §5.7 has its own file, `MovePad.test.tsx`;
- * the HUD's half of §5.7 (the Open button and the touch legend) is here.
+ * The on-screen movement pad has its own file, `MovePad.test.tsx`; the HUD's
+ * half of the touch controls (the Open button and the touch legend) is here.
  *
- * THE GOVERNING CONSTRAINT (§8.1, §8.2): jsdom has no WebGL. This file imports
+ * THE GOVERNING CONSTRAINT: jsdom has no WebGL. This file imports
  * **only** pure modules and DOM components. It never imports `Board3D.tsx` or
  * `WarehouseScene.tsx`, so `@react-three/fiber` is never loaded and no mock of
  * it is needed. That is not a convenience — it is the point of the seam:
  *
  * > `buildSceneModel` returns exactly what `WarehouseScene` draws — the
- * > component adds nothing to it — which is what lets this section's
- * > acceptance criteria be checked against an object instead of against a
- * > mocked renderer.
+ * > component adds nothing to it — which is what lets the board's rules be
+ * > checked against an object instead of against a mocked renderer.
  *
  * It is the shape `chartSetup.ts` already established for Chart.js, where
  * `buildBullwhipConfig` is asserted as a configuration object because a canvas
  * is opaque to jsdom. Every assertion below is against the `SceneModel`, never
- * against a pixel, and §8.4 says so explicitly: pixels, camera pose and
+ * against a pixel: pixels, camera pose and
  * whether the truck looks like a truck are verified once, by a human, against
  * four screenshots.
  *
  * Harness notes:
  *  - **No socket recorder.** `DecisionPanel.test.tsx` drives gameplay
  *    components through `GameRoomPlaying` with a mocked `socket.io-client`,
- *    because `17 §2.0` freezes that screen as taking no props and no document
+ *    because that screen takes no props and no document
  *    freezes a prop shape for the components inside it. Neither half of that
  *    reasoning reaches here. The one component that would mount `Board3DHud`
  *    and `Board3DPanels` is `Board3D.tsx`, which this file may never import;
- *    and 24 §6.2 does freeze these three modules' prop shapes, so addressing
+ *    and these three modules' prop shapes are frozen, so addressing
  *    them directly invents nothing. Nothing in this file's import graph
  *    touches `socket.io-client`, `src/api/*` or the store, so there is no
  *    transport for a recorder to intercept. The one thing that *would* be
  *    driven through `GameRoomPlaying` — that the 2D board is still the default
  *    and that the toggle writes `'3D'` — is asserted in `GameRoomFlow.test.tsx`
- *    on the real harness, where it belongs (§8.3).
+ *    on the real harness, where it belongs.
  *  - Every fixture number is deliberately distinctive, so an assertion that a
  *    figure is present or absent cannot be satisfied by an unrelated digit.
  *  - Labels are asserted **by identity against the source records**
  *    (`RECEIPT_LABEL`, `DEMAND_SOURCE_LABEL`, `UPSTREAM_LABEL`,
  *    `DOWNSTREAM_LABEL`, `ROLE_LABEL`), never against a literal. A literal
- *    that happens to match today is a literal that drifts tomorrow (§10 FM 5).
+ *    that happens to match today is a literal that drifts tomorrow.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
@@ -167,8 +164,8 @@ function historyFor(role: Role): WeekRecord[] {
 /**
  * The gated keys — `accumulated_cost`, `week_holding_backlog_cost`, `balance`, `neighbours`,
  * `chain`, `leaderboard`, `customer_demand_series` — are all absent by
- * default, because their absence is exactly what AC 6, AC 11 and AC 23 turn
- * on. `production_queue` follows `07 §3.8`: the Factory's unstarted
+ * default, because their absence is exactly what the visibility tests turn
+ * on. `production_queue` is the Factory's unstarted
  * production, `null` for the other three.
  */
 function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
@@ -267,7 +264,7 @@ function allSignText(model: SceneModel): string {
 /**
  * Every string anywhere in the model, walked recursively.
  *
- * AC 11 is *"no currency symbol appears anywhere in the scene"*, and "anywhere"
+ * The rule is *"no currency symbol appears anywhere in the scene"*, and "anywhere"
  * has to mean the whole object — a plate the scan forgot to visit is exactly
  * the plate that ships. The model is a finite tree of plain data, so a walk is
  * cheap and total.
@@ -305,7 +302,7 @@ afterEach(() => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — Display scaling (§4.1, normative)
+// Display scaling (normative)
 // ---------------------------------------------------------------------------
 
 describe('display scaling: crateCount is the only place a quantity becomes a count', () => {
@@ -335,7 +332,7 @@ describe('display scaling: crateCount is the only place a quantity becomes a cou
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — No computed figure (§4.1, AC 6, AC 7, §10 FM 1 and FM 4)
+// No computed figure
 // ---------------------------------------------------------------------------
 
 describe('NO COMPUTED FIGURE: the sign carries the field, the crates are a texture on it', () => {
@@ -348,7 +345,7 @@ describe('NO COMPUTED FIGURE: the sign carries the field, the crates are a textu
     expect(allSignText(model)).not.toMatch(/ON HAND 40\b/)
   })
 
-  it('FM 1: inventory 500 caps the pile and the sign still reads 500', () => {
+  it('inventory 500 caps the pile and the sign still reads 500', () => {
     const model = modelFor('DISTRIBUTOR', { inventory: 500 })
 
     expect(poolFor(model, 'inventory')?.stacks[0]?.count).toBe(PILE_SCALE.inventory.cap)
@@ -359,11 +356,11 @@ describe('NO COMPUTED FIGURE: the sign carries the field, the crates are a textu
     expect(describeScene(model)).not.toContain('40 crates')
   })
 
-  it('FM 4: a settlement whose holding_cost is not units × rate renders the payload', () => {
+  it('a settlement whose holding_cost is not units × rate renders the payload', () => {
     // 8 closing units × $0.50 would be $4.00. The server says $9.99. A view
     // that multiplied the two would be right until the day the server rounded
     // differently, and then wrong in a way nobody could explain
-    // (`SettlementRecap.tsx`'s [HARD-WON] note, and `19` FM 4).
+    // (`SettlementRecap.tsx`'s [HARD-WON] note).
     const model = modelFor('RETAILER', {
       holding_cost_per_unit_week: 0.5,
       settlement: settlementFor('RETAILER', {
@@ -398,7 +395,7 @@ describe('NO COMPUTED FIGURE: the sign carries the field, the crates are a textu
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — Per-role shells (§3.3, §10 FM 5)
+// Per-role shells
 // ---------------------------------------------------------------------------
 
 describe('per-role shells: every label is the source record s, by identity', () => {
@@ -412,7 +409,7 @@ describe('per-role shells: every label is the source record s, by identity', () 
     expect(set.label).toBe(ROLE_LABEL[role])
   })
 
-  it('FM 5: there are exactly four dressings and no fifth copy of the vocabulary', () => {
+  it('there are exactly four dressings and no fifth copy of the vocabulary', () => {
     expect(Object.keys(ROLE_SETS).sort()).toEqual([...ROLE_ORDER].sort())
     expect(ROLE_ORDER.map((role) => ROLE_SETS[role].label)).toEqual(
       ROLE_ORDER.map((role) => ROLE_LABEL[role]),
@@ -436,7 +433,7 @@ describe('per-role shells: every label is the source record s, by identity', () 
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — FACTORY structure (AC 9, `19` AC 7 / FM 13)
+// FACTORY structure
 // ---------------------------------------------------------------------------
 
 describe('FACTORY structure: the seat with no supplier has no road to one', () => {
@@ -477,7 +474,7 @@ describe('FACTORY structure: the seat with no supplier has no road to one', () =
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — The FACTORY queue (AC 12)
+// The FACTORY queue
 // ---------------------------------------------------------------------------
 
 describe('the production queue: one role, and only when there is one', () => {
@@ -515,7 +512,7 @@ describe('the production queue: one role, and only when there is one', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — The supply line (AC 10, `19` AC 4 / AC 5 / FM 3)
+// The supply line
 // ---------------------------------------------------------------------------
 
 describe('the supply line: four lanes, front lane first', () => {
@@ -533,13 +530,13 @@ describe('the supply line: four lanes, front lane first', () => {
 
     const stacks = poolFor(model, 'supply-lanes')?.stacks ?? []
     expect(stacks).toHaveLength(4)
-    // Lane i at x = −6 + 4i, front lane at 1.15× (§4.2, §1.1's whole bet).
+    // Lane i at x = −6 + 4i, front lane at 1.15×.
     expect(stacks[0]?.position[0]).toBe(SUPPLY_LANE_X[0])
     expect(stacks[0]?.scale).toBe(FRONT_LANE_SCALE)
     expect(stacks[1]?.scale).toBe(1)
     // ÷2, capped at 12 per lane: the fourth lane's 33 units would be 16
     // crates and stands at the cap instead — while its placard still reads
-    // 33, which is FM 1 again, one lane at a time.
+    // 33, which is the capped-pile rule again, one lane at a time.
     expect(stacks.map((stack) => stack.count)).toEqual([4, 6, 10, PILE_SCALE.supplyLane.cap])
     expect(signText(model, 'supply-lane-3-placard')).toContain('33 UNITS')
 
@@ -559,7 +556,7 @@ describe('the supply line: four lanes, front lane first', () => {
     expect(model.figures.lanesShown).toBe(4)
   })
 
-  it('AC 10 / FM 3: show_supply_line_prominently false omits every lane placard', () => {
+  it('show_supply_line_prominently false omits every lane placard', () => {
     const model = modelFor('WHOLESALER', {
       show_supply_line_prominently: false,
       supply_line_slots: [9, 13, 21, 33],
@@ -576,7 +573,7 @@ describe('the supply line: four lanes, front lane first', () => {
     expect(poolFor(model, 'supply-lanes')).toBeUndefined()
 
     // The gantry total still renders, over bare paint. The host made the game
-    // harder on purpose (`19 §2.2`) and helpfully compensating defeats that.
+    // harder on purpose and helpfully compensating defeats that.
     expect(ids).toContain('receiving-bay')
     expect(signText(model, 'gantry-total')).toBe('TOTAL ON THE WAY TO YOU: 76 UNITS')
     // None of the individual slot figures leaks out on another sign.
@@ -590,7 +587,7 @@ describe('the supply line: four lanes, front lane first', () => {
   })
 
   it('a lane and an order marker say when from the server s weeks to go, never their position', () => {
-    // 2026-11-03: `supply_line_slot_weeks` / `orders_in_flight_slot_weeks`.
+    // `supply_line_slot_weeks` / `orders_in_flight_slot_weeks`.
     // Deliberately not 1, 2: a scene counting positions would say NEXT WEEK.
     const model = modelFor('WHOLESALER', {
       supply_line_slots: [41, 62],
@@ -606,10 +603,10 @@ describe('the supply line: four lanes, front lane first', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — The wrong pipeline (§10 FM 2)
+// The wrong pipeline
 // ---------------------------------------------------------------------------
 
-describe('FM 2: the order road is the SUPPLIER s pipeline, and the Factory has none', () => {
+describe('the order road is the SUPPLIER s pipeline, and the Factory has none', () => {
   it('the Retailer s road carries orders_in_flight_slots, not supply_line_slots', () => {
     const model = modelFor('RETAILER', {
       orders_in_flight: 40,
@@ -626,7 +623,7 @@ describe('FM 2: the order road is the SUPPLIER s pipeline, and the Factory has n
     expect(signText(model, 'order-marker-0-placard')).toBe(
       '17 REACHING YOUR SUPPLIER NEXT WEEK',
     )
-    // Inverting the two is the mistake `07 §3.8` warns about, and it would put
+    // Inverting the two is the mistake spec §8.8 warns about, and it would put
     // the downstream neighbour's future demand on the player's screen.
     expect(signText(model, 'order-marker-0-placard')).not.toContain('41')
     // ÷2, capped at 10 per slot: 17 → 8 crates, 23 → the cap, both placarded
@@ -658,7 +655,7 @@ describe('FM 2: the order road is the SUPPLIER s pipeline, and the Factory has n
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — Cost visibility (AC 11, `19` AC 6)
+// Cost visibility
 // ---------------------------------------------------------------------------
 
 describe('cost visibility: absent means absent, not hidden', () => {
@@ -671,7 +668,7 @@ describe('cost visibility: absent means absent, not hidden', () => {
     expect(allSignText(model)).not.toMatch(/THIS WEEK|BALANCE|ACCUMULATED/)
   })
 
-  it('AC 11: with nothing settled either, no currency symbol appears anywhere', () => {
+  it('with nothing settled either, no currency symbol appears anywhere', () => {
     // The scan is over the WHOLE model, which is why the fixture also has
     // nothing settled: the ledger wall's rows are the server's per-week
     // settlement figures and are not gated by `show_running_cost_to_players`,
@@ -691,7 +688,7 @@ describe('cost visibility: absent means absent, not hidden', () => {
 
   it('the holding & backlog figure alone builds the corner; balance outranks accumulated_cost', () => {
     // Never "this week": the order cost is a figure of its own, not yet
-    // charged while the week is open (2026-11-02).
+    // charged while the week is open.
     const weekOnly = modelFor('DISTRIBUTOR', { week_holding_backlog_cost: 7.5, week_order_cost: null })
     expect(fixtureIds(weekOnly)).toContain('cost-corner')
     expect(signText(weekOnly, 'cost-week')).toBe('HOLDING & BACKLOG $7.50')
@@ -706,7 +703,7 @@ describe('cost visibility: absent means absent, not hidden', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — The six optional blocks, independently (`19` AC 23)
+// The six optional blocks, independently
 // ---------------------------------------------------------------------------
 
 describe('the six visibility blocks are independently absent', () => {
@@ -749,8 +746,8 @@ describe('the six visibility blocks are independently absent', () => {
     }
   })
 
-  it('FM 3: a gate omits its fixture — no fixture in the scene carries a visible flag', () => {
-    // `visible={false}` satisfies a screenshot and violates AC 6. The
+  it('a gate omits its fixture — no fixture in the scene carries a visible flag', () => {
+    // `visible={false}` satisfies a screenshot and violates absent-means-absent. The
     // structural guarantee is that the concept does not exist in the model at
     // all, so there is nothing for a renderer to be tempted by.
     for (const model of [modelFor('FACTORY', BARE), modelFor('RETAILER')]) {
@@ -763,7 +760,7 @@ describe('the six visibility blocks are independently absent', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — Empty states (§4.2)
+// Empty states
 // ---------------------------------------------------------------------------
 
 describe('empty states: an empty floor is not nothing', () => {
@@ -786,7 +783,7 @@ describe('empty states: an empty floor is not nothing', () => {
   })
 
   it('the backlog pen carries three signals for one quantity, not just a colour', () => {
-    // `19 §3.4` / AC 8: colour is never the only signal. The fence, the
+    // Colour is never the only signal. The fence, the
     // warning glyph the 2D `BacklogIcon` draws, and the word OWED.
     const pen = fixtureFor(modelFor('RETAILER', { backlog: 39 }), 'backlog-pen')
 
@@ -825,13 +822,13 @@ describe('empty states: an empty floor is not nothing', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — The seven prompt rows of §5.2 (AC 13, AC 18)
+// The seven prompt rows
 // ---------------------------------------------------------------------------
 
-describe('the desk prompt: the seven rows of §5.2, each from a props fixture', () => {
+describe('the desk prompt: the seven rows, each from a props fixture', () => {
   it('row 1 — the three ordering seats name their actual supplier', () => {
     for (const role of ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR'] as const) {
-      // Composed from the source record, never typed out: AC 13 is a
+      // Composed from the source record, never typed out: the prompt is a
       // statement about `UPSTREAM_LABEL`, not about a string.
       expect(deskPrompt(propsFor(role))).toBe(`Press E — order from ${UPSTREAM_LABEL[role]}`)
     }
@@ -909,7 +906,7 @@ describe('the desk prompt: the seven rows of §5.2, each from a props fixture', 
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — The budget (§7.1, AC 19)
+// The budget
 // ---------------------------------------------------------------------------
 
 describe('the budget ceilings hold for every role and a maximal view', () => {
@@ -951,17 +948,13 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
     const model = maximal(role)
 
     // Tequila shipped ~18 pointLights against meshStandardMaterial, which is a
-    // per-fragment cost paid on every pixel of every frame (§7.4). This is the
+    // per-fragment cost paid on every pixel of every frame. This is the
     // red test that keeps that regression from being a frame-rate report
     // nobody runs.
     //
-    // It asserted **four** — a hemisphere, a directional key and two point
-    // lights — until 2026-09-22, when a player who walked the hall asked for
-    // the lighting to be removed and replaced with lighting uniform across the
-    // whole board. The rule it enforces did not change and is the reason the
-    // assertion was rewritten rather than deleted: the light count is bounded
-    // and deliberate. What changed is the bound and the *kind*. A hemisphere
-    // light has no position and no falloff, so it lights the far corner of a
+    // The light count is bounded and deliberate: one, and a hemisphere,
+    // because a player who walked the hall asked for lighting uniform across
+    // the whole board. A hemisphere light has no position and no falloff, so it lights the far corner of a
     // 60 × 42 hall exactly as it lights the desk; a `pointLight` falls off
     // with the square of the distance and is by definition a hotspot with dark
     // corners round it, which is what the player was objecting to.
@@ -981,7 +974,7 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
     expect(model.fixtures.filter((fixture) => fixture.kind === 'vehicle').length).toBeLessThanOrEqual(2)
 
     expect(model.pools.length).toBeLessThanOrEqual(MAX_INSTANCE_POOLS)
-    // The four supply lanes share ONE pool with four offsets (§7.2).
+    // The four supply lanes share ONE pool with four offsets.
     expect(new Set(model.pools.map((pool) => pool.id)).size).toBe(model.pools.length)
     },
   )
@@ -1001,7 +994,7 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
       ['inventory', PILE_SCALE.inventory.cap, PILE_GRID.inventory, 1],
       ['backlog', PILE_SCALE.backlog.cap, PILE_GRID.backlog, 1],
       ['production queue', PILE_SCALE.productionQueue.cap, PILE_GRID.productionQueue, 1],
-      // The front receiving lane is drawn 1.15× (§4.2), so its stack is too.
+      // The front receiving lane is drawn 1.15×, so its stack is too.
       ['supply lane', PILE_SCALE.supplyLane.cap, PILE_GRID.supplyLane, FRONT_LANE_SCALE],
     ] as const
 
@@ -1018,14 +1011,14 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
   })
 
   it.each(ROLE_ORDER)('%s: signs and estimated draw calls stay under their ceilings', (role) => {
-    // The half of AC 19 nothing counted. `MAX_LIGHTS` made Tequila's eighteen
+    // The half of the budget nothing counted. `MAX_LIGHTS` made Tequila's eighteen
     // point lights a red test rather than a frame-rate report nobody runs;
     // until now the sign count and the draw-call total had no such test, and
-    // they had drifted to 48 signs and 188 estimated calls against §7.1's
-    // "~16 signs" line and its ceiling of 90.
+    // they had drifted to 48 signs and 188 estimated calls against the
+    // "~16 signs" line and the ceiling of 90.
     //
-    // This asserts against `MAX_DRAW_CALLS` — §7.1's ceiling and the number AC
-    // 19 owes — and no longer against a ratchet above it. The gap the ratchet
+    // This asserts against `MAX_DRAW_CALLS` — the budget's ceiling — and no
+    // longer against a ratchet above it. The gap the ratchet
     // stood in for was the architecture `FixtureMesh.tsx` drew as four rails,
     // two uprights and a post apiece; it is merged (`mergeParts`), the truck's
     // thirteen materials are baked into vertex colours, and the placard posts
@@ -1044,8 +1037,8 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
       )
     }
 
-    // §7.1's ceiling, stated here so the number AC 19 owes is in the test and
-    // not only in the spec.
+    // The ceiling, stated here so the number the budget owes is in the test and
+    // not only in the docs.
     expect(MAX_DRAW_CALLS).toBe(90)
   })
 
@@ -1065,7 +1058,7 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
     expect(ledger[1].text).toContain('Holding cost')
 
     // The team board's four plaques are one mesh while they agree, and break
-    // only where the ink does — the colour is the signal (`19 §3.4`).
+    // only where the ink does — the colour is the signal.
     const allWaiting = model.signs.filter((item) => item.id.startsWith('team-plaque'))
     expect(allWaiting).toHaveLength(1)
     expect(allWaiting[0].text.split('\n')).toHaveLength(ROLE_ORDER.length)
@@ -1079,7 +1072,7 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
   })
 
   it('the ledger prints the server s stock after arrival, never opening + arrived', () => {
-    // 2026-11-03: 12 opening + 14 arrived would be 26; the server says 31.
+    // 12 opening + 14 arrived would be 26; the server says 31.
     const model = modelFor('RETAILER', {
       settlement: settlementFor('RETAILER', { inventory_after_arrival: 31 }),
     })
@@ -1099,10 +1092,10 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
     expect(model.pools).toEqual(owned)
   })
 
-  it('every crate pool wears a QUANTITY hex, never one reached for elsewhere (§3.8)', () => {
+  it('every crate pool wears a QUANTITY hex, never one reached for elsewhere', () => {
     // The rule is *"an accent hex is only ever applied to architecture, a
     // quantity hex only ever to crates"* — and it cannot be asserted as "the
-    // two differ", because §3.8 says in as many words that two of them
+    // two differ", because two of them
     // collide: `--color-inventory` **is** `--color-role-retailer`, and
     // `--color-backlog` is one digit off `--color-role-factory`. The
     // assertable form of the rule is provenance: a pool's colour came out of
@@ -1117,7 +1110,7 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
     }
   })
 
-  it('every sign wears a TEXT hex, bar the one stamp §4.3 paints in --color-success', () => {
+  it('every sign wears a TEXT hex, bar the one stamp painted in --color-success', () => {
     const texts = new Set<string>([...Object.values(TEXT_HEX), ARCHITECTURE_HEX.success])
     for (const role of ROLE_ORDER) {
       for (const item of maximal(role).signs) {
@@ -1128,7 +1121,7 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — boardViewChoice (§2.2, AC 1)
+// boardViewChoice
 // ---------------------------------------------------------------------------
 
 describe('resolveBoardView: localStorage → VITE_BOARD_VIEW → 2D', () => {
@@ -1151,7 +1144,7 @@ describe('resolveBoardView: localStorage → VITE_BOARD_VIEW → 2D', () => {
     expect(resolveBoardView(undefined, '3D')).toBe('3D')
   })
 
-  it('AC 1: neither set — and an unknown env value — is 2D', () => {
+  it('neither set — and an unknown env value — is 2D', () => {
     expect(resolveBoardView(null, undefined)).toBe('2D')
     expect(resolveBoardView(null, null)).toBe('2D')
     expect(resolveBoardView('4D', 'sideways')).toBe('2D')
@@ -1160,7 +1153,7 @@ describe('resolveBoardView: localStorage → VITE_BOARD_VIEW → 2D', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — contextLoss (§7.6.3, AC 21)
+// contextLoss
 // ---------------------------------------------------------------------------
 
 /** The repository root, found by walking up from wherever the runner started.
@@ -1177,14 +1170,14 @@ function projectRoot(): string {
   return process.cwd()
 }
 
-describe('AC 21: a lost WebGL context is heard, and does not cost a player their week', () => {
+describe('a lost WebGL context is heard, and does not cost a player their week', () => {
   // An ErrorBoundary catches a render throw — WebGL missing when the canvas
   // first mounts. It never hears about a context the GPU takes away twenty
   // minutes later on a driver reset: nothing throws, the canvas simply stops
   // painting, and the player is left staring at a frozen warehouse with a week
-  // to submit. §7.6.3 says that must not happen, and until `contextLoss.ts`
+  // to submit. That must not happen, and until `contextLoss.ts`
   // was cut out of `Board3D.tsx` the whole of that path was code no test could
-  // reach, because §8.1 forbids importing the component jsdom has no WebGL for.
+  // reach, because this file may not import the component jsdom has no WebGL for.
 
   it('calls back when the canvas below the host loses its context', () => {
     const host = document.createElement('div')
@@ -1262,7 +1255,7 @@ describe('AC 21: a lost WebGL context is heard, and does not cost a player their
   })
 
   describe('Board3D.tsx wires it to the SAME fallback the error boundary uses', () => {
-    // Read rather than imported: §8.1 forbids this file from importing
+    // Read rather than imported: this file may not import
     // `Board3D.tsx`, and `socketHandlers.test.ts` already reads `main.tsx` for
     // exactly this class of claim — an ordering or wiring fact that lives in a
     // module a test may not load. What is asserted is only the wiring, never
@@ -1276,12 +1269,12 @@ describe('AC 21: a lost WebGL context is heard, and does not cost a player their
       expect(source).toMatch(/observeContextLoss/)
       // A second, inline copy of the subscription is the drift this extraction
       // exists to prevent — the same argument `playerMotion.ts` makes for the
-      // typing guard (FM 6).
+      // typing guard.
       expect(source).not.toMatch(/addEventListener\(\s*['"]webglcontextlost['"]/)
     })
 
     it('both the lost-context branch and the boundary render WebGLFallback', () => {
-      // AC 21 is not "something else renders" — it is that the player lands on
+      // The rule is not "something else renders" — it is that the player lands on
       // the 2D board with the identical props and `'2D'` written to storage,
       // which is what `WebGLFallback` does, once, for both doors into it.
       expect(source).toMatch(/if\s*\(contextLost\)\s*return\s*<WebGLFallback\s*\{\.\.\.props\}\s*\/>/)
@@ -1292,23 +1285,23 @@ describe('AC 21: a lost WebGL context is heard, and does not cost a player their
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — the other half of AC 19: shadow maps (§7.4, §7.5)
+// The other half of the budget: shadow maps
 // ---------------------------------------------------------------------------
 
-describe('AC 19: zero shadow maps, and castShadow written nowhere', () => {
+describe('zero shadow maps, and castShadow written nowhere', () => {
   // The light count has had `MAX_LIGHTS` and a red test since the beginning.
-  // The shadow half of the same criterion had neither: it was two sentences of
-  // comment. §7.4 names the exact shape of the regression in Tequila — mesh
+  // The shadow half of the same budget had neither: it was two sentences of
+  // comment. The exact shape of the regression in Tequila — mesh
   // after mesh carrying `castShadow` while `shadows` is never enabled on the
   // `<Canvas>`, which costs nothing and looks like a feature until somebody
   // turns shadows on and the frame budget goes with it. Source is read rather
-  // than imported for the reason §8.1 gives: jsdom has no WebGL, so this file
+  // than imported because jsdom has no WebGL, so this file
   // may not load `Board3D.tsx` or anything under `board3d/`.
 
   const VIEWS = join(projectRoot(), 'src', 'components', 'game', 'views')
 
-  /** Comments name `castShadow` on purpose — §7.4's defect list does, in three
-   *  files — so the scan below reads code only. */
+  /** Comments name `castShadow` on purpose — in three files — so the scan
+   *  below reads code only. */
   function codeOf(path: string): string {
     return readFileSync(path, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
@@ -1325,7 +1318,7 @@ describe('AC 19: zero shadow maps, and castShadow written nowhere', () => {
     ]
   }
 
-  it('the Canvas is mounted with shadows off (§7.5)', () => {
+  it('the Canvas is mounted with shadows off', () => {
     expect(codeOf(join(VIEWS, 'Board3D.tsx'))).toMatch(/shadows=\{false\}/)
   })
 
@@ -1336,7 +1329,7 @@ describe('AC 19: zero shadow maps, and castShadow written nowhere', () => {
 
   it('is not vacuous: the scan does read the board\'s modules', () => {
     // A `readdirSync` that quietly returned nothing would make the test above
-    // pass for the wrong reason, which is the failure mode §10 FM 3 names for
+    // pass for the wrong reason, which is the failure mode to guard against for
     // gates generally: assert on the list, never on its emptiness alone.
     const sources = boardSources()
     expect(sources.length).toBeGreaterThan(10)
@@ -1345,7 +1338,7 @@ describe('AC 19: zero shadow maps, and castShadow written nowhere', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — BoardViewToggle (§2.4, AC 2, AC 22, §7.6)
+// BoardViewToggle
 // ---------------------------------------------------------------------------
 
 describe('BoardViewToggle: a real button whose label names the destination', () => {
@@ -1367,8 +1360,8 @@ describe('BoardViewToggle: a real button whose label names the destination', () 
 
   it('a click asks for the other board', async () => {
     // The write-through to localStorage is `useBoardViewChoice`'s, not the
-    // button's: the toggle is a sibling of the board and owns no state
-    // (§2.1). `GameRoomFlow.test.tsx` asserts the click lands `'3D'` in
+    // button's: the toggle is a sibling of the board and owns no state.
+    // `GameRoomFlow.test.tsx` asserts the click lands `'3D'` in
     // storage through the real screen, and `storage.test.ts` asserts the
     // accessor pair.
     const user = userEvent.setup()
@@ -1381,10 +1374,10 @@ describe('BoardViewToggle: a real button whose label names the destination', () 
     expect(onChange).toHaveBeenCalledWith('3D')
   })
 
-  it('AC 22: a coarse pointer is offered 3D like any other — the warehouse has touch controls', async () => {
-    // Until §5.7 a coarse pointer got this button disabled with "needs a
-    // keyboard and a mouse". The pad, drag-look and the Open button made that
-    // sentence false, so the toggle no longer reads the pointer at all.
+  it('a coarse pointer is offered 3D like any other — the warehouse has touch controls', async () => {
+    // A coarse pointer is never told the board "needs a keyboard and a
+    // mouse": the pad, drag-look and the Open button make that sentence false,
+    // so the toggle does not read the pointer at all.
     matchOnly('(pointer: coarse)', COARSE_POINTER_QUERY)
     const user = userEvent.setup()
     const onChange = vi.fn()
@@ -1399,8 +1392,8 @@ describe('BoardViewToggle: a real button whose label names the destination', () 
     expect(onChange).toHaveBeenCalledWith('3D')
   })
 
-  it('FM 10: reduced motion still OFFERS 3D, but not silently', () => {
-    // §7.6.2: 3D is offered under reduced motion, the toggle carries a warning
+  it('reduced motion still OFFERS 3D, but not silently', () => {
+    // 3D is offered under reduced motion, the toggle carries a warning
     // line, head-bob is never introduced at all, and the week-change lane lift
     // is replaced by the colour flash alone. The in-scene half of that is
     // `WarehouseScene`'s, which this file may not import; the offer and the
@@ -1423,7 +1416,7 @@ describe('BoardViewToggle: a real button whose label names the destination', () 
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — Board3DPanels (§5.4, AC 14, AC 17, §10 FM 7)
+// Board3DPanels
 // ---------------------------------------------------------------------------
 
 describe('Board3DPanels: one DOM copy, two presentations', () => {
@@ -1441,10 +1434,10 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
     )
   }
 
-  it('FM 7: there is exactly ONE "What you have" landmark, closed or open', () => {
-    // The naive fix for §5.4 is to render the panels twice — once hidden for
+  it('there is exactly ONE "What you have" landmark, closed or open', () => {
+    // The naive fix is to render the panels twice — once hidden for
     // the reader, once visible for the player — which puts two landmarks and
-    // two history tables in the document and breaks AC 17.
+    // two history tables in the document and breaks the exactly-once rule.
     const { unmount } = renderPanels()
     expect(screen.getAllByLabelText('What you have')).toHaveLength(1)
     unmount()
@@ -1453,16 +1446,16 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
     expect(screen.getAllByLabelText('What you have')).toHaveLength(1)
   })
 
-  it('AC 17: the settlement, the panel and the history are each reachable exactly once', () => {
+  it('the settlement, the panel and the history are each reachable exactly once', () => {
     renderPanels()
 
     expect(screen.getAllByLabelText('What you have')).toHaveLength(1)
     expect(screen.getAllByLabelText('Your history')).toHaveLength(1)
 
     // `OwnHistoryChart`'s visually hidden table, with the player's own three
-    // series — the surface `19 §2.6a` makes the chart assertable through. The
+    // series — the surface the chart is assertable through. The
     // count, not just the presence: "exactly once in the DOM" is the whole
-    // acceptance criterion, and every figure here is deliberately distinctive
+    // rule, and every figure here is deliberately distinctive
     // so a second copy cannot hide behind an unrelated digit.
     const body = document.body.textContent ?? ''
     for (const figure of ['601', '701', '801', '603', '703', '803']) {
@@ -1470,12 +1463,12 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
     }
   })
 
-  it('AC 14: the order desk renders the EXISTING DecisionForm, not a re-implementation', () => {
+  it('the order desk renders the EXISTING DecisionForm, not a re-implementation', () => {
     renderPanels(['order-desk'])
     expect(screen.getAllByRole('spinbutton')).toHaveLength(1)
   })
 
-  it('AC 14: locked renders WaitingForOthers, and gameOver the game-over panel', () => {
+  it('locked renders WaitingForOthers, and gameOver the game-over panel', () => {
     const { unmount } = renderPanels(['order-desk'], { locked: true })
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Waiting for the other players')).toBeInTheDocument()
@@ -1508,7 +1501,7 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
     }
   })
 
-  it('§5.7: the most recently opened panel is layered on top, where a phone overlaps them', () => {
+  it('the most recently opened panel is layered on top, where a phone overlaps them', () => {
     // At 375 px every berth is the full width, so two open panels overlap and
     // DOM order alone would bury whichever one was opened last.
     renderPanels(['team-board', 'ledger-wall'])
@@ -1519,7 +1512,7 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
     expect(team).not.toContain('z-[35]')
   })
 
-  it('§5.7: index.html opts into viewport-fit=cover, or every safe-area inset reads 0', () => {
+  it('index.html opts into viewport-fit=cover, or every safe-area inset reads 0', () => {
     // Without it iOS letterboxes the page and the HUD's, the panels' and the
     // toggle's max(gutter, env(safe-area-inset-*)) offsets silently do nothing
     // (game_stack.md, safe area).
@@ -1527,7 +1520,7 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
     expect(html).toMatch(/<meta\s+name="viewport"\s+content="[^"]*viewport-fit=cover[^"]*"/)
   })
 
-  it('§5.7: open panels size to the dynamic viewport, never to 100vh', () => {
+  it('open panels size to the dynamic viewport, never to 100vh', () => {
     // On a phone `100vh` includes the space behind the browser's toolbar, and
     // a panel sized to it hides its last row — the Submit button — under it.
     renderPanels(['ledger-wall', 'order-desk', 'team-board'])
@@ -1541,7 +1534,7 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — Board3DHud (§5.5, §5.6, AC 15, AC 16)
+// Board3DHud
 // ---------------------------------------------------------------------------
 
 describe('Board3DHud: words are DOM, never in-scene', () => {
@@ -1561,7 +1554,7 @@ describe('Board3DHud: words are DOM, never in-scene', () => {
     )
   }
 
-  it('AC 16: a notice renders in a role="status" region, wherever the camera points', () => {
+  it('a notice renders in a role="status" region, wherever the camera points', () => {
     renderHud({ notice: "You've changed this order too many times." })
 
     const statuses = screen.getAllByRole('status')
@@ -1590,7 +1583,7 @@ describe('Board3DHud: words are DOM, never in-scene', () => {
     expect(carrier).toHaveAttribute('aria-live', 'polite')
   })
 
-  it('AC 15: weekChanged announces the week and what arrived, in the role s words', () => {
+  it('weekChanged announces the week and what arrived, in the role s words', () => {
     const view = viewFor('RETAILER', { settlement: settlementFor('RETAILER', { arrived: 14 }) })
     renderHud({ view, weekChanged: true })
 
@@ -1614,7 +1607,7 @@ describe('Board3DHud: words are DOM, never in-scene', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §5.7 — the HUD's touch half: the Open button, the touch legend, the pad slot
+// The HUD's touch half: the Open button, the touch legend, the pad slot
 // ---------------------------------------------------------------------------
 
 /** The order-desk target as the model hands it over, enabled unless told. */
@@ -1629,8 +1622,8 @@ function deskTarget(over: Partial<InteractTarget> = {}): InteractTarget {
   }
 }
 
-describe('Board3DHud §5.7: a tap opens what E opens', () => {
-  // The button is touch-only (§5.7): every test here is on a coarse pointer
+describe('Board3DHud: a tap opens what E opens', () => {
+  // The button is touch-only: every test here is on a coarse pointer
   // unless it says otherwise.
   beforeEach(() => matchOnly(COARSE_POINTER_QUERY))
 
@@ -1677,7 +1670,7 @@ describe('Board3DHud §5.7: a tap opens what E opens', () => {
     }
   })
 
-  it('AC 18: a disabled target (paused) shows its prompt but offers no button', () => {
+  it('a disabled target (paused) shows its prompt but offers no button', () => {
     const prompt = 'Paused. The host has paused the game.'
     renderHud({ nearTarget: deskTarget({ enabled: false, prompt }) })
 
@@ -1694,7 +1687,7 @@ describe('Board3DHud §5.7: a tap opens what E opens', () => {
   })
 
   it('Board3D.tsx gives the button the SAME function it binds to E', () => {
-    // Read, not imported (§8.1). One definition of "open the station I stand
+    // Read, not imported. One definition of "open the station I stand
     // at", two callers: a second `setOpenPanels` append for the button would
     // be a second set of rules for what a tap may open.
     const source = readFileSync(
@@ -1708,7 +1701,7 @@ describe('Board3DHud §5.7: a tap opens what E opens', () => {
   })
 })
 
-describe('Board3DHud §5.7: the legend and the pad follow the pointer', () => {
+describe('Board3DHud: the legend and the pad follow the pointer', () => {
   function renderHud(over: Partial<Parameters<typeof Board3DHud>[0]> = {}) {
     return render(
       <Board3DHud
@@ -1763,7 +1756,7 @@ describe('Board3DHud §5.7: the legend and the pad follow the pointer', () => {
 })
 
 // ---------------------------------------------------------------------------
-// §8.2 — Attribution (§6.1, AC 20)
+// Attribution
 // ---------------------------------------------------------------------------
 
 describe('ModelAttribution: CC-BY is an attribution licence, not a polish item', () => {

@@ -1,11 +1,11 @@
 /**
  * The save path: debounce, transport choice, noticing a stored value that
  * differs from the one sent, and 422 handling. The server refuses an
- * out-of-range value rather than clamping it (2026-11-02); the field never
+ * out-of-range value rather than clamping it; the field never
  * sends one in the first place.
  *
  * `config_update` over the socket when it is connected, `PUT /rooms/{code}/config`
- * when it is not (`18 section 3.1`). Field-level changes are debounced at 400 ms;
+ * when it is not. Field-level changes are debounced at 400 ms;
  * a blur of a numeric input and any switch toggle save immediately, because both
  * are the moment a host has finished deciding.
  *
@@ -21,7 +21,7 @@ import { useGameStore } from '../../store/gameStore'
 import type { GameConfig } from '../../types/game'
 import { asConfigPayload, fieldFromValidationError, mergePatch, type ConfigPatch } from './configPatch'
 
-/** 18 section 3.1. Long enough to swallow a typed number, short enough to feel live. */
+/** Long enough to swallow a typed number, short enough to feel live. */
 export const SAVE_DEBOUNCE_MS = 400
 
 export interface ServerFieldError {
@@ -98,8 +98,8 @@ export function useConfigSave(roomCode: string | null, hostSecret: string | null
   const canSave = !locked && roomCode !== null && hostSecret !== null
 
   /**
-   * A clamp is only visible by comparing what went out with what came back
-   * (`18 section 3.1`). The form itself renders from the store, so the value is
+   * A clamp is only visible by comparing what went out with what came back.
+   * The form itself renders from the store, so the value is
    * already correct by the time this runs; the note exists to explain why it
    * changed under the host's hands.
    */
@@ -148,9 +148,9 @@ export function useConfigSave(roomCode: string | null, hostSecret: string | null
 
       void updateRoomConfig(roomCode, asConfigPayload(payload), hostSecret)
         .then((response) => {
-          // The same place `config_updated` writes (`18 section 3.0`), and the
-          // only one the inputs render from. `setConfig` exists for exactly this
-          // (`18 section 3.1b`, `16 section 3`): `applyConfigUpdated` is gated on
+          // The same place `config_updated` writes, and the
+          // only one the inputs render from. `setConfig` exists for exactly this:
+          // `applyConfigUpdated` is gated on
           // a per-room `seq` the REST route does not carry, and minting one would
           // make the next genuine socket event look stale and be dropped.
           useGameStore.getState().setConfig(response.config)
@@ -178,7 +178,7 @@ export function useConfigSave(roomCode: string | null, hostSecret: string | null
 
   const save = useCallback(
     (patch: ConfigPatch, immediate = false) => {
-      // FM 6: with the game running nothing this panel does may reach the wire.
+      // With the game running nothing this panel does may reach the wire.
       if (!canSave) return
 
       pending.current = mergePatch(pending.current ?? {}, patch)

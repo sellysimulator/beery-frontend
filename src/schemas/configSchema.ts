@@ -1,13 +1,13 @@
 /**
- * The Zod checks behind the host configuration panel (`03-game-config.md`
- * section 2), built from the server's own ranges.
+ * The Zod checks behind the host configuration panel (spec §6.6), built from
+ * the server's own ranges.
  *
- * **The numbers are the server's, not ours** (2026-11-02). Every bound below
- * comes from the `Limits` object `GET /rooms/limits` returns — the same
+ * **The numbers are the server's, not ours.** Every bound below comes from
+ * the `Limits` object `GET /rooms/limits` returns — the same
  * `app/core/limits.py` the server validates against — so the form and the
- * server cannot disagree about a range. They did, on four fields, while the
- * form carried a hand-copied table: a step in week 1, a seasonal period past
- * 104, a stochastic mean of a million, and a cap of 0.
+ * server cannot disagree about a range. A hand-copied table would drift: a
+ * step in week 1, a seasonal period past 104, a stochastic mean of a million,
+ * a cap of 0.
  *
  * **A value outside its range is refused, never clamped.** The panel shows the
  * message below beside the field and does not send the value; the server
@@ -54,7 +54,7 @@ export function buildConfigFormSchema(limits: Limits) {
     .min(0, 'Cannot be negative.')
     .max(limits.max_order_quantity, `Maximum is ${limits.max_order_quantity}.`)
 
-  /** An optional cap: blank or 0 both mean "unlimited" (`03 section 3.1`). */
+  /** An optional cap: blank or 0 both mean "unlimited". */
   const cap = z
     .number()
     .int('Whole units only.')
@@ -129,7 +129,7 @@ export function buildConfigFormSchema(limits: Limits) {
       kind: z.literal('STOCHASTIC'),
       distribution: z.enum(['NORMAL', 'POISSON', 'UNIFORM']),
       // A mean or spread above the order ceiling cannot be ordered against,
-      // and the server refuses it (it used to clamp it to 9999 silently).
+      // and the server refuses it rather than clamping it.
       mean: z
         .number()
         .min(0, 'Cannot be negative.')
@@ -208,8 +208,8 @@ export function buildConfigFormSchema(limits: Limits) {
     })
     .superRefine((config, ctx) => {
       // The two week rules that depend on the game's length: the server
-      // refuses a step or ramp start after the last week (`03 section 3.1`
-      // rules 3 and 4), so the form says so before the save.
+      // refuses a step or ramp start after the last week (spec §6.6), so the
+      // form says so before the save.
       const last = config.duration_weeks
       if (config.demand.kind === 'STEP' && config.demand.step_week > last) {
         ctx.addIssue({
@@ -236,7 +236,7 @@ export type ConfigFormValues = z.infer<ConfigFormSchema>
  * enough (or the generator is not `CUSTOM`).
  *
  * This blocks a save rather than only flagging it: the server answers a short
- * `CUSTOM` series with a 422 naming the field (`18 section 3.1a`), and a host
+ * `CUSTOM` series with a 422 naming the field, and a host
  * should not have to submit to find that out.
  */
 export function customDemandShortfall(

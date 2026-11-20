@@ -1,25 +1,23 @@
 /**
- * REST client for section 15's profile routes (`15 §2`).
+ * REST client for the profile routes, `/users/me/*` (spec §9.9).
  *
- * Section 16 ships `http.ts`, `rooms.ts` and `games.ts`; nothing owned
- * `/users/me/*`, so this module does, and it carries the three TypeScript
- * mirrors with it — `src/types/game.ts` belongs to section 16 and is not
- * edited here (**D19**).
+ * It carries the three TypeScript mirrors of their responses with it, rather
+ * than adding them to `src/types/game.ts`.
  *
  * No route here sends an identifier of any kind. Every path is `/users/me/*`
  * and the caller is derived server-side from the bearer token that
  * `http.ts`'s interceptor attaches, so there is no way for one user to ask
  * for another's history.
  *
- * `ResultsResponse` is imported from section 21's `chartSetup.ts`, never
+ * `ResultsResponse` is imported from the results charts' `chartSetup.ts`, never
  * re-declared: `GET /games/{code}/results` and `GET /users/me/games/{id}`
- * return the identical payload, and one contract read twice drifts (`22 §2.4`).
+ * return the identical payload, and one contract read twice drifts.
  */
 import http from './http'
 import type { ResultsResponse } from '../components/charts/chartSetup'
 import type { Role } from '../types/game'
 
-/** `GET /users/me/stats` (`15 §2`). Zero-filled for a user with no games. */
+/** `GET /users/me/stats`. Zero-filled for a user with no games. */
 export interface UserStatsResponse {
   games_played: number
   weeks_played: number
@@ -35,7 +33,7 @@ export interface UserStatsResponse {
   games_as_factory: number
 }
 
-/** One row of `GET /users/me/games` (`15 §2`). */
+/** One row of `GET /users/me/games`. */
 export interface MatchSummary {
   game_id: number
   room_code: string
@@ -67,7 +65,7 @@ export async function getMyStats(): Promise<UserStatsResponse> {
 /**
  * One page of the caller's match history, newest first.
  *
- * The server clamps `page_size` to `[1, 100]` (`15 §3.5`); the client never
+ * The server clamps `page_size` to `[1, 100]`; the client never
  * asks for more than a page's worth, because a bigger page is how the "one
  * query, one render" guarantee gets quietly undone from this side.
  */
@@ -85,7 +83,7 @@ export async function getMyGames(
  * One of the caller's own games, in full.
  *
  * 404 — never 403 — when the caller did not play it, so the route is not a
- * game-existence oracle (`15 §3.6`). The copy on that failure says so too.
+ * game-existence oracle (spec §9.9). The copy on that failure says so too.
  */
 export async function getMyGame(gameId: number): Promise<ResultsResponse> {
   const { data } = await http.get<ResultsResponse>(`/users/me/games/${gameId}`)

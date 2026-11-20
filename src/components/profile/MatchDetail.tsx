@@ -25,7 +25,7 @@ export interface MatchDetailProps {
  *
  * `GET /users/me/games/{id}` answers 404 — never 403 — for a game the caller
  * did not play, precisely so that it is not a game-existence oracle
- * (`15 §3.6`). Saying "you don't have permission" here would confirm the game
+ * (spec §9.9). Saying "you don't have permission" here would confirm the game
  * exists and hand back exactly what the status code was chosen to withhold.
  */
 export const NOT_IN_HISTORY = "That game isn't in your history."
@@ -70,11 +70,11 @@ function Message({ text }: { text: string }): ReactElement {
 /**
  * One of the caller's own games, reopened in full.
  *
- * It renders through section 21's components and section 21's normaliser, and
+ * It renders through the results page's components and normaliser, and
  * owns nothing of its own beyond the fetch: `GET /users/me/games/{id}` returns
  * the identical `ResultsResponse` that `GET /games/{code}/results` does, and a
  * second mapping — or a second renderer — of one contract drifts from the
- * first the moment either changes (§2.4).
+ * first the moment either changes.
  *
  * This route exists for the case the public one cannot serve: a room code that
  * has been reused, so `/results/{code}` is ambiguous about which game it means.

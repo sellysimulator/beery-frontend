@@ -1,15 +1,14 @@
 import type { ReactElement } from 'react'
 
 /**
- * The `<Suspense>` fallback while the scene's four `.glb` models load
- * (24 §6.2, §7.3).
+ * The `<Suspense>` fallback while the scene's four `.glb` models load.
  *
  * A bone-coloured card in the house style, not a spinner on black. The black
  * canvas is the thing a first-time player reads as "it broke"; the surface
  * colour and the border are the same ones every other waiting state in this app
  * uses, so the wait looks like part of the game rather than a gap in it. Like
  * `PausedOverlay`, it says what is being waited for instead of spinning
- * silently, and it names the 2D board as the way out — §2.4 keeps that toggle
+ * silently, and it names the 2D board as the way out — that toggle stays
  * one keyboard-reachable button away in every state, including this one.
  */
 export function SceneLoading(): ReactElement {

@@ -17,13 +17,13 @@ interface ClaimResponse {
  * game and never as a gate before it (**D14**).
  *
  * Who played is decided by this browser, not by the payload: `identity` is
- * server-only and never on the wire (`00-conventions.md §2`), so no results
+ * server-only and never on the wire, so no results
  * payload can say who was in the room. The three conditions are guest mode, a
  * minted guest id, and this browser's own evidence that it was in the room: a
  * `session_token` for it (a player), or this tab hosting it (a host). A guest
- * host who claims becomes the game's registered host (`15 §3.2`); a hosted game
+ * host who claims becomes the game's registered host; a hosted game
  * never enters the profile's game history, which counts only the roles a user
- * played. Exporting needs no claim: since 2026-11-14 anyone who can open the
+ * played. Exporting needs no claim: anyone who can open the
  * results downloads the record by its permanent id (`ExportControls`), so the
  * host's copy must not promise an account is the way to keep exporting.
  *

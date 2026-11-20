@@ -1,35 +1,32 @@
 /**
- * `22-frontend-profile.md` — `/profile` and `/profile/games/:gameId`.
+ * `/profile` and `/profile/games/:gameId` (spec §9.9).
  *
- * Covers acceptance criteria 1, 2, 3, 4, 5, 6, 7, 9b, 12, 13, 14, 15, 16, 17
- * and 18, and failure modes 2, 3, 4, 5, 6, 7, 8, 10, 11 and 12.
- * Criteria 8, 9, 10 and 11 and failure modes 1, 3 (the table's column), 9 and
- * 12 (the request shape) are in `MatchHistoryTable.test.tsx`.
+ * The match history table (rows, paging, its request shape) is in
+ * `MatchHistoryTable.test.tsx`.
  *
  * Harness notes:
  *  - `src/api/http.ts` is replaced by a recorder, so every request the screen
- *    makes is observed as a wire call. `src/api/users.ts` (§2.0) is exercised
+ *    makes is observed as a wire call. `src/api/users.ts` is exercised
  *    *through* the page rather than imported, so the assertions are about the
- *    two routes `15 §2` freezes and not about how the module is factored.
- *  - `src/auth/AuthContext.tsx` is replaced by a stub of the value `16 §3`
- *    freezes, because §3.1 gates the guest treatment on `useAuth().mode`,
- *    §3.4 makes sign-out `useAuth().logout()`, and there is no other declared
- *    way to put the context into either state. `signInWithGoogle` resolves
- *    without changing `mode`, so the claim flow §3.1 describes — sign in,
- *    *then* `POST /games/claim` — is what the test observes.
- *  - The page element is rendered from its own `route` descriptor (§3.0), not
- *    wrapped in section 16's guards: criterion 18 asserts the guard the
- *    descriptor declares, and the guards themselves are section 16's to test.
- *  - The components under `src/components/profile/` have no frozen props —
- *    §2.0 freezes only `src/api/users.ts` — so every one of them is driven
- *    through the page, exactly as `21 §2.0` says of `src/components/results/`.
- *  - `chart.js` and `react-chartjs-2` are **not** mocked: `21 §2.2a` is read
- *    through the chart's visually hidden per-week table.
+ *    two `/users/me/` routes and not about how the module is factored.
+ *  - `src/auth/AuthContext.tsx` is replaced by a stub, because the guest
+ *    treatment is gated on `useAuth().mode`, sign-out is `useAuth().logout()`,
+ *    and there is no other declared way to put the context into either state.
+ *    `signInWithGoogle` resolves without changing `mode`, so the claim flow —
+ *    sign in, *then* `POST /games/claim` — is what the test observes.
+ *  - The page element is rendered from its own `route` descriptor, not wrapped
+ *    in the app's guards: one test asserts the guard the descriptor declares,
+ *    and the guards themselves are tested elsewhere.
+ *  - The components under `src/components/profile/` have no fixed props —
+ *    only `src/api/users.ts` is a fixed surface — so every one of them is
+ *    driven through the page, as the results components are.
+ *  - `chart.js` and `react-chartjs-2` are **not** mocked: the chart is read
+ *    through its visually hidden per-week table.
  *  - Figures are matched tolerantly (`$1,234.50`, `1234.5`, `92%` for `0.92`)
- *    because `00-conventions.md §5` forbids asserting on formatting this
- *    section does not specify — but a *different* number never matches.
- *  - Copy is asserted only where §2.1, §2.4 or §3.1 fix it, and is looked for
- *    in text *and* in the attributes a tooltip is carried in.
+ *    because the tests do not assert on formatting the profile does not
+ *    specify — but a *different* number never matches.
+ *  - Copy is asserted only where the profile fixes it, and is looked for in
+ *    text *and* in the attributes a tooltip is carried in.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Component, type ReactNode } from 'react';
@@ -165,7 +162,7 @@ const UID = 'uid-1';
 const DISPLAY_NAME = 'Ada Lovelace';
 const PHOTO_URL = 'https://lh3.googleusercontent.com/a/profile-photo';
 
-/** `15 §2`'s `UserStatsResponse`. Every figure is distinct from every other. */
+/** A `UserStatsResponse`. Every figure is distinct from every other. */
 const STATS = {
   games_played: 11,
   weeks_played: 214,
@@ -199,7 +196,7 @@ const ZERO_STATS = {
   games_as_factory: 0,
 };
 
-/** `10 §2`'s alphabet excludes 0, O, 1, I and L. */
+/** The room-code alphabet excludes 0, O, 1, I and L. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function roomCodeFor(index: number): string {
@@ -230,7 +227,7 @@ interface MatchFixture {
   preset_name: string | null;
 }
 
-/** 25 games, newest first — the history `15 §3.5` orders by `finished_at` desc. */
+/** 25 games, newest first — the server orders the history by `finished_at` desc. */
 const MATCHES: MatchFixture[] = Array.from({ length: 25 }, (_, i) => ({
   game_id: 4000 + i,
   room_code: roomCodeFor(i),
@@ -239,7 +236,7 @@ const MATCHES: MatchFixture[] = Array.from({ length: 25 }, (_, i) => ({
   role: ROLE_ORDER[i % 4],
   weeks_played: 12 + (i % 9),
   total_cost: 1000 + i * 37.25,
-  // Row index 3 is the null the "—" treatment is for (§2.3).
+  // Row index 3 is the null the "—" treatment is for.
   bullwhip_ratio: i === 3 ? null : Number((1.05 + i * 0.37).toFixed(2)),
   chain_total_cost: 5000 + i * 111.5,
   preset_name: PRESETS[i % PRESETS.length],
@@ -342,7 +339,7 @@ const DETAIL_SERIES: Record<Role, { inventory: number[]; backlog: number[]; cumu
     },
   };
 
-/** `15 §2`'s `ResultsResponse` — what `GET /users/me/games/{id}` returns. */
+/** A `ResultsResponse` — what `GET /users/me/games/{id}` returns. */
 function resultsResponse(over: Record<string, unknown> = {}) {
   return {
     room_code: DETAIL_ROOM,
@@ -562,7 +559,7 @@ function regionFor(re: RegExp, what: string): HTMLElement {
   return region;
 }
 
-/** `21 §2.2a`: the chart's visually hidden table — one row per week, five series. */
+/** The chart's visually hidden table — one row per week, five series. */
 function chartTable(weeks: number): HTMLElement | undefined {
   return tables().find(
     (t) => rowsOf(t).filter((row) => numericCells(row).length >= 5).length === weeks,
@@ -582,7 +579,7 @@ function chartSeries(weeks: number): number[][] {
   return columns.filter((col) => col.join(',') !== weekColumn);
 }
 
-/** `21 §2.3`'s per-role statistics table: names all four roles, carries their peaks. */
+/** The per-role statistics table: names all four roles, carries their peaks. */
 function roleStatsTable(): HTMLElement | undefined {
   return tables().find((t) => {
     const text = textOf(t);
@@ -608,7 +605,7 @@ function columnHeadings(table: HTMLElement): string[] {
 function descriptors(module: unknown, what: string): RouteDescriptor[] {
   const exported = (module as { route?: RouteDescriptor | RouteDescriptor[] }).route;
   if (!exported) {
-    throw new Error(`${what} exports no \`route\` descriptor (22 §3.0, 16 §3 registry).`);
+    throw new Error(`${what} exports no \`route\` descriptor.`);
   }
   return Array.isArray(exported) ? exported : [exported];
 }
@@ -621,7 +618,7 @@ function descriptorFor(prefix: string): RouteDescriptor {
   const found = profileDescriptors().find((d) => d.path.startsWith(prefix));
   if (!found) {
     throw new Error(
-      `ProfilePage.tsx registers no route at ${prefix} (22 §3.0). It registers: ${profileDescriptors()
+      `ProfilePage.tsx registers no route at ${prefix}. It registers: ${profileDescriptors()
         .map((d) => d.path)
         .join(', ')}`,
     );
@@ -712,7 +709,7 @@ function pathOf(call: unknown[]): string {
   return urlOf(call).split('?')[0];
 }
 
-/** §3.3: the requests this section owns are the ones under `/users/me/`. */
+/** The requests the profile page owns are the ones under `/users/me/`. */
 function mineCalls(): unknown[][] {
   return httpRec.get.mock.calls.filter((call) => pathOf(call).startsWith('/users/me/'));
 }
@@ -772,10 +769,10 @@ function asGuest(): void {
 
 /**
  * Clicks whatever the screen offers that could start a claim, and reports
- * whether a claim was issued. Copy for the offer is not fixed by §3.1 — only
+ * whether a claim was issued. Copy for the offer is not fixed — only
  * the flow is (sign in with Google, then `POST /games/claim` with
  * `{guest_identity}` in the body) — so the prompt is identified by the flow it
- * runs rather than by words this document does not specify.
+ * runs rather than by words nothing specifies.
  */
 async function sweepForClaim(user: ReturnType<typeof userEvent.setup>): Promise<boolean> {
   const tried = new Set<string>();
@@ -828,26 +825,26 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 1, 18 and §3.0 — the routes this module registers
+// The routes this module registers
 // ---------------------------------------------------------------------------
 
-describe('CRITERIA 1 and 18: the two routes and their guard', () => {
+describe('the two routes and their guard', () => {
   it('registers /profile and /profile/games/:gameId from one page module', () => {
     const paths = profileDescriptors().map((d) => d.path);
     expect(paths).toContain('/profile');
     expect(paths).toContain('/profile/games/:gameId');
   });
 
-  it('carries the auth+backend guard on both (criterion 18)', () => {
+  it('carries the auth+backend guard on both', () => {
     for (const descriptor of profileDescriptors()) {
       expect(
         descriptor.guard,
-        `${descriptor.path} must be behind the auth+backend guard (§3.0)`,
+        `${descriptor.path} must be behind the auth+backend guard`,
       ).toBe('auth+backend');
     }
   });
 
-  it('shows a guest §3.1’s sign-in prompt instead of the profile body', async () => {
+  it('shows a guest the sign-in prompt instead of the profile body', async () => {
     asGuest();
     getOrCreateGuestId();
     renderAt('/profile');
@@ -866,7 +863,7 @@ describe('CRITERIA 1 and 18: the two routes and their guard', () => {
     renderAt('/profile');
     await flush();
 
-    const button = control(/sign in|google/i, 'the Google sign-in button (§3.1)');
+    const button = control(/sign in|google/i, 'the Google sign-in button');
     const user = userEvent.setup();
     await user.click(button);
     await flush();
@@ -876,12 +873,12 @@ describe('CRITERIA 1 and 18: the two routes and their guard', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 2 and 17, failure modes 7 and 11 — ProfileClaimPrompt
+// ProfileClaimPrompt
 // ---------------------------------------------------------------------------
 
-describe('CRITERIA 2 and 17 and FAILURE MODE 11: the claim offer', () => {
+describe('the claim offer', () => {
   it('appears for a guest with a guest id and NO session token, and runs the claim', async () => {
-    // Failure mode 11 in full: section 21's `GuestClaimPrompt` is eligible only
+    // The results screen's `GuestClaimPrompt` is eligible only
     // when this browser holds a `session_token` for the room on screen, and the
     // profile has no room — so reusing it here renders nothing at all. The
     // assertion is therefore that the offer IS there and DOES claim.
@@ -896,11 +893,11 @@ describe('CRITERIA 2 and 17 and FAILURE MODE 11: the claim offer', () => {
     const claimed = await sweepForClaim(user);
     expect(
       claimed,
-      'a guest with a guest id and no session token was offered no claim (§3.1, criterion 17, failure mode 11). ' +
+      'a guest with a guest id and no session token was offered no claim. ' +
         `The screen rendered: ${bodyText()}`,
     ).toBe(true);
 
-    expect(auth.signIn, 'the claim signs in with Google first (§3.1)').toHaveBeenCalled();
+    expect(auth.signIn, 'the claim signs in with Google first').toHaveBeenCalled();
     const claim = claimCalls()[0];
     expect(claim?.[1]).toMatchObject({ guest_identity: guestId });
   });
@@ -918,18 +915,18 @@ describe('CRITERIA 2 and 17 and FAILURE MODE 11: the claim offer', () => {
     });
   });
 
-  it('is never offered to an authenticated user (criterion 17)', async () => {
+  it('is never offered to an authenticated user', async () => {
     asSignedIn();
     getOrCreateGuestId();
     await renderProfileReady();
 
     const user = userEvent.setup();
     const claimed = await sweepForClaim(user);
-    expect(claimed, 'an authenticated user was offered a guest claim (criterion 17)').toBe(false);
+    expect(claimed, 'an authenticated user was offered a guest claim').toBe(false);
     expect(rendersCopy('Sign in to keep your results.')).toBe(false);
   });
 
-  it('is not offered to a guest with no guest id (criterion 2)', async () => {
+  it('is not offered to a guest with no guest id', async () => {
     asGuest();
     expect(getGuestId()).toBeNull();
     renderAt('/profile');
@@ -939,7 +936,7 @@ describe('CRITERIA 2 and 17 and FAILURE MODE 11: the claim offer', () => {
     expect(await sweepForClaim(user)).toBe(false);
   });
 
-  it('puts the guest id in the claim body and nowhere else (failure mode 7)', async () => {
+  it('puts the guest id in the claim body and nowhere else', async () => {
     asGuest();
     const guestId = getOrCreateGuestId();
     const logs: string[] = [];
@@ -971,10 +968,10 @@ describe('CRITERIA 2 and 17 and FAILURE MODE 11: the claim offer', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 3, 4, 6, 9b — StatsSummary
+// StatsSummary
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 3: StatsSummary renders all five figures', () => {
+describe('StatsSummary renders all five figures', () => {
   it('renders games played, weeks played, average cost per week and the average ratio', async () => {
     await renderProfileReady();
 
@@ -998,7 +995,7 @@ describe('CRITERION 3: StatsSummary renders all five figures', () => {
     const link = linkTo(`/profile/games/${STATS.best_game_id}`);
     expect(
       link,
-      `§2.1 links the best game by id: /profile/games/${STATS.best_game_id}. ` +
+      `The best game is linked by id: /profile/games/${STATS.best_game_id}. ` +
         `The screen rendered these links: ${links()
           .map((a) => a.getAttribute('href'))
           .join(', ')}`,
@@ -1006,27 +1003,27 @@ describe('CRITERION 3: StatsSummary renders all five figures', () => {
   });
 });
 
-describe('CRITERION 4: every figure carries its explanatory line', () => {
+describe('every figure carries its explanatory line', () => {
   const EXPLANATIONS = [
     'Games you finished.',
     'Simulated weeks across all of them.',
     'Your total cost divided by the weeks you played. Lower is better.',
     'How much you amplified customer demand, averaged across games. Closer to 1 is better.',
-    // §2.1's fifth line also describes where it links; only the sentence that
+    // The fifth line also describes where it links; only the sentence that
     // is copy is asserted.
     'Your lowest cost per week.',
   ];
 
-  it('renders §2.1’s five explanations', async () => {
+  it('renders the five explanations', async () => {
     await renderProfileReady();
 
     for (const line of EXPLANATIONS) {
-      expect(rendersCopy(line), `§2.1's explanation "${line}" is nowhere on the screen`).toBe(true);
+      expect(rendersCopy(line), `The explanation "${line}" is nowhere on the screen`).toBe(true);
     }
   });
 });
 
-describe('2026-11-02: the summary says its figures pool games of every length and setting', () => {
+describe('the summary says its figures pool games of every length and setting', () => {
   it('renders the pooled-games note beside the averages and the best game', async () => {
     await renderProfileReady();
 
@@ -1040,7 +1037,7 @@ describe('2026-11-02: the summary says its figures pool games of every length an
   });
 });
 
-describe('CRITERION 6 and FAILURE MODE 3: a null average ratio is a dash', () => {
+describe('a null average ratio is a dash', () => {
   beforeEach(() => {
     httpRec.get.mockImplementation(async (url: string, config?: { params?: Record<string, unknown> }) => {
       const path = String(url).split('?')[0];
@@ -1058,27 +1055,27 @@ describe('CRITERION 6 and FAILURE MODE 3: a null average ratio is a dash', () =>
   it('renders "—" and never 0 or 0.00 for it', async () => {
     await renderProfileReady();
 
-    const region = regionFor(/bullwhip/i, 'the average bullwhip ratio (§2.1)');
+    const region = regionFor(/bullwhip/i, 'the average bullwhip ratio');
     const text = textOf(region);
     expect(text, `the average ratio region rendered: ${text}`).toMatch(/[-–—]/);
     expect(text).not.toMatch(/NaN|Infinity|∞|null|undefined/);
     const zeroes = numericTokens(text).filter((token) => asNumber(token) === 0);
-    expect(zeroes, 'a null average ratio rendered as 0 (failure mode 3)').toEqual([]);
+    expect(zeroes, 'a null average ratio rendered as 0').toEqual([]);
   });
 
-  it('explains the dash with §2.1’s tooltip', async () => {
+  it('explains the dash with its tooltip', async () => {
     await renderProfileReady();
 
     expect(
       rendersCopy(
         "None of your games had customer demand that varied, so there's nothing to amplify.",
       ),
-      `§2.1's tooltip is nowhere on the screen. It rendered: ${bodyText()}`,
+      `The dash's tooltip is nowhere on the screen. It rendered: ${bodyText()}`,
     ).toBe(true);
   });
 });
 
-describe('CRITERION 9b: a null best_game_id renders the empty treatment', () => {
+describe('a null best_game_id renders the empty treatment', () => {
   beforeEach(() => {
     httpRec.get.mockImplementation(async (url: string, config?: { params?: Record<string, unknown> }) => {
       const path = String(url).split('?')[0];
@@ -1096,14 +1093,14 @@ describe('CRITERION 9b: a null best_game_id renders the empty treatment', () => 
   it('links nowhere and renders no null, and does not crash', async () => {
     await renderProfileReady();
 
-    // The match history's rows link to `/profile/games/:id` too (2026-11-03);
+    // The match history's rows link to `/profile/games/:id` too;
     // what is asserted is that nothing outside it — the best game — does.
     const detailLinks = links().filter(
       (a) => (a.getAttribute('href') ?? '').startsWith('/profile/games') && !a.closest('table'),
     );
     expect(
       detailLinks.map((a) => a.getAttribute('href')),
-      'the best game linked somewhere although `best_game_id` is null (§2.1)',
+      'the best game linked somewhere although `best_game_id` is null',
     ).toEqual([]);
     expect(bodyText()).not.toMatch(/\bnull\b|\bundefined\b|\bNaN\b/);
     expect(document.querySelector('[data-testid="boundary"]')).toBeNull();
@@ -1111,10 +1108,10 @@ describe('CRITERION 9b: a null best_game_id renders the empty treatment', () => 
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 5 and failure mode 2 — the empty profile
+// The empty profile
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 5 and FAILURE MODE 2: a user with no games', () => {
+describe('a user with no games', () => {
   beforeEach(() => {
     httpRec.get.mockImplementation(async (url: string) => {
       const path = String(url).split('?')[0];
@@ -1126,13 +1123,13 @@ describe('CRITERION 5 and FAILURE MODE 2: a user with no games', () => {
     });
   });
 
-  it('renders §2.1’s empty state and a link to /home', async () => {
+  it('renders the empty state and a link to /home', async () => {
     renderAt('/profile');
 
     await waitFor(() => {
       expect(rendersCopy("You haven't finished a game yet.")).toBe(true);
     });
-    expect(linkTo('/home'), 'the empty state links to /home (§2.1)').toBeTruthy();
+    expect(linkTo('/home'), 'the empty state links to /home').toBeTruthy();
   });
 
   it('is not an error and not a spinner, and hits no error boundary', async () => {
@@ -1150,10 +1147,10 @@ describe('CRITERION 5 and FAILURE MODE 2: a user with no games', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 7 — RoleBreakdown
+// RoleBreakdown
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 7: RoleBreakdown renders four counts', () => {
+describe('RoleBreakdown renders four counts', () => {
   it('renders each role with its own count', async () => {
     await renderProfileReady();
 
@@ -1168,7 +1165,7 @@ describe('CRITERION 7: RoleBreakdown renders four counts', () => {
       });
       expect(
         found,
-        `§2.2 renders one count per role; ${role} does not render ${count}. The screen rendered: ${figuresText()}`,
+        `Expected one count per role; ${role} does not render ${count}. The screen rendered: ${figuresText()}`,
       ).toBe(true);
     }
   });
@@ -1182,13 +1179,13 @@ describe('CRITERION 7: RoleBreakdown renders four counts', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 12 and failure modes 1, 4 and 12 — what the page asks for
+// What the page asks for
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 12 and FAILURE MODE 12: exactly two /users/me/ requests on mount', () => {
+describe('exactly two /users/me/ requests on mount', () => {
   it('issues stats and page 1 of games, and nothing else under /users/me/', async () => {
-    // §3.3: section 16's providers are mounted around this page and their
-    // traffic is not this section's. They are simulated here so the count is
+    // The app's providers are mounted around this page and their
+    // traffic is not the page's own. They are simulated here so the count is
     // demonstrably of `/users/me/*` and not of the axios instance.
     void httpRec.post('/users/upsert', { display_name: DISPLAY_NAME });
     void httpRec.get('/health');
@@ -1198,11 +1195,11 @@ describe('CRITERION 12 and FAILURE MODE 12: exactly two /users/me/ requests on m
 
     expect(
       mineCalls().map(urlOf),
-      'the page must issue exactly two /users/me/ requests on mount (§3.3)',
+      'the page must issue exactly two /users/me/ requests on mount',
     ).toHaveLength(2);
     expect(statsCalls()).toHaveLength(1);
     expect(gamesCalls()).toHaveLength(1);
-    expect(detailCalls(), 'no per-row detail fetch belongs on the profile (§3.3)').toHaveLength(0);
+    expect(detailCalls(), 'no per-row detail fetch belongs on the profile').toHaveLength(0);
   });
 
   it('asks for page 1 at page_size 20 and never a second page', async () => {
@@ -1211,11 +1208,11 @@ describe('CRITERION 12 and FAILURE MODE 12: exactly two /users/me/ requests on m
 
     const params = paramsOf(gamesCalls()[0]);
     expect(Number(params.page ?? 1)).toBe(1);
-    expect(Number(params.page_size ?? 20), '§3.2 fixes the page size at 20').toBe(20);
+    expect(Number(params.page_size ?? 20), 'the page size is 20').toBe(20);
     expect(gamesCalls().map(pageOf)).toEqual([1]);
   });
 
-  it('counts section 16’s /users/upsert and health probe as none of its own', async () => {
+  it('counts the app’s /users/upsert and health probe as none of its own', async () => {
     void httpRec.post('/users/upsert', { display_name: DISPLAY_NAME });
     void httpRec.get('/health');
     void httpRec.get('/health');
@@ -1228,7 +1225,7 @@ describe('CRITERION 12 and FAILURE MODE 12: exactly two /users/me/ requests on m
   });
 });
 
-describe('FAILURE MODE 4: no request carries a user id', () => {
+describe('no request carries a user id', () => {
   it('asks only for /users/me/* and never names the caller', async () => {
     await renderProfileReady();
     await flush();
@@ -1237,7 +1234,7 @@ describe('FAILURE MODE 4: no request carries a user id', () => {
       const path = pathOf(call);
       expect(
         path.startsWith('/users/me/'),
-        `the profile asked for ${path}; §2.0's routes are all /users/me/*`,
+        `the profile asked for ${path}; its routes are all /users/me/*`,
       ).toBe(true);
     }
     const everything = JSON.stringify([...httpRec.get.mock.calls, ...httpRec.post.mock.calls]);
@@ -1247,18 +1244,18 @@ describe('FAILURE MODE 4: no request carries a user id', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 15, failure mode 6 — sign out
+// Sign out
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 15 and FAILURE MODE 6: sign out', () => {
+describe('sign out', () => {
   it('calls useAuth().logout() rather than re-implementing it', async () => {
     await renderProfileReady();
 
     const user = userEvent.setup();
-    await user.click(control(/sign out|log out/i, 'the sign-out control (§2 layout)'));
+    await user.click(control(/sign out|log out/i, 'the sign-out control'));
     await flush();
 
-    expect(auth.logout, '§3.4: sign out is useAuth().logout(), which section 16 owns').toHaveBeenCalled();
+    expect(auth.logout, 'sign out is useAuth().logout(), which the auth context owns').toHaveBeenCalled();
   });
 
   it('leaves a per-room session token in place', async () => {
@@ -1266,28 +1263,28 @@ describe('CRITERION 15 and FAILURE MODE 6: sign out', () => {
     await renderProfileReady();
 
     const user = userEvent.setup();
-    await user.click(control(/sign out|log out/i, 'the sign-out control (§2 layout)'));
+    await user.click(control(/sign out|log out/i, 'the sign-out control'));
     await flush();
 
     expect(
       getSessionToken('ABC234'),
-      'signing out cleared a per-room session token, which loses the seat (§3.4)',
+      'signing out cleared a per-room session token, which loses the seat',
     ).toBe('seat-token-ABC234');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 16 and failure mode 10 — the avatar
+// The avatar
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 16 and FAILURE MODE 10: the avatar', () => {
+describe('the avatar', () => {
   function avatarImage(): HTMLImageElement {
     const image = Array.from(document.querySelectorAll('img')).find((img) =>
       (img.getAttribute('src') ?? '').includes('googleusercontent.com'),
     );
     if (!image) {
       throw new Error(
-        `§3.5 renders section 16's Avatar with the user's photo; no such image was rendered. The screen rendered: ${bodyText()}`,
+        `Expected the shared Avatar with the user's photo; no such image was rendered. The screen rendered: ${bodyText()}`,
       );
     }
     return image as HTMLImageElement;
@@ -1323,10 +1320,10 @@ describe('CRITERION 16 and FAILURE MODE 10: the avatar', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 13 and 14, failure modes 5 and 8 — MatchDetail
+// MatchDetail
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 13 and FAILURE MODE 8: MatchDetail renders through section 21', () => {
+describe('MatchDetail renders through the results components', () => {
   async function renderDetail(gameId: number = DETAIL_GAME_ID) {
     const result = renderAt(`/profile/games/${gameId}`);
     await waitFor(() => {
@@ -1341,7 +1338,7 @@ describe('CRITERION 13 and FAILURE MODE 8: MatchDetail renders through section 2
     expect(pathOf(detailCalls()[0])).toBe(`/users/me/games/${DETAIL_GAME_ID}`);
   });
 
-  it('renders section 21’s per-role statistics table with the payload’s figures', async () => {
+  it('renders the per-role statistics table with the payload’s figures', async () => {
     await renderDetail();
 
     await waitFor(() => {
@@ -1368,8 +1365,8 @@ describe('CRITERION 13 and FAILURE MODE 8: MatchDetail renders through section 2
     }
   });
 
-  it('renders the payload’s costs through section 21’s cost components', async () => {
-    // §2.4 imports `CostSummary` and `ChainCostBar` as well; the per-role
+  it('renders the payload’s costs through the results screen’s cost components', async () => {
+    // MatchDetail imports `CostSummary` and `ChainCostBar` as well; the per-role
     // costs and the chain total are theirs, not the statistics table's.
     await renderDetail();
 
@@ -1386,7 +1383,7 @@ describe('CRITERION 13 and FAILURE MODE 8: MatchDetail renders through section 2
     expect(textHasValue(figures, resultsResponse().chain_total_cost as number)).toBe(true);
   });
 
-  it('renders section 21’s chart, read through its hidden per-week table (21 §2.2a)', async () => {
+  it('renders the results chart, read through its hidden per-week table', async () => {
     await renderDetail();
 
     await waitFor(() => {
@@ -1395,17 +1392,17 @@ describe('CRITERION 13 and FAILURE MODE 8: MatchDetail renders through section 2
     const series = chartSeries(DETAIL_WEEKS).map((col) => col.join(','));
     expect(
       series,
-      'the chart plots true demand as well as the four roles (21 §2.2a)',
+      'the chart plots true demand as well as the four roles',
     ).toContain(DETAIL_DEMAND.join(','));
     for (const role of ROLE_ORDER) {
       expect(series, `${role}'s orders are not plotted`).toContain(DETAIL_ORDERS[role].join(','));
     }
   });
 
-  it('renders the same column headings the results screen does (failure mode 8)', async () => {
+  it('renders the same column headings the results screen does', async () => {
     // A second renderer, or a second mapper from the same payload, drifts the
     // moment either changes. Both screens are handed the identical
-    // `ResultsResponse`, so section 21's table must come out the same.
+    // `ResultsResponse`, so the results table must come out the same.
     const resultsRoute = descriptors(ResultsPageModule, 'ResultsPage.tsx').find((d) =>
       d.path.startsWith('/results'),
     ) as RouteDescriptor;
@@ -1432,13 +1429,13 @@ describe('CRITERION 13 and FAILURE MODE 8: MatchDetail renders through section 2
     for (const heading of expected) {
       expect(
         actual,
-        `§2.4 renders through section 21's components; the results screen's "${heading}" column is missing`,
+        `MatchDetail renders through the results components; the results screen's "${heading}" column is missing`,
       ).toContain(heading);
     }
   });
 });
 
-describe('CRITERION 14 and FAILURE MODE 5: a game that is not the caller’s', () => {
+describe('a game that is not the caller’s', () => {
   beforeEach(() => {
     httpRec.get.mockImplementation(async (url: string) => {
       const path = String(url).split('?')[0];
@@ -1448,7 +1445,7 @@ describe('CRITERION 14 and FAILURE MODE 5: a game that is not the caller’s', (
     });
   });
 
-  it('renders §2.4’s not-found copy', async () => {
+  it('renders the not-found copy', async () => {
     renderAt(`/profile/games/${DETAIL_GAME_ID}`);
 
     await waitFor(() => {
@@ -1462,7 +1459,7 @@ describe('CRITERION 14 and FAILURE MODE 5: a game that is not the caller’s', (
     await waitFor(() => {
       expect(rendersCopy("That game isn't in your history.")).toBe(true);
     });
-    // A 403-flavoured message would confirm the game exists (15 §3.6).
+    // A 403-flavoured message would confirm the game exists (spec §9.9).
     expect(bodyText()).not.toMatch(
       /permission|forbidden|not allowed|access denied|aren't allowed|you don't have/i,
     );

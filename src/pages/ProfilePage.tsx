@@ -18,7 +18,7 @@ import Avatar from "../components/shared/Avatar";
 import LoadingSpinner from "../components/shared/LoadingSpinner";
 import type { RouteDescriptor } from "../routes/registry";
 
-/** Page size 20, and the client never asks for more (§3.2, `15 §3.5`). */
+/** Page size 20, and the client never asks for more. */
 const PAGE_SIZE = 20;
 
 /** `?page=` is user input: a missing, malformed or zero value is page 1. */
@@ -80,7 +80,7 @@ function SignInPrompt(): ReactElement {
       ) : null}
 
       {/* Renders only for a guest who has actually played — its own condition
-          is guest mode plus a minted guest id (§3.1). */}
+          is guest mode plus a minted guest id. */}
       <ProfileClaimPrompt />
 
       <p className="text-sm">
@@ -96,8 +96,8 @@ function SignInPrompt(): ReactElement {
  * The profile proper: two requests on mount, and never one per row.
  *
  * `GET /users/me/stats` and page 1 of `GET /users/me/games` are the whole
- * budget (§3.3). The backend guarantees a bounded statement count for the
- * history (`15 §3.5`), and a client that fetched each game's detail to fill a
+ * budget. The backend guarantees a bounded statement count for the
+ * history, and a client that fetched each game's detail to fill a
  * column would undo that guarantee from this side, which is the expensive
  * mistake this page is shaped to avoid.
  */
@@ -114,7 +114,7 @@ function AuthenticatedProfile(): ReactElement {
    *
    * Tagging is what lets the table show a spinner for the page being fetched
    * without clearing state from inside the effect, which is a cascading
-   * render. It is also what makes "a page replaces the table" (§3.2) true by
+   * render. It is also what makes "a page replaces the table" true by
    * construction: there is one page in state, never a growing list.
    */
   const [history, setHistory] = useState<{
@@ -149,7 +149,7 @@ function AuthenticatedProfile(): ReactElement {
     void (async () => {
       try {
         const response = await getMyGames(page, PAGE_SIZE);
-        // A page REPLACES the table; nothing is appended (§3.2).
+        // A page REPLACES the table; nothing is appended.
         if (!cancelled) setHistory({ page, data: response });
       } catch (err) {
         if (!cancelled) {
@@ -165,7 +165,7 @@ function AuthenticatedProfile(): ReactElement {
     };
   }, [page]);
 
-  /** The page number lives in the URL, so a reload returns to it (§3.2). */
+  /** The page number lives in the URL, so a reload returns to it. */
   const goToPage = useCallback(
     (next: number) => {
       setSearchParams((previous) => {
@@ -225,7 +225,7 @@ function AuthenticatedProfile(): ReactElement {
       ) : (
         <>
           {/* Directly above the table and only once the page has loaded, so it
-              follows the stats in DOM order (§2.5). */}
+              follows the stats in DOM order. */}
           {shownHistory ? (
             <BullwhipTrend matches={shownHistory.matches} />
           ) : null}
@@ -260,7 +260,7 @@ export function ProfilePage(): ReactElement {
  * One of the caller's own games, at `/profile/games/:gameId`.
  *
  * It lives in this module rather than a second file in `src/pages/` because
- * `collectRoutes` accepts an array of descriptors (`16 §4.8`), which is
+ * `collectRoutes` accepts an array of descriptors, which is
  * exactly what one page module contributing two paths is for.
  */
 export function MatchDetailPage(): ReactElement {

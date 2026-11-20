@@ -73,11 +73,11 @@ export function useConfigForm(
   function handleKindChange(kind: DemandKind): void {
     setPendingKind(kind)
     // A `CUSTOM` series has no default: nothing is saved until one is pasted,
-    // because an empty series is refused (`03 §3.1`).
+    // because an empty series is refused (spec §6.4).
     if (kind === 'CUSTOM') return
-    // The kind and no field of the previous kind (AC 7, FM 2). A changed kind
+    // The kind and no field of the previous kind. A changed kind
     // replaces the stored demand object, and the server fills every field
-    // the patch leaves out with that kind's own default (`10 §3.3`).
+    // the patch leaves out with that kind's own default (spec §6.6).
     saveApi.save({ demand: { kind } }, true)
   }
 

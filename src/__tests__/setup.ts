@@ -1,6 +1,5 @@
 /**
- * Vitest setup file — named by `vite.config.ts`'s `test.setupFiles`
- * (16-frontend-foundation.md §2). Owned by the test agent.
+ * Vitest setup file — named by `vite.config.ts`'s `test.setupFiles`.
  *
  * Responsibilities, and nothing else:
  *  - register `@testing-library/jest-dom`'s matchers,
@@ -8,10 +7,10 @@
  *  - give every test file a clean `localStorage` AND a clean `sessionStorage`.
  *
  * NOTE: the two Web Storage areas are deliberately left as jsdom's real
- * implementations. Section 16 §5.13 and §6.6 turn on the *difference* between
+ * implementations. The storage rules (`CLAUDE.md` §7) turn on the *difference* between
  * them (`session_token` in `localStorage`, `host_secret` in `sessionStorage`),
  * so a test double that conflates them would make the most important storage
- * assertion in the section unfalsifiable.
+ * assertion in the app unfalsifiable.
  */
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, vi } from 'vitest';
@@ -24,7 +23,7 @@ import { cleanup } from '@testing-library/react';
  * process was started with `--localstorage-file`, and on a Node newer than the
  * pinned 20.19/22.12 it shadows the one jsdom provides — so `window.localStorage`
  * comes back undefined while `window.sessionStorage` works. That is a property
- * of the runtime, not of anything section 16 builds, so the harness fills it in
+ * of the runtime, not of anything the app builds, so the harness fills it in
  * rather than letting every storage assertion fail for the wrong reason.
  */
 function ensureStorage(name: 'localStorage' | 'sessionStorage'): void {

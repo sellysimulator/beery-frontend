@@ -15,7 +15,7 @@ import WaitingForOthers from '../WaitingForOthers'
  * This is the seam **D15** keeps: a phase-2 `Board3D` implements the same
  * props and drops in at the same place, without a line of state flow moving.
  * Every field here is either a store value or a callback owned by the screen
- * above — the view computes nothing (§2.8).
+ * above — the view computes nothing.
  */
 export interface BoardViewProps {
   /** `store.myState` — the whole player view, as the server sent it. */
@@ -37,7 +37,7 @@ export interface BoardViewProps {
   notice: string | null
   /** False when the order cannot be changed: paused, over, or capped. */
   canChangeOrder: boolean
-  /** A brief highlight on what changed when a week turned over (§3.2). */
+  /** A brief highlight on what changed when a week turned over. */
   weekChanged: boolean
   onSubmitOrder(order: number): void
   onChangeOrder(): void
@@ -45,14 +45,14 @@ export interface BoardViewProps {
 }
 
 /**
- * The 2D board: the three regions of §2, always in the same place, on every
+ * The 2D board: its three regions always in the same place, on every
  * week.
  *
  * The order of the DOM is deliberate. The settlement recap comes first so a
  * player reads what happened before deciding, and the decision panel — with
  * the supply line in it — precedes the decision input, because underweighting
  * the supply line is the single most common losing mistake in the game
- * (`beer-game-spec.md` section 9.1, FM 2). On a phone the two columns stack in
+ * (`beer-game-spec.md` section 9.1). On a phone the two columns stack in
  * that same order.
  */
 export function Board2D({
@@ -85,7 +85,7 @@ export function Board2D({
             <DecisionPanel view={view} />
 
             {gameOver ? (
-              // Lifted to a shared component by 24 §6.3 so the 3D board's order-desk
+              // Lifted to a shared component so the 3D board's order-desk
               // panel renders these exact words rather than a second copy of them.
               <GameOverPanel />
             ) : locked ? (

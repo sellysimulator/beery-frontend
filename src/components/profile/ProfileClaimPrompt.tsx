@@ -8,13 +8,13 @@ interface ClaimResponse {
 }
 
 /**
- * The profile's own claim offer — deliberately **not** section 21's
+ * The profile's own claim offer — deliberately **not** the results page's
  * `GuestClaimPrompt`.
  *
  * That one is eligible only when this browser holds a `session_token` for the
  * room whose results are on screen: its evidence that it played *that* game.
  * The profile has no room, so reusing it here would render nothing at all,
- * silently, with no error and no symptom but a missing offer (§3.1, FM 11).
+ * silently, with no error and no symptom but a missing offer.
  *
  * The condition here is guest mode plus a minted guest id, and the claim
  * covers every game this browser played. The flow is the shared one — sign in

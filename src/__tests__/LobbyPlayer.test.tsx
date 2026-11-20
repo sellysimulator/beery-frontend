@@ -1,18 +1,19 @@
 /**
- * `17-frontend-lobby.md §2.0` and `§2.3` — `GameRoom.tsx`, the player-side
- * shell and the lobby it renders before week 1.
+ * `GameRoom.tsx`, the player-side shell and the lobby it renders before
+ * week 1 (spec §9.10).
  *
- * Covers acceptance criteria 10, 11, 12, 13, 14, 21, 22 and 24 (the player
- * half), and failure modes 1, 3, 4, 7 and 10.
+ * Covers: the join emit, the participant list, bot labels, the explained wait,
+ * no configuration shown to a player, claiming a role, and the shell resolving
+ * the playing screen by discovery.
  *
  * Harness notes:
  *  - `socket.io-client` is replaced by a recorder, so `src/api/socket.ts` and
  *    `src/api/socketHandlers.ts` run as real, un-mocked code while nothing
  *    touches transport. Importing the handler module reproduces `main.tsx`'s
- *    side-effect registration (16 §4.3), which is the environment these screens
+ *    side-effect registration, which is the environment these screens
  *    actually render in: server -> client events are delivered by calling what
  *    was registered, exactly as the transport would.
- *  - The store is section 16's, and is read through its public appliers only.
+ *  - The store is the real one, and is read through its public appliers only.
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { StrictMode, Suspense } from 'react';
@@ -149,8 +150,8 @@ function dispatch(event: string, payload?: unknown): void {
   const listeners = [...(rec.listeners.get(event) ?? [])];
   if (listeners.length === 0) {
     throw new Error(
-      `Nothing is listening for "${event}". Section 16 §4.5 registers the lobby events as a ` +
-        'module side effect, and §2.3 requires the player lobby to act on join_error.',
+      `Nothing is listening for "${event}". The lobby events are registered as a ` +
+        'module side effect, and the player lobby must act on join_error.',
     );
   }
   act(() => {
@@ -208,13 +209,13 @@ function bodyText(): string {
 
 function descriptorsOf(mod: unknown, label: string): RouteDescriptor[] {
   const route = (mod as { route?: RouteDescriptor | RouteDescriptor[] }).route;
-  if (!route) throw new Error(`${label} exports no \`route\` descriptor (17 §3.0).`);
+  if (!route) throw new Error(`${label} exports no \`route\` descriptor.`);
   return Array.isArray(route) ? route : [route];
 }
 
 function gameDescriptor(): RouteDescriptor {
   const found = descriptorsOf(GameRoomModule, 'GameRoom.tsx').find((d) => d.path === '/game/:roomCode');
-  if (!found) throw new Error('GameRoom.tsx declares no descriptor for `/game/:roomCode` (17 §3.0).');
+  if (!found) throw new Error('GameRoom.tsx declares no descriptor for `/game/:roomCode`.');
   return found;
 }
 
@@ -230,7 +231,7 @@ function renderPlayerRoom({ strict = false }: { strict?: boolean } = {}) {
   return render(strict ? <StrictMode>{tree}</StrictMode> : tree);
 }
 
-/** Every element a keyboard can reach and activate (§3.5). */
+/** Every element a keyboard can reach and activate. */
 function operableElements(): HTMLElement[] {
   const set = new Set<HTMLElement>();
   for (const el of Array.from(document.querySelectorAll('button, [role="button"], [tabindex], a, input'))) {
@@ -247,8 +248,8 @@ function roleControl(role: Role): HTMLElement {
     .sort((a, b) => (a.textContent ?? '').length - (b.textContent ?? '').length);
   if (matches.length === 0) {
     throw new Error(
-      `No keyboard-operable role card for ${role}. §2.3 requires four claimable role cards in ` +
-        'PLAYER_CHOOSES, and §3.5 requires them actionable by keyboard.',
+      `No keyboard-operable role card for ${role}. PLAYER_CHOOSES needs four claimable role ` +
+        'cards, each actionable by keyboard.',
     );
   }
   return matches[0];
@@ -273,10 +274,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 10 and failure mode 4 — the join emit
+// The join emit
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10: the player lobby joins on mount', () => {
+describe('the player lobby joins on mount', () => {
   it('emits join once, carrying the stored session_token', () => {
     setSessionToken(ROOM, 'tok-stored');
 
@@ -297,7 +298,7 @@ describe('CRITERION 10: the player lobby joins on mount', () => {
     expect(payloads[0].session_token ?? null).toBeNull();
   });
 
-  it('never puts the host_secret or an identity on the wire (00-conventions §2)', () => {
+  it('never puts the host_secret or an identity on the wire', () => {
     setSessionToken(ROOM, 'tok-stored');
     renderPlayerRoom();
 
@@ -307,8 +308,8 @@ describe('CRITERION 10: the player lobby joins on mount', () => {
     expect(keys).not.toContain('is_host');
   });
 
-  it('CRITERION 27: carries the persisted display name, so a reload keeps the name', () => {
-    // §3.0b: the name was entered on /home and written through section 16's
+  it('carries the persisted display name, so a reload keeps the name', () => {
+    // The name was entered on /home and written through
     // `storage.ts`. Router navigation state does not survive a reload; this
     // does, which is the whole point of putting it in storage.
     setDisplayName('Bea');
@@ -320,15 +321,15 @@ describe('CRITERION 10: the player lobby joins on mount', () => {
     expect(payloads[0].display_name).toBe('Bea');
   });
 
-  it('CRITERION 27: omits display_name when the browser has never stored one', () => {
+  it('omits display_name when the browser has never stored one', () => {
     renderPlayerRoom();
 
     const payloads = emitsOf('join');
     expect(payloads[0].display_name ?? null).toBeNull();
   });
 
-  it('FAILURE MODE 4: StrictMode does not produce a second join', () => {
-    // Server-side idempotency (section 11) exists for reconnects, not to paper
+  it('StrictMode does not produce a second join', () => {
+    // Server-side idempotency exists for reconnects, not to paper
     // over a double-mounted effect. A second join here is a UI bug and must be
     // fixed in the UI.
     renderPlayerRoom({ strict: true });
@@ -343,10 +344,10 @@ describe('CRITERION 10: the player lobby joins on mount', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 11, 21, 22 and failure modes 7, 10 — the participant list
+// The participant list
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 11: the participant list comes from lobby_update', () => {
+describe('the participant list comes from lobby_update', () => {
   it('renders the room code and the host display name', () => {
     renderPlayerRoom();
     dispatch('lobby_update', lobbyUpdate());
@@ -392,7 +393,7 @@ describe('CRITERION 11: the participant list comes from lobby_update', () => {
     expect(bodyText()).toContain('Caro');
   });
 
-  it('FAILURE MODE 10: an out-of-order lobby_update never overwrites a newer one', () => {
+  it('an out-of-order lobby_update never overwrites a newer one', () => {
     renderPlayerRoom();
 
     dispatch(
@@ -405,7 +406,7 @@ describe('CRITERION 11: the participant list comes from lobby_update', () => {
         ],
       }),
     );
-    // The straggler. `seq` is monotonic per room (00-conventions §3) precisely
+    // The straggler. `seq` is monotonic per room (spec §11.3) precisely
     // so a client can discard what it has already moved past.
     dispatch('lobby_update', lobbyUpdate({ seq: 3, participants: [participant({ alias: 'P1', display_name: 'Bea' })] }));
 
@@ -414,7 +415,7 @@ describe('CRITERION 11: the participant list comes from lobby_update', () => {
   });
 });
 
-describe('CRITERION 21 / FAILURE MODE 7: bots are labelled', () => {
+describe('bots are labelled', () => {
   it('renders a Bot badge as text, not colour alone', () => {
     renderPlayerRoom();
     dispatch(
@@ -428,7 +429,7 @@ describe('CRITERION 21 / FAILURE MODE 7: bots are labelled', () => {
       }),
     );
 
-    // §3.3 [REQUIRED]: a human who believed they were playing three humans
+    // [REQUIRED] A human who believed they were playing three humans
     // draws a different conclusion in the debrief.
     const badges = screen.getAllByText(/^\s*bot\s*$/i);
     expect(badges.length).toBeGreaterThan(0);
@@ -442,7 +443,7 @@ describe('CRITERION 21 / FAILURE MODE 7: bots are labelled', () => {
     expect(screen.queryAllByText(/^\s*bot\s*$/i)).toHaveLength(0);
   });
 
-  it('§3.5: a disconnected participant is described in words, not by a colour', () => {
+  it('a disconnected participant is described in words, not by a colour', () => {
     renderPlayerRoom();
     dispatch(
       'lobby_update',
@@ -455,12 +456,12 @@ describe('CRITERION 21 / FAILURE MODE 7: bots are labelled', () => {
   });
 });
 
-describe('CRITERION 22: the wait explains itself', () => {
+describe('the wait explains itself', () => {
   it('names the host and what they are doing, rather than showing a bare spinner', () => {
     renderPlayerRoom();
     dispatch('lobby_update', lobbyUpdate());
 
-    // §2.3's copy, and §9.4's rule: every wait says what is being waited for
+    // The lobby's copy, and the spec §9.4 rule: every wait says what is being waited for
     // and who is holding it up.
     expect(bodyText()).toMatch(/Ana is setting up the game/i);
   });
@@ -477,13 +478,13 @@ describe('CRITERION 22: the wait explains itself', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 12 and failure mode 1 — configuration never reaches a player
+// Configuration never reaches a player
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 12 / FAILURE MODE 1: a player sees no configuration', () => {
+describe('a player sees no configuration', () => {
   /**
-   * Distinctive values, so that finding one in the DOM is unambiguous. Section
-   * 11 §3.4 says `config_updated` goes to the host sid only, so a player whose
+   * Distinctive values, so that finding one in the DOM is unambiguous.
+   * `config_updated` goes to the host sid only (spec §11.2), so a player whose
    * store holds this is already looking at a backend bug — and the screen that
    * `beer-game-spec.md §4.1` forbids must still not appear.
    */
@@ -576,10 +577,10 @@ describe('CRITERION 12 / FAILURE MODE 1: a player sees no configuration', () => 
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 13, 14 and failure mode 3 — claiming a role
+// Claiming a role
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 13: PLAYER_CHOOSES role cards', () => {
+describe('PLAYER_CHOOSES role cards', () => {
   function renderChoosing(roleToAlias: Record<Role, string | null> = { ...EMPTY_ROLES }) {
     renderPlayerRoom();
     dispatch(
@@ -595,7 +596,7 @@ describe('CRITERION 13: PLAYER_CHOOSES role cards', () => {
     );
   }
 
-  it('carries the one-line description of each role (§2.3)', () => {
+  it('carries the one-line description of each role', () => {
     renderChoosing();
 
     const text = bodyText();
@@ -643,7 +644,7 @@ describe('CRITERION 13: PLAYER_CHOOSES role cards', () => {
   });
 });
 
-describe('CRITERION 14 / FAILURE MODE 3: the claim is never optimistic', () => {
+describe('the claim is never optimistic', () => {
   function renderChoosing() {
     renderPlayerRoom();
     dispatch('lobby_update', lobbyUpdate({ role_assignment_mode: 'PLAYER_CHOOSES' }));
@@ -676,7 +677,7 @@ describe('CRITERION 14 / FAILURE MODE 3: the claim is never optimistic', () => {
     await user.click(roleControl('FACTORY'));
     expect(useGameStore.getState().joinError).toBeNull();
 
-    // 16 §3: `join_error` lands in the store through `applyJoinError`, because
+    // `join_error` lands in the store through `applyJoinError`, because
     // a screen that subscribes to the socket directly is a second interpreter
     // of the wire — StrictMode double-registers it and a reconnect leaves it
     // stale.
@@ -713,18 +714,18 @@ describe('CRITERION 14 / FAILURE MODE 3: the claim is never optimistic', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 24 — the shellScreens seam, with section 19 absent
+// The shellScreens seam, with the playing screen absent
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 24: the player shell resolves section 19 by discovery', () => {
+describe('the player shell resolves the playing screen by discovery', () => {
   const PLAYING = './GameRoomPlaying.tsx';
 
   it('resolves an absent screen to null rather than a compile error', () => {
-    // The analogue of section 16's empty route registry, and asserted the same
+    // The analogue of an empty route registry, and asserted the same
     // way: against an explicit loader record, never the live glob. The glob is
-    // expanded at transform time, so once section 19's file exists
+    // expanded at transform time, so once the playing screen's file exists
     // `playingScreen()` can never return null again -- an assertion against it
-    // is true for exactly one wave and false forever after.
+    // would be false forever after.
     expect(resolveShellScreen({}, PLAYING, 'GameRoomPlaying')).toBeNull();
   });
 
@@ -781,7 +782,7 @@ describe('CRITERION 24: the player shell resolves section 19 by discovery', () =
   it('renders the delegated screen, not the placeholder, once the room is RUNNING', async () => {
     // `not.toBeNull()` rather than `toBeTypeOf('function')`: the playing screen
     // is fetched on first use, and `React.lazy` hands back an exotic component
-    // object rather than a function. Whether section 19 exists at all is still
+    // object rather than a function. Whether the playing screen exists at all is still
     // decided synchronously, which is all the shell asks.
     expect(playingScreen()).not.toBeNull();
 
@@ -805,7 +806,7 @@ describe('CRITERION 24: the player shell resolves section 19 by discovery', () =
 
     renderPlayerRoom();
 
-    // §2.0: both shells own the join emit, because it applies in every state.
+    // Both shells own the join emit, because it applies in every state.
     expect(emitsOf('join')).toHaveLength(1);
   });
 
@@ -907,7 +908,7 @@ describe('a waiting player can leave the lobby', () => {
     await user.click(control(LEAVE));
     await user.click(control(CONFIRM));
 
-    // §3.3: a stale tab can reach the control a moment after the host starts.
+    // A stale tab can reach the control a moment after the host starts.
     dispatch('join_error', { message: 'Cannot leave once the game has started.' });
 
     await waitFor(() => expect(isDisabled(control(LEAVE))).toBe(false));
@@ -915,7 +916,7 @@ describe('a waiting player can leave the lobby', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11 §2.2: the game never starts with a person left out
+// The game never starts with a person left out (spec §4.3)
 // ---------------------------------------------------------------------------
 
 describe('a player with no seat is told the game will not start without them', () => {

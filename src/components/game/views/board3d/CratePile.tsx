@@ -5,15 +5,14 @@ import { useCrateGeometry } from './gltfModels'
 import { CRATE_CLEARANCE, CRATE_SIZE } from './sceneLayout'
 
 /**
- * One `InstancedMesh` per pile, so a pile of any size is **one draw call**
- * (`24 §7.2`).
+ * One `InstancedMesh` per pile, so a pile of any size is **one draw call**.
  *
- * This is the component `24 §7.4` names Tequila's failure against: it draws 90
+ * This is the answer to Tequila's failure: it draws 90
  * pile boxes, 50 grid lines and 19 conveyor crates as individual meshes, and
- * pays a draw call for each. Here the largest pile the caps of `24 §4.2`
+ * pays a draw call for each. Here the largest pile the caps of spec §9.7
  * allow — 40 crates on the stock floor — costs exactly what an empty one does.
  *
- * The crates are the quantity, never the figure. `24 §4.1` is the rule: a
+ * The crates are the quantity, never the figure (spec §9.7): a
  * count may decide how many meshes are drawn and may never be read back off
  * them, which is why this component takes a `count` that `sceneModel.ts` has
  * already clamped and knows nothing about the field it came from.
@@ -22,7 +21,7 @@ import { CRATE_CLEARANCE, CRATE_SIZE } from './sceneLayout'
 /**
  * The material every crate in every pool wears.
  *
- * Module scope, created once, never per render (`24 §7.4`). It stays **white**
+ * Module scope, created once, never per render. It stays **white**
  * on purpose: `instanceColor` multiplies the material colour, so any tint here
  * would darken every per-instance colour set below by that factor.
  */
@@ -44,7 +43,7 @@ const CRATE_MATERIAL = new THREE.MeshStandardMaterial({
  * 12 cm of dark air on every axis, whatever `box.glb` is re-exported as.
  *
  * Stacked flush the crates read as one extruded slab; this much gap and the
- * eye counts boxes, which is the entire point of drawing them (`24 §1.1`).
+ * eye counts boxes, which is the entire point of drawing them.
  */
 
 /**
@@ -74,7 +73,7 @@ export interface CrateStack {
   /** How many crates to draw — already divided and capped by `sceneModel.ts`. */
   readonly count: number
   /**
-   * Per-stack size multiplier. `24 §4.2` renders the front supply-line lane at
+   * Per-stack size multiplier. The front supply-line lane renders at
    * `1.15` so the beer arriving next week is the biggest thing in the room.
    */
   readonly scale?: number
@@ -82,7 +81,7 @@ export interface CrateStack {
 
 export interface CratePileProps {
   /** The pile's quantity hex from `scenePalette.ts` — never an accent
-   *  (`24 §3.8`: accents are architecture, quantities are crates). */
+   *  (accents are architecture, quantities are crates). */
   readonly color: string
   /** Crates per row, from the layout constants in `sceneLayout.ts`. */
   readonly gridWidth: number
@@ -95,7 +94,7 @@ export interface CratePileProps {
   /**
    * Multi-stack form: several stacks sharing **one** pool.
    *
-   * `24 §7.2` budgets the four supply-line lanes as a single pool with four
+   * The budget counts the four supply-line lanes as a single pool with four
    * lane offsets, not four pools — the ceiling is eight pools and the scene
    * already wants six. When this is given it supersedes `count`/`position`.
    */
@@ -123,7 +122,7 @@ function crateOffset(
   const tier = Math.floor(index / perTier)
 
   // Centred on the stack's own footprint, so `position` is the middle of the
-  // pile and not its near-left corner — the zone centres of `24 §3.2` are
+  // pile and not its near-left corner — the zone centres of `sceneLayout.ts` are
   // centres.
   return target.set(
     (column - (gridWidth - 1) / 2) * step.x,
@@ -178,9 +177,9 @@ export function CratePile({
 
   /**
    * Matrices and colours, written **once per data change and never per frame**
-   * (`24 §7.2`) — at worst once per render of the board, which happens when a
+   * — at worst once per render of the board, which happens when a
    * week closes or a notice arrives, and never inside `useFrame`. Tequila's
-   * `onNearObject` writing state every frame is the defect `24 §7.4` names; a
+   * `onNearObject` writing state every frame is the known defect; a
    * pile that re-uploaded 40 matrices every frame would be the same mistake
    * wearing different clothes.
    */
@@ -226,7 +225,7 @@ export function CratePile({
     mesh.computeBoundingSphere()
   }, [resolved, color, gridWidth, gridDepth, step, total])
 
-  // An empty pile draws nothing at all. `24 §4.2`'s empty states are
+  // An empty pile draws nothing at all. The empty states are
   // architecture — the pallet ghost, the fenced empty square — not a pool of
   // zero instances, and a zero-capacity `InstancedMesh` is not valid anyway.
   if (total === 0) return null

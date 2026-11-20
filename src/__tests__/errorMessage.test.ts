@@ -1,11 +1,9 @@
 /**
- * `errorMessage(err, fallback)` from `src/api/http.ts` (16 §3).
- *
- * Covers acceptance criterion 9 and failure mode 4.
+ * `errorMessage(err, fallback)` from `src/api/http.ts`.
  *
  * FastAPI returns `detail` as a STRING for `HTTPException` and as an ARRAY OF
- * OBJECTS for a 422 validation error (00-conventions §3). Putting that array
- * into React state and rendering it throws
+ * OBJECTS for a 422 validation error. Putting that array into React state
+ * and rendering it throws
  *   "Objects are not valid as a React child (found: object with keys
  *    {type, loc, msg, input, ctx, url})"
  * turning a readable validation message into a white screen  [HARD-WON].
@@ -55,7 +53,7 @@ describe('errorMessage — string detail (HTTPException)', () => {
 });
 
 describe('errorMessage — array detail (422 validation)', () => {
-  it('CRITERION 9: joins the `msg` values of a real FastAPI 422 body', () => {
+  it('joins the `msg` values of a real FastAPI 422 body', () => {
     const out = errorMessage(axiosErr(FASTAPI_422.detail, 422), 'fallback');
 
     expect(typeof out).toBe('string');
@@ -76,7 +74,7 @@ describe('errorMessage — array detail (422 validation)', () => {
   });
 });
 
-describe('errorMessage — fallback for anything else (criterion 9)', () => {
+describe('errorMessage — fallback for anything else', () => {
   const cases: Array<[string, unknown]> = [
     ['detail absent', axiosErr(undefined)],
     ['detail null', axiosErr(null)],
@@ -119,7 +117,7 @@ describe('errorMessage — always a string', () => {
   });
 });
 
-describe('FAILURE MODE 4: the 422 array must not reach React as a child', () => {
+describe('the 422 array must not reach React as a child', () => {
   it('renders the flattened 422 message without throwing', () => {
     const message = errorMessage(axiosErr(FASTAPI_422.detail, 422), 'fallback');
 

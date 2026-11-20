@@ -1,22 +1,23 @@
 /**
- * `19-frontend-game-room.md §2.5` and `§2.5a` — `SettlementRecap`.
+ * `SettlementRecap` (spec §9.3).
  *
- * Covers acceptance criteria 6 (the recap half), 18, 19 and 20, and failure
- * modes 4 and 7.
+ * Covers: the ledger for a fixed fixture, line for line; the supplier and
+ * customer lines naming the real neighbours; the Balance line; the running
+ * total hidden when the host hides it; and money and unfulfilled figures taken
+ * from the payload, never computed.
  *
  * Harness notes:
  *  - The recap is driven through `GameRoomPlaying`, not rendered directly.
- *    `17 §2.0` freezes the playing screen as taking **no props** and reading
- *    the store, and `§2.4` says every value on it comes from
- *    `useGameStore().myState`; no document freezes a prop shape for the
- *    components inside it, so addressing one directly would mean inventing
- *    one. Ledger assertions are scoped to the recap's own table, which `§3.4`
- *    requires it to be.
+ *    The playing screen takes **no props** and reads the store, and every
+ *    value on it comes from `useGameStore().myState`; no document freezes a
+ *    prop shape for the components inside it, so addressing one directly
+ *    would mean inventing one. Ledger assertions are scoped to the recap's
+ *    own table, which it is required to be.
  *  - `socket.io-client` is replaced by a recorder so nothing touches
- *    transport. The charting library is **not** mocked: `§2.6a` makes the
- *    chart's visually hidden table the section's surface for it.
- *  - The numbers are `§2.5a`'s normative fixture: the Retailer's week 6 under
- *    the Classic MIT preset, and the ledger printed in `§2.5`.
+ *    transport. The charting library is **not** mocked: the chart's visually
+ *    hidden table is the test surface for it.
+ *  - The numbers are a fixed fixture: the Retailer's week 6 under the Classic
+ *    MIT preset, and the ledger it must produce.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
@@ -95,7 +96,7 @@ const GameRoomPlaying = componentFrom(GameRoomPlayingModule, 'GameRoomPlaying');
 const ROOM = 'ABC234';
 
 // ---------------------------------------------------------------------------
-// Fixtures — §2.5a is normative and its numbers are hard-coded
+// Fixtures — the recap fixture's numbers are hard-coded
 // ---------------------------------------------------------------------------
 
 function roleConfig(): RoleConfig {
@@ -168,7 +169,7 @@ function settlementFor(role: Role, over: Partial<WeekSettlement> = {}): WeekSett
 /**
  * The required half of `PlayerView`. `accumulated_cost`, the two week figures and
  * `balance` are deliberately absent: they are the keys
- * `show_running_cost_to_players` gates, and their absence is criterion 6.
+ * `show_running_cost_to_players` gates, and their absence hides the running total.
  */
 function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
   return {
@@ -194,7 +195,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     min_order_quantity: 0,
     max_order_quantity: 9999,
     show_supply_line_prominently: true,
-    // `07 §3.8`: the Factory's unstarted production, `null` for the others.
+    // The Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
     order_arrival_week: 6 + 4,
@@ -204,7 +205,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
   };
 }
 
-/** `§2.5a` exactly: the fixture criterion 18 asserts against. */
+/** The fixture the line-for-line ledger test asserts against. */
 function fixtureView(): PlayerView {
   return viewFor('RETAILER', { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null });
 }
@@ -265,7 +266,7 @@ function bodyText(): string {
 }
 
 /**
- * `§3.4`: "The recap is a semantic table with row headers, so a screen reader
+ * "The recap is a semantic table with row headers, so a screen reader
  * reads it as a ledger." The recap is the table that carries the cost lines.
  */
 function recapTable(): HTMLElement {
@@ -273,8 +274,8 @@ function recapTable(): HTMLElement {
   const found = tables.find((t) => /holding cost/i.test(textOf(t)));
   if (!found) {
     throw new Error(
-      '§3.4 requires the recap to be a semantic table with row headers; no table carried the ' +
-        `§2.5 ledger. The screen rendered: ${bodyText()}`,
+      'The recap must be a semantic table with row headers; no table carried the ' +
+        `ledger. The screen rendered: ${bodyText()}`,
     );
   }
   return found;
@@ -295,7 +296,7 @@ function rowIndex(label: RegExp): number {
   const index = rows.findIndex((r) => label.test(r));
   if (index < 0) {
     throw new Error(
-      `No ledger row matched ${label}. §2.5 fixes the ledger's shape line for line. Rows were:\n` +
+      `No ledger row matched ${label}. The ledger's shape is fixed line for line. Rows were:\n` +
         rows.map((r) => `  - ${r}`).join('\n'),
     );
   }
@@ -314,10 +315,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 18 — the §2.5a fixture, line for line
+// The recap fixture, line for line
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fixture', () => {
+describe('the recap reproduces the ledger for the fixture', () => {
   it('names the week the settlement belongs to', () => {
     renderRecap(fixtureView());
 
@@ -381,8 +382,8 @@ describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fix
   });
 
   it('never says "Week cost": the order cost is its own line, not yet charged', () => {
-    // 2026-11-02: one "week cost" was holding + backlog on screen and the
-    // whole week in the record, and "Total so far" jumped by the difference.
+    // One "week cost" would be holding + backlog on screen and the whole week
+    // in the record, and "Total so far" would jump by the difference.
     renderRecap(fixtureView());
 
     expect(recapText()).not.toMatch(/week cost/i);
@@ -402,7 +403,7 @@ describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fix
     expect(row(/total so far/i)).toMatch(/\$21\.50/);
   });
 
-  it('renders the lines in the §2.5 order', () => {
+  it('renders the lines in the ledger order', () => {
     renderRecap(fixtureView());
 
     const order = [
@@ -432,10 +433,10 @@ describe('CRITERION 18: the recap reproduces the §2.5 ledger for the §2.5a fix
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 19 — the supplier and customer lines name the real neighbours
+// The supplier and customer lines name the real neighbours
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 19: the ledger names this role’s actual neighbours', () => {
+describe('the ledger names this role’s actual neighbours', () => {
   const upstream: Array<[Role, RegExp]> = [
     ['RETAILER', /wholesaler/i],
     ['WHOLESALER', /distributor/i],
@@ -470,10 +471,10 @@ describe('CRITERION 19: the ledger names this role’s actual neighbours', () =>
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 20 — D8's balance replaces the running total
+// D8's balance replaces the running total
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 20: with starting_capital > 0 the last line is a Balance', () => {
+describe('with starting_capital > 0 the last line is a Balance', () => {
   it('reads "Balance" and shows starting_capital - accumulated_cost', () => {
     // D8: the server sends the transform; 978.50 = 1000.00 - 21.50.
     renderRecap(viewFor('RETAILER', { accumulated_cost: 21.5, week_holding_backlog_cost: 4, week_order_cost: null, balance: 978.5 }));
@@ -491,12 +492,12 @@ describe('CRITERION 20: with starting_capital > 0 the last line is a Balance', (
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 6 — show_running_cost_to_players off
+// show_running_cost_to_players off
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 6: with the running cost hidden, the last line is absent', () => {
+describe('with the running cost hidden, the last line is absent', () => {
   it('omits the running total entirely when the gated keys are absent', () => {
-    // §3.8: `accumulated_cost`, the week figures and `balance` are simply not sent.
+    // `accumulated_cost`, the week figures and `balance` are simply not sent.
     renderRecap(viewFor('RETAILER'));
 
     expect(bodyText()).not.toMatch(/total so far/i);
@@ -515,10 +516,10 @@ describe('CRITERION 6: with the running cost hidden, the last line is absent', (
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 4 — client-computed cost
+// Client-computed cost
 // ---------------------------------------------------------------------------
 
-describe('2026-11-03: the stock after arrival is the server’s figure, never a sum', () => {
+describe('the stock after arrival is the server’s figure, never a sum', () => {
   it('prints settlement.inventory_after_arrival even when it contradicts opening + arrived', () => {
     // 12 opening + 4 arrived would be 16. The server says 23, and the recap
     // prints the server's figure on both lines that show it.
@@ -552,10 +553,10 @@ describe('2026-11-03: the stock after arrival is the server’s figure, never a 
   });
 });
 
-describe('FAILURE MODE 4: the money figure is the server’s, never a product', () => {
+describe('the money figure is the server’s, never a product', () => {
   it('renders settlement.holding_cost even when it contradicts units x rate', () => {
     // 8 closing units x $0.50 would be $4.00. The server says $99.00, and the
-    // server is the only authority (00-conventions §4).
+    // server is the only authority.
     renderRecap(
       viewFor('RETAILER', {
         settlement: settlementFor('RETAILER', { holding_cost: 99, carrying_cost: 99 }),
@@ -609,10 +610,10 @@ describe('FAILURE MODE 4: the money figure is the server’s, never a product', 
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 7 — recap arithmetic drift
+// Recap arithmetic drift
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 7: "Unfulfilled" is the payload’s field, not a subtraction', () => {
+describe('"Unfulfilled" is the payload’s field, not a subtraction', () => {
   it('renders settlement.unfulfilled when shipped < obligation', () => {
     // obligation 10 - shipped 6 would be 4. The payload says 3.
     renderRecap(

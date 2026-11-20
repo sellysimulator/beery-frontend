@@ -1,5 +1,5 @@
 /**
- * REST client for the room endpoints (`10-rooms-rest-api.md`).
+ * REST client for the room endpoints (spec §11.1).
  *
  * `POST /rooms/create` needs no authentication: hosting is a capability, not
  * an account (D3). It returns the one-time `host_secret`, which the caller
@@ -72,7 +72,7 @@ export async function listPresets(): Promise<PresetListResponse> {
 
 /**
  * Every range the host form checks. The backend is the only copy of these
- * numbers; the form builds its checks from this response (2026-11-02).
+ * numbers; the form builds its checks from this response.
  */
 export async function getLimits(): Promise<Limits> {
   const { data } = await http.get<Limits>('/rooms/limits')
@@ -80,13 +80,13 @@ export async function getLimits(): Promise<Limits> {
 }
 
 /**
- * The demand series and lead times a draft config will play (`10 §3.5b`).
+ * The demand series and lead times a draft config will play.
  * No authentication: nothing is stored, and no room is read. A draft the
  * server refuses is a 422 whose `detail` names the field and the range.
  *
  * With a `patch`, the server first merges it over `config` exactly as a
  * config save merges it, and the answer's `config` is the validated result:
- * the multi-game setup form edits its local draft this way (2026-11-14).
+ * the multi-game setup form edits its local draft this way.
  */
 export async function previewConfig(config: object, patch?: object): Promise<ConfigPreview> {
   const body = patch === undefined ? { config } : { config, patch }
@@ -96,7 +96,7 @@ export async function previewConfig(config: object, patch?: object): Promise<Con
 
 /**
  * Creates `count` rooms that all start alike, for the multi-game dashboard
- * (`10 §3.5c`). The server resolves the preset and validates the config patch
+ * (spec §9.10). The server resolves the preset and validates the config patch
  * once, before any room exists, so a refusal (400 unknown preset, 422 naming
  * the field) creates nothing. Every room counts against the per-address
  * room-create limit, all or nothing (429).
@@ -118,7 +118,7 @@ export async function createRoomBatch(
 
 /**
  * State, seats, week and `can_start` for each room this tab hosts, in the
- * order asked (`10 §3.5d`). A POST so the secrets stay out of URLs. Read-only
+ * order asked. A POST so the secrets stay out of URLs. Read-only
  * on the server: polling it never extends a room's lifetime.
  */
 export async function getRoomsSummary(rooms: HostedRoom[]): Promise<RoomSummary[]> {

@@ -21,10 +21,10 @@ import { ROLE_LABEL } from '../lobby/roleCopy'
  * still be the `null` from before that reply.
  *
  * The console never withholds a *control* because the secret is absent — that
- * decision is the server's and section 17 has already made it (§3.3, **D18**).
+ * decision is the server's and the lobby has already made it (**D18**).
  * What it withholds is the **emit**: `null` here means nothing goes on the
  * wire. An empty-string secret is not authority, and a client that sends one
- * teaches the server to have an opinion about empty secrets (§5, FM 6).
+ * teaches the server to have an opinion about empty secrets.
  */
 function storedSecret(roomCode: string): string | null {
   return getHostSecret(roomCode)
@@ -42,7 +42,7 @@ function roleList(roles: Role[]): string {
 
 /**
  * "Close the week" sounds harmless and is not, so the warning names the
- * specific roles that will be recorded as ordering nothing (§2.2, FM 4).
+ * specific roles that will be recorded as ordering nothing.
  */
 function forceCloseWarning(awaitingRoles: Role[]): string {
   const verb = awaitingRoles.length === 1 ? "hasn't" : "haven't"
@@ -56,9 +56,8 @@ function substituteWarning(playerName: string): string {
 /**
  * What ending now keeps. Both figures are the server's: `week` is the open
  * week, which `end_early` drops, and `weeksPlayed` is `host_state.weeks_played`,
- * the complete weeks the results will report. The warning used to say "the
- * game ends at week N" — one week more than the results then showed
- * (2026-11-03).
+ * the complete weeks the results will report. The warning does not say "the
+ * game ends at week N", which would be one week more than the results show.
  */
 function endGameWarning(week: number, weeksPlayed: number): string {
   const played = weeksPlayed === 1 ? '1 week' : `${weeksPlayed} weeks`
@@ -75,9 +74,9 @@ interface ConfirmDialogProps {
 
 /**
  * The confirmation for a destructive control — **rendered DOM, never
- * `window.confirm`** (§2.2).
+ * `window.confirm`**.
  *
- * Three criteria read this warning's text and one asserts that nothing is
+ * Three tests read this warning's text and one asserts that nothing is
  * emitted until it is accepted, and a native dialog is unreadable from a test.
  * It is also unstyleable on a projector, which matters when the sentence that
  * has to be read out loud to a room is the one explaining what is about to
@@ -154,17 +153,16 @@ function ConfirmDialog({
 export interface SubstituteBotButtonProps {
   roomCode: string
   role: Role
-  /** The person who loses the seat, named in the warning (§2.2). */
+  /** The person who loses the seat, named in the warning. */
   playerName: string
-  /** `RUNNING` or `PAUSED`, and the role is not already a bot (§2.2). */
+  /** `RUNNING` or `PAUSED`, and the role is not already a bot. */
   disabled: boolean
 }
 
 /**
- * *Swap in a bot*, the one host control that lives on a role's own card
- * (§2.1).
+ * *Swap in a bot*, the one host control that lives on a role's own card.
  *
- * It is irreversible in v1 — there is no "give it back" (`12 §3.6`) — so it
+ * It is irreversible in v1 — there is no "give it back" — so it
  * confirms first, and the warning names the player rather than the role, since
  * the host is about to do something to a person in the room.
  */
@@ -217,7 +215,7 @@ export interface HostControlsProps {
   week: number
   /** `host_state.weeks_played`: what ending now keeps. Never `week - 1` here. */
   weeksPlayed: number
-  /** Presentation mode is local state; nothing goes on the wire (§3.4a). */
+  /** Presentation mode is local state; nothing goes on the wire. */
   onPresent: () => void
 }
 
@@ -225,12 +223,12 @@ export interface HostControlsProps {
 type Pending = 'force_close' | 'end_game'
 
 /**
- * The controls that let a host run a session in a room full of people (§2.2).
+ * The controls that let a host run a session in a room full of people (spec §9.6).
  *
  * Every one of them carries the stored `host_secret`, because authority is a
  * capability and never an account (**D3**) and never a client-side boolean —
  * and when this tab holds no secret yet, the control still renders but emits
- * nothing at all rather than sending an empty one (§5, FM 6). Two of them are
+ * nothing at all rather than sending an empty one. Two of them are
  * destructive and state their consequence in plain words before anything is
  * emitted.
  *

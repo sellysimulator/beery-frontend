@@ -1,11 +1,11 @@
 /**
- * BE-2 (`CHARTS-PLAN.md`), B1: `NetInventoryChart` and `buildNetInventoryConfig`.
+ * The net inventory panels: `NetInventoryChart` and `buildNetInventoryConfig`.
  *
- * Covers acceptance (1) every plotted value comes from `inventory` / `backlog`
- * with no subtraction, and (6) the live path (no series) renders none of B1.
- * Failure mode: net inventory computed as `inventory - backlog`.
+ * Asserts that every plotted value comes from `inventory` / `backlog` with no
+ * subtraction (net inventory is never computed as `inventory - backlog`), and
+ * that the live path (no series) renders none of the panels.
  *
- * `chart.js` and `react-chartjs-2` are never mocked (`21 s2.2a`). The builder
+ * `chart.js` and `react-chartjs-2` are never mocked. The builder
  * module is wrapped, not replaced: the real builder runs and its arguments are
  * recorded, so the component's `group` argument can be read.
  */
@@ -158,7 +158,7 @@ describe('buildNetInventoryConfig', () => {
       expect(nums(byLabel(cfg(role), BACKLOG_SERIES_LABEL))).toEqual(BACKLOG[role].map((b) => -b))
     })
 
-    it('FAILURE MODE: no dataset is inventory minus backlog, or any other combination', () => {
+    it('no dataset is inventory minus backlog, or any other combination', () => {
       const net = INVENTORY[role].map((v, i) => v - BACKLOG[role][i])
       const allowed = [INVENTORY[role].join(','), BACKLOG[role].map((b) => -b).join(',')]
       for (const dataset of cfg(role).data?.datasets ?? []) {
@@ -295,7 +295,7 @@ describe('NetInventoryChart', () => {
     expect(textOutsideTables(container).filter((t) => /\d/.test(t))).toEqual([])
   })
 
-  describe('ACCEPTANCE 6: the live path, with no series, renders none of it', () => {
+  describe('the live path, with no series, renders none of it', () => {
     it('renders nothing when no role carries inventory or backlog', () => {
       const view = makeView()
       const live: ResultsView = {

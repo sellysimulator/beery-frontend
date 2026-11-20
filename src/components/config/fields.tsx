@@ -17,8 +17,7 @@ import Select from '../shared/Select'
  *    from the server's own limits), the note left when the server stored
  *    something other than what was sent (`0` saved as "unlimited", an
  *    inverted stochastic range swapped), and the field-level 422. A value
- *    outside its range is refused here and never sent: nothing is clamped
- *    (2026-11-02).
+ *    outside its range is refused here and never sent: nothing is clamped.
  * 3. It picks the save timing its control deserves — a switch saves on the
  *    toggle, a number saves debounced and again on blur (`18 section 3.1`).
  */
@@ -34,10 +33,10 @@ interface MessagesProps {
 /**
  * The note shown when the server stored a different value from the one sent.
  *
- * The server no longer clamps (2026-11-02), so the only differences left are
- * its two documented repairs: a cap of `0` stored as "unlimited", and an
- * inverted stochastic range stored the right way round. The bound-naming
- * branches stay for a server that answers with a bound, so a host is told
+ * The server does not clamp, so the only differences are its two documented
+ * repairs: a cap of `0` stored as "unlimited", and an inverted stochastic
+ * range stored the right way round. The bound-naming branches cover a server
+ * that answers with a bound, so a host is told
  * the rule rather than shown a number that changed under their hands.
  */
 function clampNote(stored: unknown, min?: number, max?: number, unit?: string): string {

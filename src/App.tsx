@@ -27,9 +27,8 @@ function withGuards(element: ReactElement, guard: RouteGuard): ReactElement {
  * `<MemoryRouter initialEntries={[...]}>` at any path.
  *
  * No page component is named. The table is assembled from whatever modules
- * exist in `src/pages/` (D19), so sections 17, 21 and 22 add screens by
- * dropping in a file. With `src/pages/` empty every path falls through to the
- * shared `NotFound`.
+ * exist in `src/pages/` (D19), so a screen is added by dropping in a file.
+ * With `src/pages/` empty every path falls through to the shared `NotFound`.
  */
 export default function App(): ReactElement {
   const routes = discoverRoutes()

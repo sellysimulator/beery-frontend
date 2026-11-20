@@ -1,15 +1,15 @@
 /**
- * `18-frontend-host-config.md §3.2` — the Zod shape behind the host form.
+ * The Zod shape behind the host form.
  *
- * "Zod mirrors the ranges in `00-decisions.md §5` for immediate feedback, but the
- * server is authoritative." So this file asserts exactly those ranges, plus the
- * two the config models themselves declare (`03-game-config.md §2`: the Sterman
- * parameters are `0.0 .. 1.0` and the target-stock multiplier `0.0 .. 10.0`). It
- * asserts nothing about clamping — the form never clamps; §3.1a's clamp belongs
- * to the server, and §3.2 makes this schema a hint rather than a gate.
+ * Zod mirrors the hard ranges (spec §6.6) for immediate feedback, but the
+ * server is authoritative. So this file asserts exactly those ranges, plus the
+ * two the config models themselves declare (spec §6: the Sterman parameters
+ * are `0.0 .. 1.0` and the target-stock multiplier `0.0 .. 10.0`). It asserts
+ * nothing about clamping — the form never clamps; the clamp belongs to the
+ * server, and this schema is a hint rather than a gate.
  *
- * `18 §2` names `src/schemas/configSchema.ts` as the module but does not name the
- * export, so `schema()` below picks whichever exported value both exposes
+ * `src/schemas/configSchema.ts` is the module, but its export name is not
+ * fixed, so `schema()` below picks whichever exported value both exposes
  * `safeParse` and accepts a complete, in-range `GameConfig`.
  */
 import { describe, it, expect } from 'vitest';
@@ -25,7 +25,7 @@ import type {
 } from '../types/game';
 
 // ---------------------------------------------------------------------------
-// Fixtures — `03-game-config.md §2`'s declared defaults
+// Fixtures — the declared config defaults (spec §6)
 // ---------------------------------------------------------------------------
 
 function roleDefaults(over: Partial<RoleConfig> = {}): RoleConfig {
@@ -111,9 +111,9 @@ interface Parser {
 let cached: Parser | null = null;
 
 /**
- * The form's checks, built from the ranges the server serves. Amended
- * 2026-11-02: the module exports a factory, `buildConfigFormSchema(limits)`,
- * and keeps no table of its own; the test feeds it the backend's defaults.
+ * The form's checks, built from the ranges the server serves. The module
+ * exports a factory, `buildConfigFormSchema(limits)`, and keeps no table of
+ * its own; the test feeds it the backend's defaults.
  */
 function schema(): Parser {
   if (cached) return cached;
@@ -133,7 +133,7 @@ describe('the whole config', () => {
   });
 });
 
-describe('duration_weeks — MIN_WEEKS 8, MAX_WEEKS_LIMIT 104 (§5)', () => {
+describe('duration_weeks — MIN_WEEKS 8, MAX_WEEKS_LIMIT 104', () => {
   it('accepts both ends of the range', () => {
     expect(accepts(validConfig({ duration_weeks: 8 }))).toBe(true);
     expect(accepts(validConfig({ duration_weeks: 104 }))).toBe(true);
@@ -149,7 +149,7 @@ describe('duration_weeks — MIN_WEEKS 8, MAX_WEEKS_LIMIT 104 (§5)', () => {
   });
 });
 
-describe('delays — MIN_DELAY_WEEKS 1, MAX_DELAY_WEEKS 8 (§5)', () => {
+describe('delays — MIN_DELAY_WEEKS 1, MAX_DELAY_WEEKS 8', () => {
   it('accepts both ends of the range', () => {
     expect(accepts(withRetailer({ shipping_delay_weeks: 1 }))).toBe(true);
     expect(accepts(withRetailer({ shipping_delay_weeks: 8 }))).toBe(true);
@@ -169,7 +169,7 @@ describe('delays — MIN_DELAY_WEEKS 1, MAX_DELAY_WEEKS 8 (§5)', () => {
   });
 });
 
-describe('initial quantities — MAX_INITIAL_QUANTITY 9_999 (§5)', () => {
+describe('initial quantities — MAX_INITIAL_QUANTITY 9_999', () => {
   it('accepts the ceiling', () => {
     expect(accepts(withRetailer({ initial_inventory: 9_999 }))).toBe(true);
     expect(accepts(withRetailer({ initial_backlog: 9_999 }))).toBe(true);
@@ -185,7 +185,7 @@ describe('initial quantities — MAX_INITIAL_QUANTITY 9_999 (§5)', () => {
   });
 });
 
-describe('unit values — MAX_UNIT_VALUE 1_000_000.0 (§5)', () => {
+describe('unit values — MAX_UNIT_VALUE 1_000_000.0', () => {
   it('accepts the ceiling for every cost and starting_capital', () => {
     expect(accepts(withRetailer({ holding_cost_per_unit_week: 1_000_000 }))).toBe(true);
     expect(accepts(withRetailer({ backlog_cost_per_unit_week: 1_000_000 }))).toBe(true);
@@ -203,7 +203,7 @@ describe('unit values — MAX_UNIT_VALUE 1_000_000.0 (§5)', () => {
   });
 });
 
-describe('max_order_quantity — MAX_ORDER_QUANTITY 9_999 (§5)', () => {
+describe('max_order_quantity — MAX_ORDER_QUANTITY 9_999', () => {
   it('accepts null, meaning uncapped by the host', () => {
     expect(accepts(validConfig({ visibility: visibilityDefaults({ max_order_quantity: null }) }))).toBe(
       true,
@@ -220,7 +220,7 @@ describe('max_order_quantity — MAX_ORDER_QUANTITY 9_999 (§5)', () => {
   });
 });
 
-describe('bot parameters (03 §2)', () => {
+describe('bot parameters', () => {
   it('accepts theta, alpha and beta at both ends of 0.0 .. 1.0', () => {
     for (const key of ['theta', 'alpha', 'beta'] as const) {
       expect(accepts(validConfig({ bot: botDefaults({ [key]: 0 }) })), `${key} = 0`).toBe(true);
@@ -243,7 +243,7 @@ describe('bot parameters (03 §2)', () => {
   });
 });
 
-describe('the demand union (03 §2)', () => {
+describe('the demand union', () => {
   it('accepts every generator with its declared defaults', () => {
     const demands: GameConfig['demand'][] = [
       { kind: 'CONSTANT', value: 4 },
@@ -285,7 +285,7 @@ describe('the demand union (03 §2)', () => {
   });
 });
 
-describe('role_assignment_mode (03 §2)', () => {
+describe('role_assignment_mode', () => {
   it('accepts the three declared modes', () => {
     for (const mode of ['HOST_ASSIGNS', 'PLAYER_CHOOSES', 'RANDOM'] as const) {
       expect(accepts(validConfig({ role_assignment_mode: mode })), mode).toBe(true);
@@ -328,7 +328,7 @@ describe('random_seed (D11)', () => {
   });
 });
 
-describe('the four ranges that drifted from the server (2026-11-02)', () => {
+describe('the four ranges a hand-copied table gets wrong', () => {
   it('reads every bound from the limits it is given, not from a copy', () => {
     const tight = configSchemaModule.buildConfigFormSchema({ ...TEST_LIMITS, max_weeks: 20 });
     expect(tight.safeParse(validConfig({ duration_weeks: 20 })).success).toBe(true);
@@ -402,7 +402,7 @@ describe('the four ranges that drifted from the server (2026-11-02)', () => {
     ).toBe(false);
   });
 
-  it('has no allow_negative_orders field: the option was removed', () => {
+  it('has no allow_negative_orders field: orders have a floor of 0', () => {
     const parsed = configSchemaModule
       .buildConfigFormSchema(TEST_LIMITS)
       .safeParse({ ...validConfig(), visibility: { ...visibilityDefaults(), allow_negative_orders: true } });

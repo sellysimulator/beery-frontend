@@ -1,8 +1,7 @@
 import type * as THREE from 'three'
 
 /**
- * The hall's one billboard angle, and the register of everything turned by it
- * (24 §6.1, §5.1; amended 2026-09-22).
+ * The hall's one billboard angle, and the register of everything turned by it.
  *
  * A player who walked the hall asked for the in-scene text to *"always face
  * the player"*. Every sign in the room faces the **same** camera, so there is
@@ -12,7 +11,7 @@ import type * as THREE from 'three'
  *
  * It is a module, and not a React context, for two reasons. A context value
  * that changed every frame would be a re-render of the scene graph sixty times
- * a second, which is exactly what 24 §5.1's `[HARD-WON]` note forbids; and
+ * a second, which is exactly what the no-`setState`-in-`useFrame` rule forbids; and
  * these two values are mutated from inside `useFrame`, where React state may
  * not be touched at all. Module scope is the same assumption `PlacardPosts.tsx`
  * already makes for its scratch vectors: **one hall is mounted at a time.**
@@ -34,7 +33,7 @@ import type * as THREE from 'three'
  * duplicate behind, and so that removal is not a linear scan.
  *
  * **Nothing in this set is ever read by a test.** It holds three.js objects,
- * and 24 §8.1 keeps every assertion on the `SceneModel` side of the WebGL
+ * and the tests keep every assertion on the `SceneModel` side of the WebGL
  * line; what a test checks is the `billboard` flag the model carries, which is
  * the decision. This is only the wiring that obeys it.
  */

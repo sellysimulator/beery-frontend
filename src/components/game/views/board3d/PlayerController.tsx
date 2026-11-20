@@ -24,7 +24,7 @@ import { HALL, SPAWN } from './sceneLayout'
 import type { InteractTarget, InteractTargetId } from './sceneModel'
 
 /**
- * The first-person controller of 24 §5.1 — a near-verbatim port of Tequila's,
+ * The first-person controller — a near-verbatim port of Tequila's,
  * with both of its defects fixed by name.
  *
  * WASD and the arrow keys at 7 u/s, `delta`-scaled. Mouse-**drag** look, yaw
@@ -39,16 +39,16 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  *
  * ## The two `[HARD-WON]` fixes
  *
- * **The typing guard** (24 §5.1). The order panel contains a real
+ * **The typing guard**. The order panel contains a real
  * `<input type="number">`. Without a guard, typing `8` then `W` into it walks
  * the player across the hall mid-decision — Tequila hit this — so every key
  * handler leaves immediately when the event came from an `INPUT`, `TEXTAREA`
  * or `SELECT`. The guard itself is `playerMotion.ts`'s `isTypingTarget`, in
  * one copy shared with `Board3D.tsx`: this file once held a private copy and
  * that file held another, and two copies of a guard are two guards that
- * drift (FM 6).
+ * drift.
  *
- * **Change-detected proximity** (24 §5.1, Tequila defect 8, FM 9).
+ * **Change-detected proximity** (Tequila defect 8).
  * `onNearObject` fires **only when the nearest id changes**. A `useRef` holds
  * the last reported value and `useFrame` compares before calling. Tequila's
  * version called `setState` sixty times a second, bridging the render loop
@@ -60,11 +60,11 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  *
  * The walk, the clamp, the pitch limit, the proximity search and the
  * comparison above all live in `playerMotion.ts`, which imports no renderer
- * and can therefore be tested (24 §8.1 — *assert the object, not the
+ * and can therefore be tested (*assert the object, not the
  * renderer*). What is left here is the part that genuinely is the renderer:
  * the listeners, the refs, and the four lines that write to `camera`.
  *
- * ## Touch (24 §5.7)
+ * ## Touch
  *
  * A finger gets the same controller, not a second one. Drag-look is pointer
  * events, so it already answers a touch; the canvas wrapper carries
@@ -78,7 +78,7 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  *
  * `paused || gameOver` freezes movement but **not** look, so a player who
  * cannot act can still read the room. The pad's turn buttons are look. There is no idle animation and no
- * head-bob, under `prefers-reduced-motion` or otherwise — 24 §7.6 says never
+ * head-bob, under `prefers-reduced-motion` or otherwise — the rule is never
  * to introduce one at all, which is a cheaper promise to keep than to break.
  */
 
@@ -90,7 +90,7 @@ const LOOK_SENSITIVITY = 0.0026
 export interface PlayerControllerProps {
   /** `SceneModel.interactTargets` — each with its own centre, radius and
    *  prompt. The controller compares against the model rather than reaching
-   *  for `INTERACT_DISTANCE` itself (24 §8.1). */
+   *  for `INTERACT_DISTANCE` itself. */
   readonly targets: readonly InteractTarget[]
   /**
    * Called with the nearest target in range, or `null` when there is none —
@@ -98,7 +98,7 @@ export interface PlayerControllerProps {
    * that is the whole point of the ref below.
    */
   onNearObject(id: InteractTargetId | null): void
-  /** Movement freezes; look does not (24 §5.1). */
+  /** Movement freezes; look does not. */
   readonly paused: boolean
   readonly gameOver: boolean
   /**
@@ -108,7 +108,7 @@ export interface PlayerControllerProps {
    */
   onInteract?(id: InteractTargetId): void
   /**
-   * The on-screen pad's held buttons (24 §5.7), owned by `Board3D` and written
+   * The on-screen pad's held buttons, owned by `Board3D` and written
    * by `MovePad`. A ref rather than a prop value because a press must reach
    * the next frame without a React render in between. Optional, so the
    * controller still stands on its own with only a keyboard.
@@ -135,7 +135,7 @@ export function PlayerController({
   const pitch = useRef(0)
   /** The pointer steering the look, or null. An id rather than a flag: on a
    *  touch screen a second finger is a second pointer, and only the first
-   *  one's movement may turn the camera (24 §5.7). */
+   *  one's movement may turn the camera. */
   const dragging = useRef<number | null>(null)
   const lastPointer = useRef({ x: 0, y: 0 })
 
@@ -151,7 +151,7 @@ export function PlayerController({
     latest.current = { targets, onInteract }
   })
 
-  // Spawn: `[0, 1.7, 9]` facing `−z`, straight down the order axis (§3.1).
+  // Spawn: `[0, 1.7, 9]` facing `−z`, straight down the order axis.
   // `YXZ` is the order a first-person camera composes in — yaw about the
   // world's up, then pitch about the camera's own right.
   useEffect(() => {
@@ -176,7 +176,7 @@ export function PlayerController({
       if (key !== 'e') return
       const target = latest.current.targets.find((candidate) => candidate.id === reported.current)
       // `enabled` is false while paused: the prompt still reads and E is
-      // inert, which is 24 §5.2's own wording.
+      // inert.
       if (target && target.enabled) latest.current.onInteract?.(target.id)
     }
 
@@ -187,7 +187,7 @@ export function PlayerController({
     // A tab switch mid-stride leaves the key down forever otherwise, and the
     // player comes back to a camera walking into a wall. The pad is cleared
     // with it: a phone that locks its screen with a thumb on "forward" never
-    // delivers the `pointerup` that would have released it (24 §5.7).
+    // delivers the `pointerup` that would have released it.
     const releaseAll = (): void => {
       held.current.clear()
       pad?.current.clear()
@@ -222,7 +222,7 @@ export function PlayerController({
       const dy = event.clientY - lastPointer.current.y
       lastPointer.current = { x: event.clientX, y: event.clientY }
       // Yaw is unclamped — a warehouse is a room you turn round in. Pitch is
-      // not, per §5.1.
+      // not.
       yaw.current -= dx * LOOK_SENSITIVITY
       pitch.current = clampPitch(pitch.current - dy * LOOK_SENSITIVITY)
     }
@@ -252,21 +252,21 @@ export function PlayerController({
   }, [domElement])
 
   // The leading `state` parameter is unused and `noUnusedParameters` is on, so
-  // it is `_` — 24 §5.1 spells this out because it is the shape every other
+  // it is `_`, the shape every other
   // `useFrame` in this directory takes.
   useFrame((_, delta) => {
     const padHeld = pad?.current ?? NO_PAD
     // The pad's turn buttons are look, so they run before the pause check
-    // below, exactly as a drag would (24 §5.7).
+    // below, exactly as a drag would.
     yaw.current = stepYaw(yaw.current, padHeld, delta)
     camera.rotation.set(pitch.current, yaw.current, 0)
     camera.position.y = HALL.eyeHeight
 
-    // Paused or finished, the player may look but not walk (§5.1). The room is
+    // Paused or finished, the player may look but not walk. The room is
     // still readable, which is the point: a paused game is not a blank screen.
     if (!paused && !gameOver) {
       // Normalisation, `delta` scaling and the clamp to `MOVEMENT_BOUNDS` are
-      // all `stepPlayer`'s, where a test can watch them (24 §8.1). This is the
+      // all `stepPlayer`'s, where a test can watch them. This is the
       // one line that is genuinely the renderer's: writing the answer onto the
       // camera.
       const next = stepPlayer(
@@ -279,9 +279,9 @@ export function PlayerController({
       camera.position.z = next.z
     }
 
-    // Proximity, on the model's own radii, and then **the whole of the FM 9
+    // Proximity, on the model's own radii, and then **the whole of the proximity
     // fix**: one comparison, so React hears from the render loop only when the
-    // answer actually changed (§5.1). The ref stays here because it is state;
+    // answer actually changed. The ref stays here because it is state;
     // the decision is `playerMotion.ts`'s, so it is assertable.
     const nearestId = nearestTargetId(camera.position, targets)
     if (shouldReportNearest(reported.current, nearestId)) {

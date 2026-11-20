@@ -9,7 +9,7 @@
  * It must never be added to `.gitignore`. Gitignoring it while `src/` imports
  * it means CI cannot build the frontend, and the frontend then silently stops
  * deploying while the backend keeps auto-deploying — the sibling Tequila
- * project does exactly that and has been in that state (section 16, 4.11).
+ * project does exactly that and has been in that state.
  *
  * The project is `beery-30d23`. If you point this at a different project,
  * change it here and nowhere else; there is no environment override, so there

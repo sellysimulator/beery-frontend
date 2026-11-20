@@ -1,12 +1,11 @@
 /**
- * `24-frontend-3d-board.md §5.7` — the on-screen movement pad, as a DOM
- * component.
+ * The 3D board's on-screen movement pad (spec §9.7), as a DOM component.
  *
- * Covers §9 acceptance criterion 24's pad half: six named buttons in a named
- * group, each **held** rather than clicked, and every way a finger's lift can
- * fail to arrive releasing the press anyway. A press that is never released is
- * a player walking into a wall until they find the button again, so the four
- * release paths are each asserted on their own.
+ * Covers six named buttons in a named group, each **held** rather than
+ * clicked, and every way a finger's lift can fail to arrive releasing the
+ * press anyway. A press that is never released is a player walking into a
+ * wall until they find the button again, so the four release paths are each
+ * asserted on their own.
  *
  * Harness notes:
  *  - `MovePad` imports nothing from three.js; it reports presses through two
@@ -40,7 +39,7 @@ const BUTTONS: ReadonlyArray<[name: string, control: PadControl]> = [
   ['Move right', 'strafe-right'],
 ]
 
-describe('MovePad §5.7: six named buttons in one named group', () => {
+describe('MovePad: six named buttons in one named group', () => {
   it('is a group named "Movement controls" holding the six buttons, in grid order', () => {
     renderPad()
     const group = screen.getByRole('group', { name: 'Movement controls' })
@@ -69,7 +68,7 @@ describe('MovePad §5.7: six named buttons in one named group', () => {
   })
 })
 
-describe('MovePad §5.7: held, not clicked', () => {
+describe('MovePad: held, not clicked', () => {
   it.each(BUTTONS)('pointerdown on "%s" presses %s, pointerup releases it', (name, control) => {
     const { onPress, onRelease } = renderPad()
     const button = screen.getByRole('button', { name })
@@ -128,7 +127,7 @@ describe('MovePad §5.7: held, not clicked', () => {
   })
 })
 
-describe('MovePad §5.7: Space and Enter hold a focused button', () => {
+describe('MovePad: Space and Enter hold a focused button', () => {
   it.each([' ', 'Enter'])('keydown %j presses, keyup releases', (key) => {
     const { onPress, onRelease } = renderPad()
     const button = screen.getByRole('button', { name: 'Move backward' })

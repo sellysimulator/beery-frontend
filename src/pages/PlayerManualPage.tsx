@@ -181,7 +181,7 @@ const BODY: ManualPageSpec[] = [
   },
   {
     // `beer-game-manual.md` "The 3D warehouse (optional)". Both input methods
-    // are described because both work (24 §5.7): the warehouse stopped being
+    // are described because both work: the warehouse stopped being
     // keyboard-and-mouse-only when it gained its touch controls.
     id: 'the-3d-warehouse',
     heading: 'The 3D warehouse (optional)',

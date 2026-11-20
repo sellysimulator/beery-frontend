@@ -1,21 +1,21 @@
 /**
- * `19-frontend-game-room.md §2.3` — `DecisionForm`, "what you can do".
+ * `DecisionForm`, "what you can do" (spec §9.2).
  *
- * Covers acceptance criteria 9, 10, 11, 12, 13 and 25, and failure modes 5, 6,
- * 10 and 14.
+ * Covers: the constraints are stated, the arrival preview, the quick-fills,
+ * what goes on the wire, submission while paused, and keyboard-only use.
  *
  * Harness notes:
  *  - The form is driven through `GameRoomPlaying`, not rendered directly.
- *    `17 §2.0` freezes the playing screen as taking **no props** and reading
+ *    The playing screen takes **no props** and reads
  *    the store; no document freezes a prop shape for the components inside
  *    it, so addressing one directly would mean inventing one. Assertions are
  *    scoped to the form's own region.
  *  - `socket.io-client` is replaced by a recorder, so `src/api/socket.ts` and
  *    `src/api/games.ts` run as real, un-mocked code while nothing touches
  *    transport. What is asserted is therefore what goes on the wire
- *    (`12 §2`), not the name of any client function.
- *  - The charting library is **not** mocked: `§2.6a` makes the chart's
- *    visually hidden table the section's surface for it, and the canvas is
+ *    (spec §11.2), not the name of any client function.
+ *  - The charting library is **not** mocked: the chart's visually hidden
+ *    table is the test surface for it, and the canvas is
  *    wrapped so a missing 2D context degrades to that table.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -169,7 +169,7 @@ function settlementFor(role: Role, week: number): WeekSettlement {
 /**
  * The fixture carries 1, 3, 4 and 5 in other, delay-shaped fields, so that a
  * preview reassembled out of anything but `order_arrival_lead_weeks` names a
- * different week (failure mode 12).
+ * different week.
  */
 function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
   const week = typeof over.week === 'number' ? over.week : 6;
@@ -196,7 +196,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     min_order_quantity: 0,
     max_order_quantity: 9999,
     show_supply_line_prominently: true,
-    // `07 §3.8`: the Factory's unstarted production, `null` for the others.
+    // The Factory's unstarted production, `null` for the others.
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
     order_arrival_week: week + 4,
@@ -264,11 +264,11 @@ function emitsOf(event: string): Array<Record<string, unknown>> {
     .map((e) => (e.payload ?? {}) as Record<string, unknown>);
 }
 
-/** `§2.3`: "One numeric input: how many units to order from your supplier." */
+/** "One numeric input: how many units to order from your supplier." */
 function orderInput(): HTMLInputElement {
   const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input'));
   const found = inputs.find((i) => i.type === 'number') ?? inputs[0];
-  if (!found) throw new Error('§2.3 requires one numeric input for the order quantity.');
+  if (!found) throw new Error('The decision form requires one numeric input for the order quantity.');
   return found;
 }
 
@@ -279,7 +279,7 @@ function controlMatching(re: RegExp, what: string): HTMLElement {
     .filter((el) => re.test(textOf(el)) || re.test(el.getAttribute('aria-label') ?? ''))
     .sort((a, b) => textOf(a).length - textOf(b).length);
   if (matches.length === 0) {
-    throw new Error(`§2.3 requires a control for "${what}"; nothing matched ${re}.`);
+    throw new Error(`The decision form requires a control for "${what}"; nothing matched ${re}.`);
   }
   return matches[0];
 }
@@ -296,7 +296,7 @@ function formRegion(): HTMLElement {
   let el: HTMLElement | null = input.parentElement;
   const confirm = confirmControl();
   while (el && !el.contains(confirm)) el = el.parentElement;
-  if (!el) throw new Error('§2.3 requires the input, the quick-fills and Confirm in one form.');
+  if (!el) throw new Error('The decision form requires the input, the quick-fills and Confirm in one form.');
   return el;
 }
 
@@ -344,10 +344,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 9 — the constraints are stated, not only enforced
+// The constraints are stated, not only enforced
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 9: the minimum and the maximum are stated in text', () => {
+describe('the minimum and the maximum are stated in text', () => {
   it('states a minimum of 0 and the configured maximum', () => {
     renderForm(viewFor('WHOLESALER', { max_order_quantity: 500 }));
 
@@ -357,7 +357,7 @@ describe('CRITERION 9: the minimum and the maximum are stated in text', () => {
   });
 
   it('takes both bounds from your_state, as min and max attributes', () => {
-    // Amended 2026-11-02: there are no negative orders. The floor is the
+    // There are no negative orders. The floor is the
     // server's `min_order_quantity` (always 0), never one the form invents.
     renderForm(viewFor('WHOLESALER', { min_order_quantity: 0, max_order_quantity: 500 }));
 
@@ -393,12 +393,12 @@ describe('CRITERION 9: the minimum and the maximum are stated in text', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 10 and 11, failure mode 12 — the arrival preview
+// The arrival preview
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10: the preview names the server’s order_arrival_week', () => {
-  // 2026-11-03: the form used to add `week + order_arrival_lead_weeks` itself.
-  // It now prints the server's `order_arrival_week`, and the lead in weeks.
+describe('the preview names the server’s order_arrival_week', () => {
+  // The form never adds `week + order_arrival_lead_weeks` itself. It prints
+  // the server's `order_arrival_week`, and the lead in weeks.
   it('names week 10 for week 6 and a lead of 4', async () => {
     const user = userEvent.setup();
     renderForm(
@@ -424,7 +424,7 @@ describe('CRITERION 10: the preview names the server’s order_arrival_week', ()
   });
 });
 
-describe('CRITERION 11: the Factory produces rather than orders', () => {
+describe('the Factory produces rather than orders', () => {
   it('labels the input as production for the Factory', () => {
     renderForm(viewFor('FACTORY'));
 
@@ -440,9 +440,9 @@ describe('CRITERION 11: the Factory produces rather than orders', () => {
   });
 });
 
-describe('FAILURE MODE 14: the preview is never reassembled from other numbers', () => {
-  // `§3.8`: no per-role delay is sent at all, precisely so this cannot be
-  // attempted, and since 2026-11-03 the week itself is the server's too.
+describe('the preview is never reassembled from other numbers', () => {
+  // No per-role delay is sent at all, precisely so this cannot be attempted,
+  // and the week itself is the server's too.
   const roles: Role[] = ['FACTORY', 'WHOLESALER'];
 
   it.each(roles)('%s names week 8 for week 6 and a lead of 2', async (role) => {
@@ -470,10 +470,10 @@ describe('FAILURE MODE 14: the preview is never reassembled from other numbers',
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 12 — the quick-fill buttons
+// The quick-fill buttons
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 12: the three quick-fill buttons fill the right numbers', () => {
+describe('the three quick-fill buttons fill the right numbers', () => {
   it('"Match incoming order" fills this week’s incoming order', async () => {
     const user = userEvent.setup();
     renderForm(viewFor('WHOLESALER', { incoming_order: 55 }));
@@ -512,10 +512,10 @@ describe('CRITERION 12: the three quick-fill buttons fill the right numbers', ()
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 13 and failure modes 5 and 6 — what goes on the wire
+// What goes on the wire
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 13: confirming emits submit_order for the open week', () => {
+describe('confirming emits submit_order for the open week', () => {
   it('emits the open week and the entered quantity', async () => {
     const user = userEvent.setup();
     renderForm(viewFor('WHOLESALER', { week: 6 }));
@@ -537,7 +537,7 @@ describe('CRITERION 13: confirming emits submit_order for the open week', () => 
   });
 });
 
-describe('FAILURE MODE 5: no client-computed total reaches the wire', () => {
+describe('no client-computed total reaches the wire', () => {
   it('emits exactly {room_id, week, order}', async () => {
     const user = userEvent.setup();
     renderForm(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
@@ -570,7 +570,7 @@ describe('FAILURE MODE 5: no client-computed total reaches the wire', () => {
   });
 });
 
-describe('FAILURE MODE 6: the emitted week is the client’s believed open week', () => {
+describe('the emitted week is the client’s believed open week', () => {
   it('emits week 5 when the store is on week 5, so STALE_WEEK has something to compare', async () => {
     const user = userEvent.setup();
     renderForm(viewFor('WHOLESALER', { week: 5 }));
@@ -583,10 +583,10 @@ describe('FAILURE MODE 6: the emitted week is the client’s believed open week'
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 10 — submission while paused
+// Submission while paused
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 10: a paused game cannot be submitted into', () => {
+describe('a paused game cannot be submitted into', () => {
   /**
    * The order is entered first, and the control checked enabled, so that
    * "disabled while paused" cannot pass against a form that simply never
@@ -633,10 +633,10 @@ describe('FAILURE MODE 10: a paused game cannot be submitted into', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 25 — keyboard alone
+// Keyboard alone
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 25: the input, quick-fills and confirm are keyboard-operable', () => {
+describe('the input, quick-fills and confirm are keyboard-operable', () => {
   it('reaches every control by Tab', async () => {
     const user = userEvent.setup();
     renderForm(viewFor('WHOLESALER'));

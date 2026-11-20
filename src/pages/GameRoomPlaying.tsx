@@ -18,7 +18,7 @@ import SceneLoading from '../components/game/views/board3d/SceneLoading'
 import ErrorBoundary from '../components/shared/ErrorBoundary'
 
 /**
- * The copy for the server's `TOO_MANY_SUBMISSIONS` refusal (§2.4). The server
+ * The copy for the server's `TOO_MANY_SUBMISSIONS` refusal. The server
  * caps resubmissions at 20; the player keeps the order they already have.
  */
 const TOO_MANY_SUBMISSIONS_MESSAGE =
@@ -34,7 +34,7 @@ const BOT_SEAT_MESSAGE = 'A bot is playing your role. Take it back to order agai
 const WEEK_HIGHLIGHT_MS = 400
 
 /**
- * The 3D board, loaded only when somebody asks for it (24 §2.1).
+ * The 3D board, loaded only when somebody asks for it.
  *
  * `lazy()`, never a static import. A static one would put three.js in the entry
  * graph for every player who never opens it — Tequila's defect, and the same
@@ -45,12 +45,12 @@ const Board3D = lazy(() => import('../components/game/views/Board3D'))
 /**
  * The view seam (**D15**), now used. State flows through the store and into
  * whichever board is registered here, and nothing below the view layer changed
- * when the second entry arrived: section 24's `Board3D` implements the same
+ * when the second entry arrived: `Board3D` implements the same
  * `BoardViewProps` and drops in at the same place.
  *
  * The record is typed `ComponentType<BoardViewProps>` rather than a plain
  * function, because `lazy()` returns a `LazyExoticComponent` and the narrower
- * type will not hold it. `BoardViewProps` itself is untouched (24 §1.2).
+ * type will not hold it. `BoardViewProps` itself is untouched.
  */
 const BOARD_VIEWS: Record<string, ComponentType<BoardViewProps>> = {
   '2D': Board2D,
@@ -60,29 +60,27 @@ const BOARD_VIEWS: Record<string, ComponentType<BoardViewProps>> = {
 /**
  * The screen a player spends the whole game on.
  *
- * Section 17's `GameRoom.tsx` shell resolves it by path and name and renders
- * it once the room is `RUNNING`, `PAUSED` or `FINISHED` (**D19**). It takes no
+ * The `GameRoom.tsx` shell resolves it by path and name and renders
+ * it once the room is `RUNNING`, `PAUSED` or `FINISHED`. It takes no
  * props and reads the store directly, as every delegated screen does, and it
  * exports no `route`: it is not a page, and the registry's glob over
  * `src/pages/*.tsx` must not pick it up.
  *
  * No game state lives in component state. Everything on the screen is rebuilt
  * from `your_state` on every render, which is what makes a refresh — and the
- * full resync that follows it — indistinguishable from never having left
- * (§3.3). The three `useState` calls below hold interaction state only: which
+ * full resync that follows it — indistinguishable from never having left.
+ * The three `useState` calls below hold interaction state only: which
  * week the player has reopened, what they last sent, and whether to flash the
  * recap for 400 ms.
  *
  * It registers no socket listener of its own. The one server error it has copy
- * for reaches it through `store.lastError`, which section 16's `error` handler
- * writes: the store is the single reader of the wire (`00-conventions.md §4`,
- * §2.4).
+ * for reaches it through `store.lastError`, which the socket's `error` handler
+ * writes: the store is the single reader of the wire.
  */
 export function GameRoomPlaying(): ReactElement {
-  // Runtime-mutable now, so a hook rather than the module constant this used to
-  // be: the player chooses their board mid-game and the choice persists per
-  // browser (24 §2.2). An unknown key still falls through to `Board2D`, exactly
-  // as `19 §2.8` required of the seam before it had a second entry.
+  // Runtime-mutable, so a hook rather than a module constant: the player
+  // chooses their board mid-game and the choice persists per browser
+  // (spec §9.7). An unknown key still falls through to `Board2D`.
   const [boardChoice, setBoardChoice] = useBoardViewChoice()
   const Board = BOARD_VIEWS[boardChoice] ?? Board2D
 
@@ -112,7 +110,7 @@ export function GameRoomPlaying(): ReactElement {
 
   // A week turning over has to be visible, or a player misses that anything
   // happened. Brief, and nothing but a highlight: the content itself is
-  // already rebuilt from the new `your_state` (§3.2).
+  // already rebuilt from the new `your_state`.
   useEffect(() => {
     if (week === null) return
     const previous = previousWeek.current
@@ -120,7 +118,7 @@ export function GameRoomPlaying(): ReactElement {
     if (previous === null || previous === week) return
 
     // A refusal belongs to the week it was refused in. Cleared on the turn of
-    // the week, and not on a remount, which must render identically (FM 11).
+    // the week, and not on a remount, which must render identically.
     clearLastError()
     setWeekChanged(true)
     const timer = setTimeout(() => setWeekChanged(false), WEEK_HIGHLIGHT_MS)
@@ -140,8 +138,8 @@ export function GameRoomPlaying(): ReactElement {
 
   const gameOver = roomState === 'FINISHED' || myState.phase === 'FINISHED'
   // The server has refused a resubmission: the order the player already has
-  // stands, so the screen goes back to — and stays in — the locked state
-  // (§2.4, AC 17). Derived, not copied into component state, so it survives a
+  // stands, so the screen goes back to — and stays in — the locked state.
+  // Derived, not copied into component state, so it survives a
   // remount exactly as the store does.
   const refusedResubmission = lastError?.code === TOO_MANY_SUBMISSIONS_CODE
   // The host swapped a bot into this player's seat (`bot_substituted`). The
@@ -160,7 +158,7 @@ export function GameRoomPlaying(): ReactElement {
 
   function handleSubmitOrder(order: number): void {
     // Paused or finished, the server refuses the order anyway; not emitting
-    // is the client half of the same rule (§2.7, FM 10).
+    // is the client half of the same rule.
     if (!roomCode || week === null || paused || gameOver) return
 
     setLastSubmission({ week, order })
@@ -168,14 +166,14 @@ export function GameRoomPlaying(): ReactElement {
     clearLastError()
     // Exactly `{room_id, week, order}`. No total, no alias, no claim of
     // authority — `week` is the guard the server's STALE_WEEK check compares
-    // against (`12-socket-play.md` section 2).
+    // against (spec §11.2).
     submitOrder({ room_id: roomCode, week, order })
   }
 
   function handleChangeOrder(): void {
     if (week === null) return
     // Acting on the refusal dismisses it, the way a screen dismisses
-    // `joinError` once it has been shown (`16 §3`).
+    // `joinError` once it has been shown.
     clearLastError()
     setReopenedWeek(week)
   }
@@ -199,7 +197,7 @@ export function GameRoomPlaying(): ReactElement {
       : null,
     notice,
     // "Your last order stands": once the server has capped the
-    // resubmissions, there is nothing left to change this week (§2.4).
+    // resubmissions, there is nothing left to change this week.
     canChangeOrder: !paused && !gameOver && !refusedResubmission && !replacedByBot,
     weekChanged,
     onSubmitOrder: handleSubmitOrder,
@@ -217,17 +215,17 @@ export function GameRoomPlaying(): ReactElement {
       {replacedByBot ? <BotSeatNotice onReclaim={handleReclaim} /> : null}
       {/*
         `<Suspense>` because `Board3D` is a lazy chunk: on the toggle it is
-        fetched mid-game, on classroom wi-fi, with three people waiting
-        (24 risk 2). The fallback is a card, not a spinner on black.
+        fetched mid-game, on classroom wi-fi, with three people waiting.
+        The fallback is a card, not a spinner on black.
 
-        This is the **outer** of the two boundaries 24 §7.4 asks for — the one
-        around the lazy import. `SceneLoading` is the fallback the spec names
-        for it (§6.2), and it is the only one of the two that can hold DOM: the
+        This is the **outer** of the 3D board's two boundaries — the one
+        around the lazy import. `SceneLoading` is its fallback, and it is the
+        only one of the two that can hold DOM: the
         second boundary is inside the `<Canvas>`, where every element is
         resolved against the THREE namespace and a `<div>` would throw.
 
         `SceneLoading` imports nothing but React, so naming it here does not
-        pull three.js into the entry graph — AC 4 still holds.
+        pull three.js into the entry graph.
 
         The boundary is keyed on the choice so that toggling back resets it.
         It catches what `Board3D`'s own boundary cannot: the lazy import
@@ -244,7 +242,7 @@ export function GameRoomPlaying(): ReactElement {
       </ErrorBoundary>
 
       {/*
-        A SIBLING of the board, never a prop of it (24 §2.1). That is what keeps
+        A SIBLING of the board, never a prop of it. That is what keeps
         `Board2D.tsx` unedited and `BoardViewProps` un-widened while both boards
         get the toggle for free.
       */}

@@ -1,16 +1,16 @@
 /**
  * The results chart's Chart.js registration and its one pure builder.
  *
- * Two things live here, and the split is frozen by `21-frontend-results.md`
- * section 2.2a: a Chart.js canvas is opaque to jsdom, so the configuration the
+ * Two things live here, and the split is deliberate: a Chart.js canvas is
+ * opaque to jsdom, so the configuration the
  * chart is handed has to be assertable without a canvas. `buildBullwhipConfig`
  * returns **exactly** what `BullwhipChart` renders — the component adds
- * nothing to it — which is what lets the chart's acceptance criteria be
+ * nothing to it — which is what lets the chart's tests be
  * checked against an object instead of against a mocked library.
  *
- * `ResultsView` lives here rather than beside the page because the frozen
+ * `ResultsView` lives here rather than beside the page because the
  * signature of the builder names it, and because every results component
- * reads that one view model and nothing else (section 2.0).
+ * reads that one view model and nothing else.
  */
 import {
   BarElement,
@@ -46,7 +46,7 @@ ChartJS.register(
   Legend,
 )
 
-/* ─── The one view model (section 2.0) ─── */
+/* ─── The one view model ─── */
 
 /**
  * One role's figures, as the screen reads them.
@@ -54,7 +54,7 @@ ChartJS.register(
  * `inventory`, `backlog` and `cumulative_cost` are the per-week series that
  * only the persisted payload carries, so they are optional here. An absent
  * series is **not rendered** — never zeroed, never re-derived from `orders`,
- * which would put a figure on the screen that the server never sent (§3.2).
+ * which would put a figure on the screen that the server never sent.
  */
 export interface RoleResultView {
   role: Role
@@ -82,7 +82,7 @@ export interface RoleResultView {
 /**
  * What every component on the results screen reads, whichever path filled it.
  *
- * The two entry paths (§3.1) do not deliver the same fields, so both are
+ * The two entry paths do not deliver the same fields, so both are
  * normalised into this before anything renders. The optional tail is the
  * session-facts block: present on the URL path, absent on the live one.
  */
@@ -109,12 +109,12 @@ export interface ResultsView {
   public_id?: string
 }
 
-/* ─── The persisted payload, and its normaliser (`15 §2`; §2.0 FROZEN) ─── */
+/* ─── The persisted payload, and its normaliser ─── */
 
 /**
  * One role's entry in `GET /games/{code}/results` and
  * `GET /users/me/games/{id}` — the two routes that return the identical
- * payload (`15 §2`).
+ * payload.
  */
 export interface RoleResult {
   role: Role
@@ -158,9 +158,9 @@ export interface ResultsResponse {
  * payload, so the per-week series and the session facts are both present.
  *
  * It lives here beside `ResultsView` rather than in `ResultsPage.tsx` because
- * section 22's match detail renders the same payload through the same
+ * the profile's match detail renders the same payload through the same
  * components, and a second mapping of one contract drifts from the first the
- * moment either changes (`22 §2.4`).
+ * moment either changes.
  */
 export function resultsViewFromResponse(payload: ResultsResponse): ResultsView {
   const perRole: RoleResultView[] = ROLE_ORDER.flatMap((role) => {
@@ -235,7 +235,7 @@ export interface BullwhipConfigOptions {
 }
 
 /**
- * The reveal, as a configuration object (section 2.2).
+ * The reveal, as a configuration object.
  *
  * The rules that make the chart teach the lesson rather than hide it:
  *   - five series on **one** Y axis. A secondary axis rescales the order
@@ -246,7 +246,7 @@ export interface BullwhipConfigOptions {
  *   - true customer demand is the **last** dataset, so Chart.js draws it on
  *     top of the four order curves, and it carries no dash;
  *   - Chart.js's own legend is off. The legend is real DOM in
- *     `BullwhipChart` (section 2.2a), one switch per series — the single most
+ *     `BullwhipChart`, one switch per series — the single most
  *     useful control in the debrief, as it lets a host bring the chain in one
  *     stage at a time. A canvas legend as well would be a second, unreachable
  *     copy of it.
@@ -300,7 +300,7 @@ export function buildBullwhipConfig(
       labels,
       // A series the view no longer carries is not a flat line at the bottom
       // of the chart: it is gone. That is what makes the legend's demand
-      // switch behave like the four role switches (AC 7).
+      // switch behave like the four role switches.
       datasets: demandPoints.length > 0 ? [...orderDatasets, demandDataset] : orderDatasets,
     },
     options: {

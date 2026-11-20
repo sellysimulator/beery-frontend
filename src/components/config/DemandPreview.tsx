@@ -83,7 +83,7 @@ export interface DemandPreviewProps {
 /**
  * The customer demand a host is about to run, drawn for every week of the game.
  *
- * Every number on it is the server's (`POST /rooms/preview`, 2026-11-03): the
+ * Every number on it is the server's (`POST /rooms/preview`): the
  * series is what the engine's own generator produced for the draft, so the
  * preview and the game cannot disagree, and this component does no demand
  * arithmetic at all. While the server is working it says so instead of

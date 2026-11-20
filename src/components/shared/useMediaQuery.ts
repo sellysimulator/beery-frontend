@@ -12,7 +12,7 @@ import { useCallback, useSyncExternalStore } from 'react'
  * assert anything about.
  *
  * It lived privately in `BoardViewToggle.tsx` until the 3D board's touch
- * controls (24 §5.7) needed the same answer for `(any-pointer: coarse)`. Two
+ * controls needed the same answer for `(any-pointer: coarse)`. Two
  * copies of a subscription are two subscriptions that drift, so there is one.
  */
 export function useMediaQuery(query: string): boolean {

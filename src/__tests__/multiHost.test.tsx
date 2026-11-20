@@ -1,9 +1,9 @@
 /**
  * Multi-game hosting: one base config, N games (`POST /rooms/batch-create`), and
- * a dashboard above each game's unchanged host screen (`10 §3.5c`, `§3.5d`).
+ * a dashboard above each game's unchanged host screen (spec §9.6).
  *
  * The setup page runs the lobby's own config form (`ConfigSections`) over a
- * local draft (2026-11-14). The fake `previewConfig` below plays the server's
+ * local draft. The fake `previewConfig` below plays the server's
  * part: it merges the patch over the draft, fills a new demand kind's
  * defaults, refuses what the server refuses with its `"field: message"` 422,
  * and answers with the validated `config`.

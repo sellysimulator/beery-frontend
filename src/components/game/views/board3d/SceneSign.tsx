@@ -11,7 +11,7 @@ import { toTriple } from './sceneMaterials'
  * Every word painted inside the canvas goes through this component.
  *
  * Two rules it exists to keep. First, **in-scene text is drei `<Text>`, never
- * drei `<Html>`** (24 §7.1): an `<Html>` inside the canvas is a DOM node
+ * drei `<Html>`**: an `<Html>` inside the canvas is a DOM node
  * positioned by a per-frame projection, which is a layout and a style
  * recalculation every frame, and it is unreachable behind the wrapper's
  * `aria-hidden` anyway. Second, one wrapper means one place where the font,
@@ -21,12 +21,11 @@ import { toTriple } from './sceneMaterials'
  *
  * The words themselves are never this component's business. Every string,
  * every position, every size and every colour arrives from the `SceneModel`,
- * which built it out of a `PlayerView` field — 24 §8.1 and `19 §3.1` between
- * them mean a figure a player reads must be the server's, rendered verbatim,
- * and a sign that formatted its own number would be exactly the defect §4.1
- * exists to prevent.
+ * which built it out of a `PlayerView` field: a figure a player reads must be
+ * the server's, rendered verbatim, and a sign that formatted its own number
+ * would break exactly that.
  *
- * **On the font.** 24 §6.1 ships four GLBs and no font file, so there is no
+ * **On the font.** The board ships four GLBs and no font file, so there is no
  * local `.woff` to point troika at and the default resolution stands. What is
  * shared here is everything else: size, wrap, anchors, line pitch and the
  * `--color-ink` default. The wrap width and the line pitch now live in
@@ -35,12 +34,11 @@ import { toTriple } from './sceneMaterials'
  */
 
 /**
- * **No outline, deliberately** (24 §7.1) — and, since 2026-09-22, a plate
- * instead.
+ * **No outline, deliberately** — and a plate instead.
  *
  * troika renders `outlineWidth` as a *second pass over a second mesh*, so an
  * outline on every sign doubles the text half of the draw-call budget, and
- * text is the largest single line item in 24 §7.1's arithmetic. Dropping it
+ * text is the largest single line item in the draw-call arithmetic. Dropping it
  * was right about the cost and wrong about the consequence: it left thirty-odd
  * `#23201a` strings with nothing behind them, and a player who walked the hall
  * reported exactly that — *"the contrast on the floating text and the

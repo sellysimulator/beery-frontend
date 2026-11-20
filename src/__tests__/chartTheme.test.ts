@@ -1,11 +1,10 @@
 /**
- * BE-1 (`CHARTS-PLAN.md`), the theme half of the chart kit.
+ * The theme half of the chart kit.
  *
- * Covers acceptance (1) no palette literal outside `chartTheme.ts`, acceptance
- * (2) the drift test that fails when one token changes, and the failure mode
- * "a literal drifting from its token".
+ * Covers: no palette literal outside `chartTheme.ts`, and the drift test that
+ * fails when one token changes ("a literal drifting from its token").
  *
- * Chart.js is never mocked (`21 §2.2a`); nothing here needs a canvas.
+ * Chart.js is never mocked; nothing here needs a canvas.
  */
 import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -53,7 +52,7 @@ function drifted(css: string): string[] {
     .map(([token]) => token)
 }
 
-describe('ACCEPTANCE 2 and FAILURE MODE: a literal drifting from its token', () => {
+describe('a literal drifting from its token', () => {
   it('has every CHART_TOKENS literal equal to its --color-* token in index.css', () => {
     expect(drifted(INDEX_CSS)).toEqual([])
   })
@@ -213,7 +212,7 @@ describe('the chart setup reads the theme', () => {
   })
 })
 
-describe('ACCEPTANCE 1: no palette literal remains outside chartTheme.ts', () => {
+describe('no palette literal remains outside chartTheme.ts', () => {
   const SRC = join(ROOT, 'src')
   const ALLOWED = [
     join('components', 'charts', 'chartTheme.ts'),

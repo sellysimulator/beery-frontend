@@ -2,7 +2,7 @@
  * The per-role parameter rows, and which roles each one exists for.
  *
  * They live apart from the grid that renders them because the read-only
- * summary (`18 section 3.3`) has to show the same parameters, in the same
+ * summary has to show the same parameters, in the same
  * order, under the same names — a second list would drift the first time a
  * knob is added, and the host reading it mid-game is the one person who cannot
  * check.
@@ -12,7 +12,7 @@ import type { Limits, Role } from '../../types/game'
 /**
  * Which of the server's ranges a row is checked against. The numbers
  * themselves come from `GET /rooms/limits` at render time (`boundsFor`): the
- * form keeps no copy of them (2026-11-02).
+ * form keeps no copy of them.
  */
 export type RowBounds = 'quantity' | 'money' | 'delay' | 'cap'
 
@@ -55,13 +55,13 @@ export function boundsFor(row: RoleRow, limits: Limits): Bounds {
  * Starting conditions, in the order a host reasons about them: what is on the
  * shelf, what is owed, what is already moving, and how long everything takes.
  *
- * Two rows are role-specific, and both are `18 section 2`'s doing:
+ * Two rows are role-specific:
  *
  * - The **Factory** has no supplier to ship from, so it shows
  *   `production_delay_weeks` and `production_capacity_per_week` where the other
  *   three show `shipping_delay_weeks`.
  * - The **Retailer**'s `information_delay_weeks` is unused
- *   (`06-role-agents.md section 3.1`) and is therefore absent from the DOM, not
+ *   (spec §8.4) and is therefore absent from the DOM, not
  *   merely disabled. A field that does nothing is worse than no field: a host
  *   who sets it believes they changed the game.
  *
@@ -69,7 +69,7 @@ export function boundsFor(row: RoleRow, limits: Limits): Bounds {
  * the engine does with them (`config_models.order_delay_weeks`): a role's
  * order delay is how long its customer's orders take to reach it, so the
  * Distributor's sets the Wholesaler's lead time, not the Distributor's own.
- * The labels said the opposite until 2026-11-02.
+ * Don't label them the other way round.
  */
 export const STARTING_ROWS: RoleRow[] = [
   {

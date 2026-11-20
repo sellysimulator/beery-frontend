@@ -5,7 +5,7 @@
 > it. Edit this one, then re-copy. Do not edit a per-game copy in place — it will be
 > overwritten.
 >
-> Pulky has no copy: `Pulky/pulky-game-spec.md` carries these rules in place, so a change
+> Pulky has no copy: its spec (`Pulky/docs/spec/`) carries these rules in place, so a change
 > here reaches Pulky only when it is written into that spec by hand.
 >
 > Derived from **Tequila Game** (`Selly/Selly_Frontend` + `Selly/Selly_Backend`) after its
@@ -61,11 +61,11 @@ profit line, a cost per unit, a market average, a share. The value never leaves 
 never feeds a decision or the engine, and the chart's table view shows the server figures it
 came from. Anything with a game rule in it is still the server's: eligibility, capacity, a cost
 formula, a forecast for a live decision. That is why a "what if I charge $X today?" curve is a
-server preview, never the client re-running the demand model. (Explaining the model with
-example numbers in help and config screens, as Lemony's `configMath.ts` does, is not a
-forecast for a live decision.) A game may be stricter than this: Beery plots only
-server fields, and shows a combination with geometry (stacking, drawing below the axis)
-instead of a computed number. Decided 2026-11-02; see `chart-proposals-plan.md` §1.
+server preview, never the client re-running the demand model. Help and config screens that
+explain the model with example numbers get those numbers from the server too: Lemony's and
+Pulky's help show the figures of a `POST /config/preview` answer for the draft config. A game
+may be stricter than this: Beery plots only server fields, and shows a combination with
+geometry (stacking, drawing below the axis) instead of a computed number. The rest of the chart rules are in §1 *Charts*.
 
 8. **Every unauthenticated path is bounded.** **[HARD-WON]** Anyone can open a guest socket or
    create a room, and the backend is one small instance holding live state in memory, so one
@@ -124,7 +124,7 @@ a vulnerable Node; raise both after each Node security release.
 > not touch. Express the real constraint with a tilde (`"react": "~19.2.0"`) rather than
 > reaching for `--legacy-peer-deps`. **[HARD-WON]**
 
-> **A walkable 3D view must be playable on touch.** (2026-11-16, ported from the Samby
+> **A walkable 3D view must be playable on touch.** (Ported from the Samby
 > warehouse, `samby-frontend/src/features/analysis/warehouse/`.) A first-person view does not
 > refuse a coarse pointer or a narrow window; it ships these instead:
 > 1. **Drag to look** with pointer events on the canvas (or its wrapper), with pointer capture
@@ -145,8 +145,18 @@ a vulnerable Node; raise both after each Node security release.
 > An orbit-camera view (Lemony's street) needs none of this: drei's `OrbitControls` already
 > orbits with one finger and zooms with a pinch, so it only words its hint for touch.
 
+> **WebGL does not see the page's CSS or its error boundary.**
+> 1. CSS custom properties do not resolve inside a WebGL scene: the scene keeps its own palette
+>    of hex literals copied from the CSS tokens, with a drift test like the charts' theme.
+> 2. A lost WebGL context is an event, not a throw, so a React error boundary never sees it.
+>    Listen for `webglcontextlost` in the capture phase, route to the same 2D fallback, and
+>    store that choice so the next load does not retry.
+> 3. Ignore movement keys while a form field has focus, or typing an order walks the player.
+>    Never `setState` unconditionally inside `useFrame`, and avoid `PointerLockControls` when
+>    DOM panels must stay clickable. **[HARD-WON]**
+
 > **Every frontend draws edge to edge and keeps its controls inside the safe area.**
-> (2026-11-16) `index.html` sets
+> `index.html` sets
 > `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />`.
 > Without `viewport-fit=cover`, iOS letterboxes the page and every `env(safe-area-inset-*)`
 > reads 0, so a padding written against the notch or the home indicator silently does
@@ -271,7 +281,7 @@ never compared.
   the holder's name ("Taken by Ana"), and have the server **refuse** an assignment to a held
   seat rather than move it. Moving it silently unseats the holder, which the host reads as
   two people sharing a seat until one of them vanishes from it. Reassigning is two
-  deliberate steps: unseat, then assign. (Found in Beery, 2026-11-02.)
+  deliberate steps: unseat, then assign. (Found in Beery.)
 
 ### Socket handshake — `autoConnect: false` **[HARD-WON]**
 
@@ -429,6 +439,107 @@ return typeof body === 'object' && body !== null &&
        (body as { status?: unknown }).status === 'ok'
 ```
 
+### Number inputs blur on wheel **[HARD-WON]**
+
+Chrome and Edge step a focused `<input type="number">` under the mouse wheel, so scrolling the
+page silently changes a config value or an order. React's wheel listeners are passive, so
+`preventDefault()` cannot stop it: put `onWheel={(e) => e.currentTarget.blur()}` on every
+number input.
+
+### Charts
+
+The family's chart standard. It goes as far as removing real duplication and closing
+accessibility gaps; per-game identity (palette, font, chart heights, screen layouts) stays
+per game.
+
+**Library and kit.** Every game draws charts with Chart.js 4 + react-chartjs-2 5
+(`npm install chart.js react-chartjs-2`); moving to another library was ruled out. There is
+no shared npm package, because the repos deploy on their own schedules: each repo carries
+its own copy of a small kit under `src/components/charts/`, and Pulky's copy is the
+reference.
+- `chartSetup.ts`: registration and the global defaults (below).
+- `chartTheme.ts`: the canvas colour literals in one place (mirrored from the CSS tokens),
+  the font, the entity style function, a cached `hatchPattern(color)` and the emphasis
+  colours. Pulky keeps these in `chartSetup.ts`; Lemony keeps its validated palettes there.
+- `ChartBox.tsx`, `Legend.tsx` and, where used, `DataTable.tsx`. Pulky keeps them in
+  `components/shared/` with its other shared UI.
+- `plugins/` only for the plugins a game uses: `eventBands` (Tequila Game, Pulky),
+  `crosshairSync` with a crosshair group (Beery, Lemony, Pulky), `referenceRule` (Lemony).
+  Pulky defines its plugins inside `chartSetup.ts`.
+
+**Registration and defaults.** `registerCharts()` in `chartSetup.ts` runs once at module
+load; a chart pulls it in with a side-effect import. It registers piecemeal (a new chart
+type must be registered there), never registers the Title plugin (titles are HTML headings
+in the `ChartBox`) and turns the canvas legend off (legends are DOM). Global defaults:
+tooltip style, a hairline grid from a token, linear scales starting at zero, the game's
+body font, `interaction: { mode: 'index', intersect: false }` on line charts, and animation
+off under `prefers-reduced-motion: reduce`. Beery is the exception: it registers per module
+and sets these options per chart.
+
+**`ChartBox`.** Every chart sits in one. Props: `title`, `caption?`, `ariaLabel`, `height`,
+`controls?`, `legend?`, `table`, `children`. The title is an HTML heading; the canvas
+wrapper has `role="img"` and the aria label; a visible "Show table" toggle swaps the chart
+for a table of the same figures; the canvas sits in an error boundary whose fallback says
+"The chart could not be drawn here. The same figures are in the table." Per game: Lemony
+defaults `ariaLabel` to the title and `height` to 240 and takes `{ head, rows }` through
+`tableFromRows`; Beery adds `headingLevel` and keeps its table in the DOM for screen
+readers, so its toggle reads "Show table" / "Hide table".
+
+**`Legend`.** Legends are DOM, never canvas. Items are
+`{ key, label, swatch: { kind: 'line' | 'fill', color, dash?, pointStyle?, hatched? } }`
+(Beery's swatch carries `dash` and `width`). The swatch repeats the mark's non-colour
+channel (dash, marker, hatch), so a legend never relies on colour alone. Given
+`hidden: ReadonlySet<string>` and `onToggle(key)`, each item is a `role="switch"` button
+with `aria-checked`, keyed by `key`, never by position. Given `onFocusItem(key | null)`,
+hovering or focusing an item emphasises that series.
+
+**Entity identity and emphasis.** One style function per game, keyed by a stable id,
+returns colour, point style, dash and hatch: `playerStyle(alias)` in Tequila Game (P1–P6
+distinct colours, a dash and a hatch from P7 up), `roleStyle(role)` in Beery,
+`PERSON_SERIES` by customer type in Lemony, `pulqueriaStyle(alias)` in Pulky. Never style
+by rank: an entity keeps its style on every chart, and filtering never repaints the
+survivors. Emphasis: the focused entity keeps its style and every other one turns the
+context grey; with about six lines or fewer, label the line ends.
+
+**Numbers.** Both axes carry a title with units. Tooltips use the game's own money and
+quantity formatters. A missing value is `null` (a gap in the line), never `0`. One y-axis
+per chart. What a chart may compute is the display-arithmetic note under invariant 7 (§0).
+
+**Builders and tests.** Each chart has one pure builder, `build<Thing>Config(input):
+ChartConfiguration`, in a plain `.ts` module: no React in it, and the component passes its
+result straight through. Tests assert the builder's output (or the config a chart receives)
+and never mock the builder. Tequila Game, Lemony and Pulky mock only `react-chartjs-2`
+(jsdom has no canvas); Beery never mocks Chart.js. Apply this to new or rewritten charts;
+charts nobody is touching are not retrofitted. Every game's chart-kit tests cover the
+`ChartBox` toggle, aria label and fallback, the `Legend` switch semantics and swatch, and
+each plugin (bands at the right indices, the crosshair broadcasting the hovered index to
+the other charts in its group). Where canvas literals mirror CSS tokens, a drift test
+asserts each literal equals its `--color-*` value in `src/index.css` (Beery, Pulky; Tequila
+Game has no colour tokens, and Lemony's palette is the validated dataviz set rather than
+tokens).
+
+**Interaction rules (games and the catalog).**
+- Every hover detail is also reachable without a pointer: a keyboard-driven crosshair
+  index, or the table view.
+- Hit areas are at least 24 px (point `hitRadius` ≥ 12).
+- Legend toggles work from the keyboard.
+- Every chart has a table view, including the catalog's hand-built admin charts.
+
+**Deliberately not standardized.** Palettes, fonts, heights and layouts. Beery's frozen
+seams (DOM legend, screen-reader table, builder pass-through) and its one-file-one-owner
+rule, so a Beery change adds modules rather than moving code between them. Lemony's
+validated palette. The catalog (`Novus/Supply`), whose admin charts are hand-built HTML on
+its `Table` primitive with no charting library and follow only the interaction rules.
+
+**Gotchas.**
+- A canvas cannot read CSS variables, so chart colours are literals, and only the drift
+  test stops them drifting from the tokens.
+- Keep plugin ids, exports and option shapes stable (about 30 of Pulky's test files read
+  them, e.g. the `peakShading` id): add, don't rename.
+- Beery's tests find legend switches by accessible name, so a series name must stay in its
+  button text.
+- The crosshair costs redraws: one group per screen, redrawing only that group's charts.
+
 ### Env vars
 
 ```
@@ -477,6 +588,17 @@ firebase deploy --only hosting
 `firebase.json`: `public: "dist"`, SPA rewrite `**` → `/index.html`. Firebase Hosting does
 **not** proxy WebSocket upgrades — the socket client must point directly at the backend host in
 production; REST can go through either.
+
+One Firebase project per game, set up once in the console: enable the **Google** sign-in
+provider (Authentication), add a Hosting site with the game's own site id
+(`sellysim`, `beersim`, `lemonysim`, `pulkysim`), register a Web app to get the
+`firebaseConfig` for `firebase.ts`, and generate a service-account key for the backend
+(Project settings → Service accounts). That key is the one real secret: it goes only into
+the backend's `FIREBASE_SERVICE_ACCOUNT_JSON` on Render. The project id and the site id are
+different things: `.firebaserc` takes the **project** id, `firebase.json`'s `"site"` takes
+the **site** id. Hosting serves the app on both `<site>.web.app` and
+`<site>.firebaseapp.com`; a browser on the second sends that as its `Origin`, so list it in
+`CORS_ORIGINS` too if players can reach it.
 
 ---
 
@@ -824,6 +946,26 @@ subset by *removing* keys from the real object, never by hand-assembling a new f
 
 Every state read-modify-write inside a handler is wrapped in `state_svc.lock(room_id)`.
 
+**The room lock is not reentrant: emit after release.** Re-acquiring the per-room lock inside
+itself deadlocks the room for the lock timeout. Read, mutate, save, build the payloads and mint
+`seq` inside the lock; emit, and call any other service method that takes the lock, only after
+it is released. Drive a cascade (an all-bot game closing round after round) with a loop of
+short acquisitions, never with recursion between two public methods. **[HARD-WON]**
+
+**Every `start_game` refusal carries `room_code`.** Reply `join_error {message, room_code}` on
+every refusal, including the rate-limit and server-error replies of the guard decorator, so a
+dashboard that runs several games can put each refusal on its own game's card. Listeners that
+read only `message` are unaffected.
+
+**Disconnect cleanup runs in order.** The room-level disconnect hook (pause the game, tell the
+host) runs *before* the socket manager drops the sid maps. Reversed, there is no room code left
+to look the participant up by, and the game silently never pauses.
+
+**Host recovery by identity never matches a null.** A game that lets a host reclaim a room by
+verified identity after losing the tab must return `False` when the stored host identity is
+null, and only a claim authorised by `host_secret` may record that identity. Otherwise the
+recovery path hands a fresh room to the first stranger who asks.
+
 **Two maps will exist, and only one is authoritative.** A `SocketManager` holding
 `sid_to_alias` in process memory is convenient, and the room document in Redis holds the same
 mapping. The moment `AsyncRedisManager` is configured, a second uvicorn process exists, and
@@ -874,14 +1016,14 @@ engine that clears its pending submissions on close reports everyone as undecide
 FINISHED). A client store that also applies the room-wide "X submitted" event to the host's
 view is a cheap second line of defence, not a substitute. Test it end to end: humans plus
 bots, played to the last round, and assert the host's last state marks every seat
-submitted. (Beery and Pulky each shipped a variant of this; found 2026-11-02.)
+submitted. (Beery and Pulky each shipped a variant of this.)
 
 **Broadcast every participant the server creates.** Bots filled in at `start_game` are
 participants like any other, and a client only knows a participant from a participant-list
 event. If start emits only "game started" plus a role map, every client holds a list with
 no entry for the bot seats, and anything rendered from that list — names, a Bot badge, the
 live results' cost cards — comes out blank for exactly those seats. Emit the lobby /
-participant-list payload again after the seats are filled. (Found in Beery, 2026-11-02.)
+participant-list payload again after the seats are filled. (Found in Beery.)
 
 ### Redis — three distinct roles
 
@@ -1151,6 +1293,13 @@ builds the image). `exec` makes uvicorn PID 1, so it gets Render's stop signal. 
 remains the default because Render does not publish fixed proxy addresses and the container is
 only reachable through their proxy. Ensure `.dockerignore` excludes `.env`.
 
+**The Render service.** A Docker web service on the free plan, built from the backend
+repo's root (leave Root Directory blank), Health Check Path `/api/v1/health`. Do not set
+`PORT`: Render injects it and the CMD's `${PORT:-8080}` picks it up. Each backend's
+`render.yaml` records these settings (it is not Blueprint-linked; the dashboard is the source).
+`CORS_ORIGINS` on the platform is a JSON array, `["https://<site>.web.app","http://localhost:5173"]`,
+never a bare comma list and never `["*"]`.
+
 > The image bakes in a **code snapshot** — there is no bind mount. A source change needs a
 > rebuild, and a running container will happily keep serving the old code (which looks exactly
 > like "my fix didn't work"). For iteration use `uvicorn app.main:application --reload`.
@@ -1172,6 +1321,29 @@ DB_MAX_OVERFLOW=
 REDIS_URL=
 FIREBASE_SERVICE_ACCOUNT_JSON=
 ```
+
+### Tests **[HARD-WON]**
+
+- **A concurrency test needs a forced suspension point.** Against an in-memory store or
+  FakeRedis, a lock test proves nothing unless the critical section yields
+  (`await asyncio.sleep(0)`) between read and write. Confirm the test goes red with the lock
+  removed.
+- **See every new regression test fail once.** Break the code, watch the test go red, restore
+  it. When a database constraint is named as the backstop for a race, check that the race can
+  actually reach that constraint.
+- **Package markers.** Every `tests/test_<area>/` has an `__init__.py` and `tests/` itself has
+  none; otherwise a second `conftest.py` makes `from conftest import …` bind to the wrong
+  module. A throwaway mapped class in a test gets its own `DeclarativeBase`, never the app's
+  `Base`, which it would pollute and so break the schema comparisons.
+- **No test skips itself once later code lands.** A skip-if-missing guard written for a file
+  that does not exist yet keeps skipping silently after it does; delete the guard when the file
+  arrives.
+- **No two file names differ only by case.** On case-insensitive macOS and Windows filesystems
+  an extensionless import of `demandCurve` next to `DemandCurve.tsx` resolves to the wrong file
+  (TS1261). Name chart builders `*Config.ts`.
+- **Test the empty case of `import.meta.glob` against an explicit record.** The glob expands at
+  transform time, so the live registry is never empty once the files exist. Expose a
+  `collectRoutes(record)`-style function and test that instead of the live glob.
 
 ---
 
@@ -1202,12 +1374,13 @@ re-decide it. Specifically: the **real-time transport** (Socket.IO — see §2),
 model (verified Firebase ID token or guest id, established at the handshake), the
 authority model (`host_secret` compared with `hmac.compare_digest`), the three identifiers
 (`alias` / `session_token` / `identity`), Redis as the live room store and lock, and the
-deploy shape.
+deploy shape. Likewise, a user's profile and game history list only the games they
+**played**; games they hosted are never listed there.
 
 A game's own spec document is authoritative on **game semantics** — rules, costs, scoring,
 round structure, what a player sees. This file is authoritative on **plumbing**. Where the
 two conflict, the game document is superseded on the plumbing point, and the conflict should
-be written down in that game's plan rather than silently resolved in code.
+be written down in that game's spec rather than silently resolved in code.
 
 ---
 

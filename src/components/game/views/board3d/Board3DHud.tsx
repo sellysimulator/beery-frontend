@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components --
    The HUD's fixed copy lives beside the HUD that renders it. `PROMPT_COPY` is
    the keyboard vocabulary this overlay teaches and `TOUCH_PROMPT_COPY` the
-   touch one, and 24 §6.2 puts them in this file on purpose: a second copy of
+   touch one, and both live in this file on purpose: a second copy of
    "Esc to close" in a legend and in a test fixture is a copy that drifts. */
 import type { ReactElement } from 'react'
 import type { PlayerView } from '../../../../types/game'
@@ -17,7 +17,7 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  * The fixed copy of the overlay — the controls the player has, in the words the
  * prompts use.
  *
- * The per-state desk prompt is **not** here: 24 §5.2 makes it a pure function of
+ * The per-state desk prompt is **not** here: it is a pure function of
  * the props in `sceneModel.ts`, and the HUD only renders the string the model
  * already produced. What lives here is the vocabulary that never varies with
  * game state, which is exactly the part a legend and a test both need to name.
@@ -30,7 +30,7 @@ export const PROMPT_COPY: Record<'move' | 'look' | 'interact' | 'close', string>
 }
 
 /**
- * The same four lines for a finger (24 §5.7). Shown instead of `PROMPT_COPY`
+ * The same four lines for a finger. Shown instead of `PROMPT_COPY`
  * on a coarse pointer, because "W A S D" on a phone is a legend for a keyboard
  * that is not there. Short on purpose: on a 375 px screen the legend shares
  * its row with the 2D/3D toggle and wraps into whatever is left.
@@ -71,38 +71,37 @@ export interface Board3DHudProps {
   /**
    * The interact target in range, as the model describes it, or null when
    * nothing is within `INTERACT_DISTANCE`. Its `prompt` is already worded by
-   * `sceneModel.ts` (§5.2); its `enabled` decides whether the Open button is
-   * offered (§5.7) — false while paused, exactly when `E` is inert.
+   * `sceneModel.ts`; its `enabled` decides whether the Open button is
+   * offered — false while paused, exactly when `E` is inert.
    */
   nearTarget: InteractTarget | null
   /**
    * Open the station the player is standing at — the very function `Board3D`
-   * binds to `E`, so a tap and a keypress cannot open different things
-   * (24 §5.7).
+   * binds to `E`, so a tap and a keypress cannot open different things.
    */
   onInteract(id: InteractTargetId): void
   /**
    * The on-screen pad's press/release pair, or null while a panel is open.
-   * The pad renders only on a coarse pointer (§5.7); with a panel open there
+   * The pad renders only on a coarse pointer; with a panel open there
    * is nothing to walk to and the frame loop is idle, so it gets out of the
    * panel's way rather than sitting under it.
    */
   pad: MovePadProps | null
-  /** A server refusal to surface, or null (§5.6). */
+  /** A server refusal to surface, or null. */
   notice: string | null
-  /** True for the 400 ms after a week turned over (§5.5). */
+  /** True for the 400 ms after a week turned over. */
   weekChanged: boolean
 }
 
 /**
- * The DOM overlay: everything in this board that is text (24 §6.2).
+ * The DOM overlay: everything in this board that is text.
  *
  * The rule the whole file follows is that **words are DOM and never in-scene**.
  * A sign painted on a wall is only readable if the player happens to be facing
  * it, which is fine for a warehouse sign and unacceptable for a refusal or a
  * week change. So the notice strip, the prompt and the week announcement are
  * ordinary HTML pinned over the canvas, where a screen reader can reach them
- * and where facing the wrong way cannot hide them (§5.6, AC 16).
+ * and where facing the wrong way cannot hide them (spec §9.7).
  *
  * The overlay is `pointer-events-none` as a whole, with the things a player
  * actually presses — the legend, the credits, the Open button and the movement
@@ -110,7 +109,7 @@ export interface Board3DHudProps {
  * depends on, and the player would be left with a scene that simply does not
  * turn.
  *
- * ## At phone width (24 §5.7)
+ * ## At phone width
  *
  * Below `sm` the corners are shared, so each one is spoken for. Top-left: the
  * week strip. Top-right: the week-change announcement (it moves under the
@@ -134,11 +133,11 @@ export function Board3DHud({
   const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY)
   const prompt = nearTarget?.prompt ?? null
   // Only an enabled target is offered: while paused the prompt still reads
-  // and E is inert, and a button that does nothing is worse than none (§5.2).
+  // and E is inert, and a button that does nothing is worse than none.
   const openable = nearTarget !== null && nearTarget.enabled ? nearTarget.id : null
   const legend = legendLines(coarsePointer ? TOUCH_PROMPT_COPY : PROMPT_COPY)
 
-  // §5.5's third signal. The other two are in the scene — the ledger frame and
+  // The week change's third signal. The other two are in the scene — the ledger frame and
   // the front lane — and neither of them exists for a screen reader, so this
   // sentence is the whole week change for a player who is not looking at it.
   // The truthiness guard, not a `=== null`: `PlayerView.settlement` is typed
@@ -153,7 +152,7 @@ export function Board3DHud({
   return (
     <div className="pointer-events-none fixed inset-0 z-20">
       {/* The notice strip: centre-top, in the danger hue, for as long as the
-          prop is non-null (§5.6). The live region is mounted whether or not
+          prop is non-null. The live region is mounted whether or not
           there is a notice, because a `role="status"` that appears at the same
           moment as its text is a region a screen reader may never announce. */}
       <div
@@ -177,7 +176,7 @@ export function Board3DHud({
         <span className="sr-only">, {view.role}</span>
       </div>
 
-      {/* The week-change announcement of §5.5. Present always, filled for the
+      {/* The week-change announcement. Present always, filled for the
           400 ms `weekChanged` is true, and empty otherwise. */}
       <div
         role="status"
@@ -199,12 +198,12 @@ export function Board3DHud({
         className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink-inverse bg-ink/60"
       />
 
-      {/* The interact prompt, above the crosshair. 24 §5.2 gives this board no
+      {/* The interact prompt, above the crosshair. This board has no
           clickable meshes at all: proximity plus a keypress is one interaction
           model, and a second one made of raycast hit-tests is how Tequila ended
           up with two. The Open button below the crosshair is not a second
           model: it appears on the same proximity and calls the same function
-          `E` does (§5.7). */}
+          `E` does. */}
       <div
         role="status"
         aria-live="polite"
@@ -217,7 +216,7 @@ export function Board3DHud({
         )}
       </div>
 
-      {/* The tappable twin of `E` (§5.7). Offered only on a coarse pointer —
+      {/* The tappable twin of `E`. Offered only on a coarse pointer —
           a keyboard player has `E` and the prompt above already says so — and
           only while the target in range is enabled. It is a real `<button>`,
           and its name says which panel it opens. */}
@@ -233,7 +232,7 @@ export function Board3DHud({
         </div>
       )}
 
-      {/* Bottom-left: the pad above the legend, one column (§5.7). The legend
+      {/* Bottom-left: the pad above the legend, one column. The legend
           is capped to the room the 2D/3D toggle leaves on a phone and to
           `max-w-xs` from `sm` up, where it reads as it always has. */}
       <div className={`absolute left-[max(1rem,env(safe-area-inset-left))] flex flex-col items-start gap-2 ${BOTTOM_GUTTER}`}>

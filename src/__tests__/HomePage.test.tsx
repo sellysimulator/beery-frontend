@@ -1,21 +1,22 @@
 /**
- * `17-frontend-lobby.md §2.2` — `/home`, the host-or-join screen, plus §3.0's
- * route declarations and §2.2's `/join/:roomCode` redirect.
+ * `/home`, the host-or-join screen (spec §9.10), plus the lobby pages' route
+ * declarations and the `/join/:roomCode` redirect.
  *
- * Covers acceptance criteria 3, 4, 5, 6, 7, 8, 9 and 27 (the `/home` half), and
- * failure modes 2 and 5.
+ * Covers: hosting persists the host_secret before navigating, presets, joining
+ * and the three reasons a room refuses, the display name entered on `/home`,
+ * the room-code alphabet, and the invite link in either form.
  *
  * Harness notes:
- *  - The page is reached through the route descriptor it exports (§3.0).
- *  - `src/api/http.ts` is replaced by a recorder. Section 16 §3 names
- *    `rooms.ts` as section 10's REST client and `http.ts` as the axios
+ *  - The page is reached through the route descriptor it exports.
+ *  - `src/api/http.ts` is replaced by a recorder. `rooms.ts` is the rooms
+ *    REST client and `http.ts` the axios
  *    instance underneath it, so recording at `http` observes the wire whether
  *    the page calls the client or the instance.
- *  - Controls are located by the accessible names §2.4b freezes — `Room code`,
+ *  - Controls are located by their fixed accessible names — `Room code`,
  *    `Name to host as`, `Name to join as`, `Preset`, `Create game`,
  *    `Join game` — and by nothing else. The two name fields are distinct
- *    because §2.2 renders both panels at once.
- *  - Every room code used as a fixture is drawn from §2.2's alphabet,
+ *    because the page renders both panels at once.
+ *  - Every room code used as a fixture is drawn from the room-code alphabet,
  *    `ABCDEFGHJKMNPQRSTUVWXYZ23456789`. A code the field would itself reject is
  *    a code the server never mints.
  */
@@ -31,7 +32,7 @@ import { discoverRoutes, type RouteDescriptor } from '../routes/registry';
 import * as HomePageModule from '../pages/HomePage';
 import * as GameRoomModule from '../pages/GameRoom';
 
-/** §2.2's alphabet excludes 0, O, 1, I and L. `ABC123` is not a room code. */
+/** The room-code alphabet excludes 0, O, 1, I and L. `ABC123` is not a room code. */
 const ROOM = 'ABC234';
 
 // ---------------------------------------------------------------------------
@@ -135,7 +136,7 @@ vi.mock('firebase/auth', () =>
   }),
 );
 
-/** The three presets section 10 §2 declares, shaped as `PresetListResponse`. */
+/** The three presets the backend declares, shaped as `PresetListResponse`. */
 const PRESETS = [
   { name: 'CLASSIC_MIT', label: 'Classic MIT', description: 'The original.', config: {} },
   { name: 'FAST_GAME', label: 'Fast Game', description: 'A tight schedule.', config: {} },
@@ -175,19 +176,19 @@ vi.mock('../api/health', () => healthRec);
 function descriptorsOf(mod: unknown, label: string): RouteDescriptor[] {
   const route = (mod as { route?: RouteDescriptor | RouteDescriptor[] }).route;
   if (!route) {
-    throw new Error(`${label} exports no \`route\` descriptor (17 §3.0, 16 §3 registry).`);
+    throw new Error(`${label} exports no \`route\` descriptor.`);
   }
   return Array.isArray(route) ? route : [route];
 }
 
 function homeDescriptor(): RouteDescriptor {
   const found = descriptorsOf(HomePageModule, 'HomePage.tsx').find((d) => d.path === '/home');
-  if (!found) throw new Error('HomePage.tsx declares no descriptor for `/home` (17 §3.0).');
+  if (!found) throw new Error('HomePage.tsx declares no descriptor for `/home`.');
   return found;
 }
 
 // ---------------------------------------------------------------------------
-// Locating controls — §2.4b freezes every accessible name used below
+// Locating controls — every accessible name used below is fixed
 // ---------------------------------------------------------------------------
 
 const NAMES = {
@@ -212,8 +213,8 @@ function codeInput(): HTMLInputElement {
 }
 
 /**
- * §2.2 places the host panel and the join panel side by side, so the two name
- * fields are on screen together and §2.4b gives them distinct names. Each
+ * The host panel and the join panel sit side by side, so the two name
+ * fields are on screen together and have distinct names. Each
  * `getByRole` below therefore resolves to exactly one input, and would throw if
  * the two names were ever merged again.
  */
@@ -243,7 +244,7 @@ async function choosePreset(user: ReturnType<typeof userEvent.setup>, preset: { 
         o.getAttribute('data-value') === preset.name ||
         (o.textContent ?? '').toLowerCase().includes(preset.label.toLowerCase()),
     );
-    if (!match) throw new Error(`The \`Preset\` picker offers no "${preset.label}" (17 §2.2, AC 4).`);
+    if (!match) throw new Error(`The \`Preset\` picker offers no "${preset.label}".`);
     await user.click(match);
     return;
   }
@@ -254,7 +255,7 @@ async function choosePreset(user: ReturnType<typeof userEvent.setup>, preset: { 
       return;
     }
   }
-  throw new Error(`No \`Preset\` control offers "${preset.label}" (17 §2.2, §2.4b, AC 4).`);
+  throw new Error(`No \`Preset\` control offers "${preset.label}".`);
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +268,7 @@ const seen: Array<{ pathname: string; hostSecretForRoom: string | null }> = [];
 function LocationProbe() {
   const location = useLocation();
   // Recorded during render: this is *the moment the route changes*, which is
-  // what failure mode 2 is about.
+  // what the host_secret test is about.
   seen.push({ pathname: location.pathname, hostSecretForRoom: getHostSecret(ROOM) });
   return null;
 }
@@ -363,11 +364,11 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// §3.0 — the six pages declare themselves
+// The six pages declare themselves
 // ---------------------------------------------------------------------------
 
-describe('17 §3.0: every page registers itself with section 16 discovery', () => {
-  it('declares the six routes this section owns, with the stated guards', () => {
+describe('every page registers itself with route discovery', () => {
+  it('declares the six lobby routes, with the stated guards', () => {
     const routes = discoverRoutes();
     const guardFor = (path: string) => routes.find((r) => r.path === path)?.guard ?? '(absent)';
 
@@ -384,17 +385,17 @@ describe('17 §3.0: every page registers itself with section 16 discovery', () =
     const paths = descriptors.map((d) => d.path).sort();
     expect(paths).toEqual(['/game/:roomCode', '/join/:roomCode']);
 
-    // §3.0: the redirect only forwards, and the destination guards itself.
+    // The redirect only forwards, and the destination guards itself.
     const redirect = descriptors.find((d) => d.path === '/join/:roomCode');
     expect(redirect?.guard).toBe('public');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 3 and 4, failure mode 2 — hosting a game
+// Hosting a game
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 3 / FAILURE MODE 2: the host_secret is persisted before navigating', () => {
+describe('the host_secret is persisted before navigating', () => {
   it('has the secret in sessionStorage at the moment /host/:roomCode renders', async () => {
     const user = userEvent.setup();
     renderHome();
@@ -406,7 +407,7 @@ describe('CRITERION 3 / FAILURE MODE 2: the host_secret is persisted before navi
 
     await screen.findByTestId('host-room');
 
-    // Section 10 §3.1 returns `host_secret` exactly once. A navigate that runs
+    // Room creation returns `host_secret` exactly once (spec §11.1). A navigate that runs
     // before the write loses the room outright, and the symptom — a host with
     // no controls — appears minutes later, in front of a class.
     const firstHostRender = seen.find((s) => s.pathname === `/host/${ROOM}`);
@@ -434,13 +435,13 @@ describe('CRITERION 3 / FAILURE MODE 2: the host_secret is persisted before navi
     await user.click(createButton());
     await screen.findByTestId('host-room');
 
-    // 16 §3: the host_secret is sessionStorage, tab-scoped. localStorage would
+    // The host_secret is sessionStorage, tab-scoped. localStorage would
     // leave the capability behind for whoever opens the browser next.
     expect(dumpStorage(window.localStorage)).not.toContain('hs-from-create');
     expect(dumpStorage(window.sessionStorage)).toContain('hs-from-create');
   });
 
-  it('sends the host display name as `host_display_name` (section 10 §2)', async () => {
+  it('sends the host display name as `host_display_name`', async () => {
     const user = userEvent.setup();
     renderHome();
 
@@ -454,7 +455,7 @@ describe('CRITERION 3 / FAILURE MODE 2: the host_secret is persisted before navi
   });
 });
 
-describe('CRITERION 4: creating with a preset sends that preset name', () => {
+describe('creating with a preset sends that preset name', () => {
   it('offers the presets the backend returned and posts the chosen name', async () => {
     const user = userEvent.setup();
     renderHome();
@@ -474,7 +475,7 @@ describe('CRITERION 4: creating with a preset sends that preset name', () => {
     expect(body.preset).toBe('FAST_GAME');
   });
 
-  it('omits the preset when none was chosen — it is optional (§2.2)', async () => {
+  it('omits the preset when none was chosen — it is optional', async () => {
     const user = userEvent.setup();
     renderHome();
 
@@ -488,11 +489,11 @@ describe('CRITERION 4: creating with a preset sends that preset name', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 5, 6, 7 — joining, and the three reasons a room refuses
+// Joining, and the three reasons a room refuses
 // ---------------------------------------------------------------------------
 
 describe('joining a game reads GET /rooms/{code}/status and acts on the reason', () => {
-  it('CRITERION 5: an unknown code shows an inline error and does not navigate', async () => {
+  it('an unknown code shows an inline error and does not navigate', async () => {
     backend.status = { ok: false, reason: 'Room does not exist.' };
     const user = userEvent.setup();
     renderHome();
@@ -504,7 +505,7 @@ describe('joining a game reads GET /rooms/{code}/status and acts on the reason',
     expect(currentPath()).toBe('/home');
   });
 
-  it('CRITERION 6: a full room names the host, so the player knows the code was right', async () => {
+  it('a full room names the host, so the player knows the code was right', async () => {
     backend.status = {
       ok: false,
       reason: 'Room is full.',
@@ -523,7 +524,7 @@ describe('joining a game reads GET /rooms/{code}/status and acts on the reason',
     expect(visitedGameRoom()).toBe(false);
   });
 
-  it('CRITERION 7: a started room offers the rejoin hint', async () => {
+  it('a started room offers the rejoin hint', async () => {
     backend.status = {
       ok: false,
       reason: 'This game has already started.',
@@ -537,7 +538,7 @@ describe('joining a game reads GET /rooms/{code}/status and acts on the reason',
     await join(user, ROOM);
 
     await waitFor(() => expect(bodyText()).toMatch(/already started/i));
-    // §2.2: "If you were already playing, open your original link — you can rejoin."
+    // "If you were already playing, open your original link — you can rejoin."
     expect(bodyText()).toMatch(/original link/i);
     expect(bodyText()).toMatch(/rejoin/i);
     expect(visitedGameRoom()).toBe(false);
@@ -570,15 +571,15 @@ describe('joining a game reads GET /rooms/{code}/status and acts on the reason',
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 27 — the display name survives the page
+// The display name survives the page
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 27: the display name entered on /home is persisted', () => {
-  it('§2.4b: the two panels are on screen together, under distinct names', () => {
+describe('the display name entered on /home is persisted', () => {
+  it('the two panels are on screen together, under distinct names', () => {
     renderHome();
 
     // `getByRole` throws on more than one match, so this test fails the moment
-    // the two fields share a name again — the ambiguity §2.4b records.
+    // the two fields share a name again.
     const host = hostNameInput();
     const joinName = joinNameInput();
 
@@ -587,7 +588,7 @@ describe('CRITERION 27: the display name entered on /home is persisted', () => {
     expect(joinName).toBeInTheDocument();
   });
 
-  it('writes it through storage.setDisplayName, where section 16 can read it back', async () => {
+  it('writes it through storage.setDisplayName, where the socket layer can read it back', async () => {
     const user = userEvent.setup();
     renderHome();
 
@@ -595,9 +596,9 @@ describe('CRITERION 27: the display name entered on /home is persisted', () => {
 
     await join(user, ROOM, 'Bea');
 
-    // §3.0b: router navigation state does not survive a reload, so the name is
-    // persisted — and in section 16's `storage.ts`, because that section's
-    // `rejoinAfterConnect` emits it too.
+    // Router navigation state does not survive a reload, so the name is
+    // persisted — and in `storage.ts`, because `rejoinAfterConnect` emits it
+    // too.
     await waitFor(() => expect(getDisplayName()).toBe('Bea'));
   });
 
@@ -608,18 +609,18 @@ describe('CRITERION 27: the display name entered on /home is persisted', () => {
     await join(user, ROOM, 'Bea');
 
     await waitFor(() => expect(getDisplayName()).toBe('Bea'));
-    // 16 §3 puts it in localStorage: it is display data, not a credential, and
-    // it has to survive the reload that AC 27 is about.
+    // It lives in localStorage: it is display data, not a credential, and
+    // it has to survive a reload.
     expect(dumpStorage(window.localStorage)).toContain('Bea');
     expect(dumpStorage(window.sessionStorage)).not.toContain('Bea');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 8 and failure mode 5 — the unambiguous alphabet
+// The unambiguous alphabet
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 8 / FAILURE MODE 5: the room-code alphabet', () => {
+describe('the room-code alphabet', () => {
   it('uppercases as the user types', async () => {
     const user = userEvent.setup();
     renderHome();
@@ -659,10 +660,10 @@ describe('CRITERION 8 / FAILURE MODE 5: the room-code alphabet', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 9 — the invite link works in either form
+// The invite link works in either form
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 9: /join/:roomCode redirects to /game/:roomCode', () => {
+describe('/join/:roomCode redirects to /game/:roomCode', () => {
   it('lands on the player route with the same code', async () => {
     const descriptors = descriptorsOf(GameRoomModule, 'GameRoom.tsx');
     const joinRoute = descriptors.find((d) => d.path === '/join/:roomCode');

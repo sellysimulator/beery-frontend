@@ -14,7 +14,7 @@ import { hostConsoleScreen } from './shellScreens'
 
 const STARTED: RoomState[] = ['RUNNING', 'PAUSED', 'FINISHED']
 
-/** Resolved once, at module load; `null` until section 20 exists (**D19**). */
+/** Resolved once, at module load; `null` while `HostConsole.tsx` is absent. */
 const ConsoleScreen = hostConsoleScreen()
 
 /** Shown only after the server has actually refused the claim. */
@@ -55,7 +55,7 @@ export function HostRoom(): ReactElement {
   const roomState = useGameStore((state) => state.roomState)
   const isHost = useGameStore((state) => state.isHost)
   const setRoomCode = useGameStore((state) => state.setRoomCode)
-  // The store is the only reader of the wire (`16 §3`): a component-level
+  // The store is the only reader of the wire: a component-level
   // `socket.on('join_error', …)` is a second interpreter of it, which
   // StrictMode double-registers and a reconnect can leave stale.
   const joinError = useGameStore((state) => state.joinError)

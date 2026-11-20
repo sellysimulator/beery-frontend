@@ -1,7 +1,8 @@
 /**
- * `src/utils/storage.ts` — the whole public surface of 16 §3.
+ * `src/utils/storage.ts` — the whole public surface.
  *
- * Covers acceptance criteria 8, 13, 16 and failure modes 6 and 10.
+ * Covers: one stable guest id, which storage area each secret lands in, and the
+ * tab-scoped host claim.
  *
  * Key NAMES (other than `GUEST_ID_KEY`) are not part of the frozen surface, so
  * nothing here asserts on one: the tests scan the storage area for the *value*
@@ -85,7 +86,7 @@ describe('alias — the public, server-assigned id', () => {
   });
 });
 
-describe('guest identity (criterion 8, failure mode 10)', () => {
+describe('guest identity', () => {
   it('getGuestId() is null before anything mints one', () => {
     expect(getGuestId()).toBeNull();
   });
@@ -95,15 +96,15 @@ describe('guest identity (criterion 8, failure mode 10)', () => {
     expect(id).toMatch(/^guest_[0-9a-f-]{36}$/);
   });
 
-  it('getOrCreateGuestId() returns the same value across calls (criterion 8)', () => {
+  it('getOrCreateGuestId() returns the same value across calls', () => {
     const first = getOrCreateGuestId();
     expect(getOrCreateGuestId()).toBe(first);
     expect(getGuestId()).toBe(first);
   });
 
-  it('FAILURE MODE 10: ten calls mint exactly one id', () => {
+  it('ten calls mint exactly one id', () => {
     // A regenerated guest id loses the player's seat on reconnect: the server
-    // matches a reconnecting player by identity (00-conventions §2), so a new
+    // matches a reconnecting player by identity (spec §3), so a new
     // `guest_<uuid4>` is a different person.
     const seen = new Set<string>();
     for (let i = 0; i < 10; i += 1) seen.add(getOrCreateGuestId());
@@ -121,7 +122,7 @@ describe('guest identity (criterion 8, failure mode 10)', () => {
   });
 });
 
-describe('session_token — secret, per room, localStorage (criterion 13)', () => {
+describe('session_token — secret, per room, localStorage', () => {
   it('setSessionToken writes to localStorage and NOT to sessionStorage', () => {
     setSessionToken(ROOM, 'tok-abc');
 
@@ -157,8 +158,8 @@ describe('session_token — secret, per room, localStorage (criterion 13)', () =
   });
 });
 
-describe('host_secret — secret, per room, sessionStorage (criterion 13, failure mode 6)', () => {
-  it('FAILURE MODE 6: setHostSecret writes to sessionStorage ONLY', () => {
+describe('host_secret — secret, per room, sessionStorage', () => {
+  it('setHostSecret writes to sessionStorage ONLY', () => {
     // localStorage would leak host authority into every tab of the browser,
     // including one opened from an invite link. D18's identity recovery buys
     // back the durability this costs; widening the storage scope does not.
@@ -192,7 +193,7 @@ describe('host_secret — secret, per room, sessionStorage (criterion 13, failur
   });
 });
 
-describe('host claim — UI hint only, tab-scoped (criterion 16)', () => {
+describe('host claim — UI hint only, tab-scoped', () => {
   it('setHostRoom/isHostForRoom round-trip, per room', () => {
     expect(isHostForRoom(ROOM)).toBe(false);
 
@@ -202,7 +203,7 @@ describe('host claim — UI hint only, tab-scoped (criterion 16)', () => {
     expect(isHostForRoom(OTHER_ROOM)).toBe(false);
   });
 
-  it('CRITERION 16: false in a fresh tab even when localStorage holds a session token', () => {
+  it('false in a fresh tab even when localStorage holds a session token', () => {
     setHostRoom(ROOM);
     setSessionToken(ROOM, 'tok-abc');
     expect(isHostForRoom(ROOM)).toBe(true);
@@ -227,8 +228,8 @@ describe('host claim — UI hint only, tab-scoped (criterion 16)', () => {
 
 describe('display name — display data, sanitised on write, localStorage', () => {
   it('exports the one copy of the length limit', () => {
-    // Section 17's input fields need it for maxLength; a second copy of 24 in
-    // another section is a copy that drifts.
+    // The lobby's input fields need it for maxLength; a second copy of 24
+    // elsewhere is a copy that drifts.
     expect(MAX_DISPLAY_NAME_LENGTH).toBe(24);
   });
 
@@ -252,7 +253,7 @@ describe('display name — display data, sanitised on write, localStorage', () =
     // NUL, BEL and ESC arrive in pasted text and are not word separators, so
     // "A<NUL>n<BEL>a<ESC>" is the one word "Ana". Replacing them with a space
     // instead would split one word into three, and the collapse step cannot put
-    // it back together again (§3, step 1).
+    // it back together again.
     setDisplayName('A\u0000n\u0007a\u001b');
     expect(getDisplayName()).toBe('Ana');
   });
@@ -309,7 +310,7 @@ describe('display name — display data, sanitised on write, localStorage', () =
     expect(stored).toBe('A'.repeat(MAX_DISPLAY_NAME_LENGTH));
   });
 
-  it('trims again after clamping, when the boundary lands on a space (§3, step 5)', () => {
+  it('trims again after clamping, when the boundary lands on a space', () => {
     // 23 characters, a space, then one more: the clamp cuts at 24, which is
     // exactly the space, and an un-trimmed result would end in it.
     const input = `${'A'.repeat(23)} B`;
@@ -357,7 +358,7 @@ describe('display name — display data, sanitised on write, localStorage', () =
   });
 });
 
-describe('board view — a display preference, not a credential (24 §2.3)', () => {
+describe('board view — a display preference, not a credential', () => {
   it('starts null, so an unchosen browser falls through to VITE_BOARD_VIEW', () => {
     expect(getBoardView()).toBeNull();
   });
@@ -373,7 +374,7 @@ describe('board view — a display preference, not a credential (24 §2.3)', () 
   });
 
   it('an unrecognised stored value reads as null — unset, not an error', () => {
-    // Somebody's stale key, or a hand-edited one. 24 §2.2 treats it as UNSET so
+    // Somebody's stale key, or a hand-edited one. It is treated as UNSET so
     // it falls through to the env default: the resolution order already has an
     // answer for "no preference", and a throw here would turn a junk string
     // into a broken game screen.

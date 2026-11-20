@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components --
-   The chain vocabulary lives beside the component that draws the chain. D19
-   gives section 19 no shared module of its own, and a second copy of "who the
-   Distributor buys from" in three files is a copy that drifts. */
+   The chain vocabulary lives beside the component that draws the chain: a
+   second copy of "who the Distributor buys from" in three files is a copy
+   that drifts. */
 import type { ReactElement } from 'react'
 import type { Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
@@ -39,7 +39,7 @@ export const DEMAND_SOURCE_LABEL: Record<Role, string> = {
 /**
  * The recap's arrival row header. It names the player's actual upstream
  * neighbour, and for the Factory the goods are its own output, so the line
- * reads "Finished production" (§2.5, AC 19).
+ * reads "Finished production".
  */
 export const RECEIPT_LABEL: Record<Role, string> = {
   RETAILER: 'Received from Wholesaler',

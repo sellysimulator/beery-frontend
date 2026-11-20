@@ -59,8 +59,8 @@ function Swatch({ swatch }: { swatch: LegendSwatch }): ReactElement {
 
 /**
  * The one legend every chart uses. It is real DOM rather than the canvas
- * legend Chart.js paints, so it works with a keyboard and a screen reader
- * (`21 §2.2a`). Given `onToggle` each item is a `role="switch"` button named
+ * legend Chart.js paints, so it works with a keyboard and a screen reader.
+ * Given `onToggle` each item is a `role="switch"` button named
  * after its series; without it the legend is a static list.
  */
 export function Legend({

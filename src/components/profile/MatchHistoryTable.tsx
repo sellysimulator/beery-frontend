@@ -42,7 +42,7 @@ function Ratio({ value }: { value: number | null }): ReactElement {
 function MatchRow({ match }: { match: MatchSummary }): ReactElement {
   const navigate = useNavigate()
   // By game id, never room code: codes are recycled, so `/results/{code}` can
-  // open a later game the player was never in (2026-11-03).
+  // open a later game the player was never in.
   const destination = `/profile/games/${match.game_id}`
 
   /**
@@ -83,12 +83,12 @@ function MatchRow({ match }: { match: MatchSummary }): ReactElement {
  * The caller's match history, one page at a time.
  *
  * A row opens `/profile/games/:gameId` — the caller's own copy of that game,
- * which `MatchDetail` draws with section 21's results components, so the
- * application still has exactly one results renderer. It used to open
+ * which `MatchDetail` draws with the results page's components, so the
+ * application still has exactly one results renderer. Not
  * `/results/:roomCode`, which names a different game once the code is reused.
  *
  * The table never fetches. It is handed a page and a callback, which is what
- * keeps the page's two-request budget (§3.3) a property of the page rather
+ * keeps the page's two-request budget a property of the page rather
  * than something a column could quietly undo by looking up a game per row.
  */
 export function MatchHistoryTable({

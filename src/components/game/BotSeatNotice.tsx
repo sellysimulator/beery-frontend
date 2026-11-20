@@ -6,8 +6,7 @@ export interface BotSeatNoticeProps {
 }
 
 /**
- * What a player sees when the host has swapped a bot into their seat
- * (2026-11-03).
+ * What a player sees when the host has swapped a bot into their seat.
  *
  * The bot keeps playing until the player takes the seat back; taking it is a
  * choice, never automatic, because a laptop waking up in a bag reconnects too.

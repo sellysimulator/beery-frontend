@@ -18,7 +18,7 @@ export const NULL_RATIO_EXPLANATION =
  * owed. "Fill rate" reads as "the share of orders eventually filled", which
  * this is not: a unit that waits three weeks is owed three times and shipped
  * once. The name says what it measures instead, and the definition sits beside
- * it so nobody has to guess (2026-11-02). The field keeps its wire name.
+ * it so nobody has to guess. The field keeps its wire name.
  */
 export const SHIPPED_VS_WAITING_LABEL = 'Shipped vs waiting'
 
@@ -34,10 +34,10 @@ const NULL_FILL_RATE_EXPLANATION = 'Nothing was ever demanded of this role.'
  * average order: the server's number, two decimals.
  *
  * Counts do not go through here. `peak_inventory`, `peak_backlog` and
- * `weeks_in_backlog` are quantities, which `00-conventions.md` §4 makes `int`
+ * `weeks_in_backlog` are quantities, which are `int`
  * everywhere, and "2.00 weeks in backlog" is wrong on a screen a host
- * projects (FM 14). Either way nothing is rounded before it is displayed,
- * added to, or derived from another figure (§3.2).
+ * projects. Either way nothing is rounded before it is displayed,
+ * added to, or derived from another figure.
  */
 function figure(value: number): string {
   return value.toFixed(2)

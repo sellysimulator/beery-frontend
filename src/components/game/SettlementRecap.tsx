@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components --
    `formatMoney` is the recap's own rendering rule and the decision panel needs
-   the identical one. D19 leaves section 19 no shared module, and two copies of
-   a money formatter is how two parts of one screen start disagreeing. */
+   the identical one, and two copies of a money formatter is how two parts of
+   one screen start disagreeing. */
 import type { ReactElement } from 'react'
 import type { PlayerView } from '../../types/game'
 import { DEMAND_SOURCE_LABEL, RECEIPT_LABEL } from './RoleBanner'
@@ -11,7 +11,7 @@ import { DEMAND_SOURCE_LABEL, RECEIPT_LABEL } from './RoleBanner'
  * symbol, two decimals. A negative balance reads `-$5.00`, not `$-5.00`.
  *
  * Nothing here multiplies, adds or derives — every figure passed in traces to
- * a `your_state` field (`00-conventions.md` section 4).
+ * a `your_state` field.
  */
 export function formatMoney(symbol: string, value: number): string {
   const magnitude = Math.abs(value).toFixed(2)
@@ -20,7 +20,7 @@ export function formatMoney(symbol: string, value: number): string {
 
 export interface SettlementRecapProps {
   view: PlayerView
-  /** A brief post-transition highlight, under 400 ms (§3.2). */
+  /** A brief post-transition highlight, under 400 ms. */
   highlight?: boolean
 }
 
@@ -29,7 +29,7 @@ export interface SettlementRecapProps {
  * (`beer-game-spec.md` section 9.3).
  *
  * It is a semantic table with row headers so a screen reader reads it as a
- * ledger (§3.4), and every line is read straight out of
+ * ledger, and every line is read straight out of
  * `your_state.settlement`. The units and the rate in a cost line are text; the
  * money beside them is the server's figure. A component that multiplied the
  * two would be right until the day the server rounded differently, and then
@@ -53,10 +53,10 @@ export function SettlementRecap({ view, highlight = false }: SettlementRecapProp
     )
   }
 
-  // The doc's display pair: opening inventory, then the stock after receiving
-  // (§2.5). Both are the server's figures: the recap used to add
-  // `opening_inventory + arrived` itself, a copy of the settlement's first
-  // step, and now prints `inventory_after_arrival` (2026-11-03).
+  // The spec's display pair: opening inventory, then the stock after receiving
+  // (spec §9.3). Both are the server's figures: the recap prints
+  // `inventory_after_arrival` rather than adding `opening_inventory + arrived`
+  // itself, which would be a copy of the settlement's first step.
   const afterArrival = settlement.inventory_after_arrival
   const showRunningTotal =
     view.balance !== undefined || view.accumulated_cost !== undefined
@@ -142,7 +142,7 @@ export function SettlementRecap({ view, highlight = false }: SettlementRecapProp
             <td className="numeric py-1 text-right">{money(settlement.backlog_cost)}</td>
           </tr>
 
-          {/* Two lines, never one "week cost" (2026-11-02). Holding and backlog
+          {/* Two lines, never one "week cost". Holding and backlog
               are the settlement's own figure; the order cost (fixed + purchase)
               is charged only when the week closes, so while it is open there is
               no figure to show, only that it is still to come. */}
@@ -174,7 +174,7 @@ export function SettlementRecap({ view, highlight = false }: SettlementRecapProp
 
           {/* The running total is the one line `show_running_cost_to_players`
               gates. With the flag off the server sends neither `balance` nor
-              `accumulated_cost`, and this row is absent entirely (§2.5). */}
+              `accumulated_cost`, and this row is absent entirely. */}
           {showRunningTotal ? (
             <tr>
               <th scope="row" className="py-1 pr-4 font-semibold">

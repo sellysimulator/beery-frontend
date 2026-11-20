@@ -159,10 +159,10 @@ export interface DemandEditorProps {
  *
  * Changing the generator sends the new kind alone, carrying nothing across:
  * the server replaces the demand object and fills every parameter with that
- * kind's declared defaults (`18 section 3.1a`), and a `step_week` surviving
- * into a `SEASONAL` config is a scenario nobody described (AC 7, FM 2). Until
+ * kind's declared defaults, and a `step_week` surviving
+ * into a `SEASONAL` config is a scenario nobody described. Until
  * the stored config comes back with them, the parameter block says it is
- * waiting; this panel keeps no copy of the defaults (2026-11-03).
+ * waiting; this panel keeps no copy of the defaults.
  *
  * The preview is the server's (`POST /rooms/preview`): the stored config, with
  * the generator the host just picked or the series they are pasting in place
@@ -170,7 +170,7 @@ export interface DemandEditorProps {
  *
  * `CUSTOM` has one more client-side block: a series shorter than
  * `duration_weeks` is refused by the server, and a host should not have to
- * submit to find that out (`18 section 3.2`). Every other range here is the
+ * submit to find that out. Every other range here is the
  * server's own (`useLimits`), checked beside the field before anything is sent.
  */
 export function DemandEditor({
@@ -200,7 +200,7 @@ export function DemandEditor({
   const values = parsed ? parsed.values : storedValues
   const shortfall = Math.max(0, durationWeeks - values.length)
   // Week entries above the order ceiling: the server refuses the series, so
-  // the form names them and does not send it (it used to be clamped to 9999).
+  // the form names them and does not send it. Nothing is clamped.
   const tooLarge = values.filter((value) => value > limits.max_order_quantity)
 
   function commitCustom(text: string): void {
@@ -211,8 +211,8 @@ export function DemandEditor({
     const fits = result.values.every((value) => value <= limits.max_order_quantity)
     if (result.values.length >= durationWeeks && fits) {
       // The kind goes with the series. Without it a host switching from
-      // another generator saved `values` into that generator's object, which
-      // ignored them, and the game never became `CUSTOM` (2026-11-03).
+      // another generator would save `values` into that generator's object,
+      // which ignores them, and the game would never become `CUSTOM`.
       saveApi.save({ demand: { kind: 'CUSTOM', values: result.values } })
     }
   }

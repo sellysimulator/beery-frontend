@@ -12,7 +12,7 @@ const http: AxiosInstance = axios.create({
 /**
  * Attach the Firebase ID token so the backend can verify it. The uid is
  * always derived server-side from the verified token and is never sent in a
- * body or a path (`02-identity-and-auth.md`). Guests have no Firebase user,
+ * body or a path. Guests have no Firebase user,
  * so no header is added for them.
  */
 http.interceptors.request.use(async (config) => {

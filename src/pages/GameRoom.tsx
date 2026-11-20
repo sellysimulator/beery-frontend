@@ -14,7 +14,7 @@ import { playingScreen } from './shellScreens'
 /** Room states in which the game has started and the play screen takes over. */
 const STARTED: RoomState[] = ['RUNNING', 'PAUSED', 'FINISHED']
 
-/** Resolved once, at module load; `null` until section 19 exists (**D19**). */
+/** Resolved once, at module load; `null` while `GameRoomPlaying.tsx` is absent. */
 const PlayingScreen = playingScreen()
 
 /**

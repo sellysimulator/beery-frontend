@@ -34,8 +34,7 @@ import type {
  *
  * It is written ONLY by the socket handlers in `src/api/socketHandlers.ts`.
  * Components read from it; they never compute inventory, cost or eligibility,
- * because every one of those arrives from the server
- * (`00-conventions.md` section 4).
+ * because every one of those arrives from the server.
  */
 export interface GameState {
   // identity
@@ -64,7 +63,7 @@ export interface GameState {
    * It exists because the ack arrives on the socket, and the socket is read in
    * `socketHandlers.ts` — outside React, where there is no router to navigate
    * with. So the handler records the fact and `GameRoom` turns it into a
-   * redirect, which keeps the store the single reader of the wire (16 section 3)
+   * redirect, which keeps the store the single reader of the wire
    * instead of adding a second `socket.on` inside a component.
    */
   leftRoom: boolean
@@ -90,15 +89,15 @@ export interface GameState {
   connectionError: string | null
   /**
    * The last `error` event's message and code, or null. The code is what a
-   * screen needs to map a specific failure to its own copy -- section 19's
+   * screen needs to map a specific failure to its own copy -- the playing screen's
    * `TOO_MANY_SUBMISSIONS` is the first. It lives here rather than in a
    * component-level `socket.on('error')` listener because the store is the
-   * single reader of the wire (`00-conventions.md 4`); a second interpreter is
+   * single reader of the wire; a second interpreter is
    * what StrictMode double-registers and a reconnect leaves stale.
    */
   lastError: ServerError | null
 
-  // multi-game dashboard (2026-11-14)
+  // multi-game dashboard
   /** The dashboard's batch codes, so a `start_game` refusal naming one of
    * them goes on that game's card instead of into a global alert. */
   batchRooms: string[]
@@ -127,7 +126,7 @@ export interface GameActions {
   /** Back to the initial state, on leaving a room. */
   reset(): void
 
-  // section 11 events
+  // lobby events
   /** No `seq`: `joined` does not carry one. */
   applyJoined(p: JoinedPayload): void
   /** No `seq`: `join_error` does not carry one. Sets `joinError`. */
@@ -151,7 +150,7 @@ export interface GameActions {
   applyRolesAssigned(p: RolesAssignedPayload): void
   applyGameStarted(p: GameStartedPayload): void
 
-  // section 12 events
+  // play events
   applyYourState(p: YourStatePayload): void
   applyHostState(p: HostStatePayload): void
   applyOrderSubmitted(p: OrderSubmittedPayload): void
@@ -168,7 +167,7 @@ export interface GameActions {
   applyGameFinished(p: GameFinishedPayload): void
   applyGamePersisted(p: GamePersistedPayload): void
 
-  // config, written by the REST fallback in section 18 when the socket is not
+  // config, written by the config panel's REST fallback when the socket is not
   // connected. `PUT /rooms/{code}/config` returns the same stored, post-clamp
   // config that `config_updated` carries, but without a `seq`, so it cannot go
   // through `applyConfigUpdated`'s sequence gate -- minting a `seq` there would
@@ -191,7 +190,7 @@ const EMPTY_ROLE_TO_ALIAS: RoleToAlias = {
   FACTORY: null,
 }
 
-/** Frozen by section 16 section 3, so a test can say what "unchanged" means. */
+/** Frozen, so a test can say what "unchanged" means. */
 const initialState: GameState = {
   roomCode: null,
   myAlias: null,
@@ -258,9 +257,8 @@ function mintAlertId(): string {
  * `host_state` is what the console reads every "decided" mark from, and the
  * server sends one per submission. `order_submitted` is the same fact,
  * broadcast to the room including the host, so applying it here too means a
- * `host_state` that never arrives cannot leave a seat on "Still deciding" —
- * which is exactly what happened on the final week, whose closing submission
- * used to send the host no state at all. The tick and the awaiting list are
+ * `host_state` that never arrives cannot leave a seat on "Still deciding",
+ * for example on the final week, whose closing submission ends the game. The tick and the awaiting list are
  * server facts, not arithmetic; the next `host_state` replaces both wholesale.
  */
 function markDecided(view: HostView | null, role: Role, week: number): HostView | null {
@@ -282,7 +280,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
   /**
    * Applies a sequenced game event, but only when it is newer than the last one
    * applied. Every server -> client game event carries a `seq` that is monotonic
-   * per room (`00-conventions.md` section 3), so a stale event arriving after a
+   * per room (spec §11.3), so a stale event arriving after a
    * reconnect resync is dropped rather than rewinding the UI, and an equal `seq`
    * is dropped as a duplicate.
    *

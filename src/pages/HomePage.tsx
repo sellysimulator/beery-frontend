@@ -55,7 +55,7 @@ function joinRefusal(status: RoomStatusResponse): InlineError {
  * Host a game, or join one.
  *
  * The create path persists `host_secret` **before** it navigates. The secret
- * is returned exactly once (`10-rooms-rest-api.md` section 3.1); navigating
+ * is returned exactly once (spec §11.1); navigating
  * first and storing second loses the room if the render that follows throws,
  * and there is no second copy to ask for.
  */
@@ -67,7 +67,7 @@ export function HomePage(): ReactElement {
 
   const [presets, setPresets] = useState<PresetSummary[]>([])
   /**
-   * One name, two fields. Both panels ask for `Your name` (section 2.4b) and
+   * One name, two fields. Both panels ask for `Your name` and
    * it is the same person either way, so the two inputs are views of one
    * value: typing it while deciding to host and then joining instead must not
    * silently lose it.

@@ -1,9 +1,10 @@
 /**
  * `src/api/socket.ts` construction options and the `src/api/socketHandlers.ts`
- * side-effect registration (16 §3, §4.1, §4.3, §4.4, §4.5, §4.6).
+ * side-effect registration.
  *
- * Covers acceptance criteria 4, 5, 10, 11, 12, 14, 15 and failure modes
- * 1, 2, 5, 7, 8, 9.
+ * Covers: the socket's construction options, registration before
+ * `createRoot`, the seq guard, `host_claimed`, the reconnection emits, a
+ * refused handshake, and what the client is allowed to send.
  *
  * Harness: `socket.io-client` is replaced with a recorder, so `socket.ts` is
  * exercised as real, un-mocked code while nothing touches transport. The
@@ -140,7 +141,7 @@ function handler(event: string): Listener {
   if (!found) {
     throw new Error(
       `socketHandlers registered no listener for "${event}". ` +
-        'Section 16 §4.4/§4.5 requires the store to be written by socket handlers.',
+        'The store must be written by socket handlers.',
     );
   }
   return found.cb;
@@ -197,11 +198,11 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// socket.ts construction (criteria 4, 5; failure modes 1, 2)
+// socket.ts construction
 // ---------------------------------------------------------------------------
 
-describe('socket construction (16 §4.1)', () => {
-  it('CRITERION 4 / FAILURE MODE 1: autoConnect is false', () => {
+describe('socket construction', () => {
+  it('autoConnect is false', () => {
     // With autoConnect true the very first handshake happens before Firebase
     // has restored a persisted session, so a returning signed-in user is
     // silently handed a throwaway guest identity by the server.  [HARD-WON]
@@ -209,7 +210,7 @@ describe('socket construction (16 §4.1)', () => {
     expect(rec.options?.autoConnect).toBe(false);
   });
 
-  it('CRITERION 5 / FAILURE MODE 2: `auth` is a function, not an object', () => {
+  it('`auth` is a function, not an object', () => {
     // An object freezes the first ID token for the life of the page; a callback
     // re-runs on every reconnect and picks up a refreshed one.
     expect(typeof rec.options?.auth).toBe('function');
@@ -217,7 +218,7 @@ describe('socket construction (16 §4.1)', () => {
     expect(typeof rec.options?.auth).not.toBe('object');
   });
 
-  it('FAILURE MODE 2: the auth callback runs again on a second connect, re-reading identity', () => {
+  it('the auth callback runs again on a second connect, re-reading identity', () => {
     const auth = rec.options?.auth as (cb: (payload: Record<string, unknown>) => void) => void;
 
     const first = vi.fn();
@@ -250,10 +251,10 @@ describe('socket construction (16 §4.1)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// main.tsx registration order (criterion 10)
+// main.tsx registration order
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10: socketHandlers is imported before createRoot', () => {
+describe('socketHandlers is imported before createRoot', () => {
   const source = readFileSync(join(projectRoot(), 'src', 'main.tsx'), 'utf8');
 
   it('main.tsx imports the handler module for its side effect', () => {
@@ -262,7 +263,7 @@ describe('CRITERION 10: socketHandlers is imported before createRoot', () => {
 
   it('the import precedes the createRoot call', () => {
     // Under StrictMode a component-mounted handler registers twice and every
-    // event is applied twice (16 §4.3).
+    // event is applied twice.
     const importIndex = source.search(/import\s+(?:[^;]*from\s+)?['"][^'"]*socketHandlers['"]/);
     const createRootIndex = source.search(/createRoot\s*\(/);
 
@@ -273,7 +274,7 @@ describe('CRITERION 10: socketHandlers is imported before createRoot', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Handler registration (00-conventions §5 coverage floor)
+// Handler registration
 // ---------------------------------------------------------------------------
 
 describe('socketHandlers registers the wire contract', () => {
@@ -283,7 +284,7 @@ describe('socketHandlers registers the wire contract', () => {
     }
   });
 
-  it('listens for every server -> client event of section 11', () => {
+  it('listens for every server -> client event of the lobby', () => {
     for (const event of [
       'joined',
       'host_claimed',
@@ -297,7 +298,7 @@ describe('socketHandlers registers the wire contract', () => {
     }
   });
 
-  it('listens for every server -> client event of section 12', () => {
+  it('listens for every server -> client event of the play loop', () => {
     for (const event of [
       'your_state',
       'host_state',
@@ -349,11 +350,11 @@ describe('the error event: failures versus expected refusals', () => {
 });
 
 // ---------------------------------------------------------------------------
-// seq guard (criteria 11, 12)
+// seq guard
 // ---------------------------------------------------------------------------
 
-describe('seq guard (16 §4.4)', () => {
-  it('CRITERION 12: a higher seq updates the store and lastSeq', () => {
+describe('seq guard', () => {
+  it('a higher seq updates the store and lastSeq', () => {
     const before = snapshot();
 
     dispatch('week_closed', { seq: 5, week: 3, next_week: 4, awaiting_roles: ['RETAILER'] });
@@ -362,7 +363,7 @@ describe('seq guard (16 §4.4)', () => {
     expect(snapshot()).not.toBe(before);
   });
 
-  it('CRITERION 11: a lower seq leaves the store completely unchanged', () => {
+  it('a lower seq leaves the store completely unchanged', () => {
     dispatch('week_closed', { seq: 5, week: 3, next_week: 4, awaiting_roles: ['RETAILER'] });
     const after5 = snapshot();
 
@@ -372,7 +373,7 @@ describe('seq guard (16 §4.4)', () => {
     expect(useGameStore.getState().lastSeq).toBe(5);
   });
 
-  it('CRITERION 11: an equal seq is a duplicate and is dropped too', () => {
+  it('an equal seq is a duplicate and is dropped too', () => {
     dispatch('week_closed', { seq: 5, week: 3, next_week: 4, awaiting_roles: ['RETAILER'] });
     const after5 = snapshot();
 
@@ -457,10 +458,10 @@ describe('host_disconnected / host_reconnected', () => {
 });
 
 // ---------------------------------------------------------------------------
-// host_claimed (criterion 14)
+// host_claimed
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 14: host_claimed re-arms the tab', () => {
+describe('host_claimed re-arms the tab', () => {
   it('writes the secret with setHostSecret and marks the tab host for that room', () => {
     expect(getHostSecret(ROOM)).toBeNull();
     expect(isHostForRoom(ROOM)).toBe(false);
@@ -481,11 +482,11 @@ describe('CRITERION 14: host_claimed re-arms the tab', () => {
 });
 
 // ---------------------------------------------------------------------------
-// reconnection emits (criterion 15; failure mode 7)
+// reconnection emits
 // ---------------------------------------------------------------------------
 
-describe('reconnection (16 §4.5)', () => {
-  it('CRITERION 15 / FAILURE MODE 7: at /host/:roomCode with NO stored secret, join_waiting is still emitted', () => {
+describe('reconnection', () => {
+  it('at /host/:roomCode with NO stored secret, join_waiting is still emitted', () => {
     // A client that guards this emit on `getHostSecret(roomCode) !== null`
     // silently disables D18's entire recovery path, and the symptom is a
     // permanently paused game — not a client-side error.
@@ -527,7 +528,7 @@ describe('reconnection (16 §4.5)', () => {
     dispatch('connect');
 
     const payloads = emitsOf('join') as Array<Record<string, unknown>>;
-    // §4.5: a shell may also emit `join` on mount, so a cold load can produce
+    // A shell may also emit `join` on mount, so a cold load can produce
     // two. That is intended — `join` is idempotent by identity — and every one
     // of them must carry the same credentials.
     expect(payloads.length).toBeGreaterThanOrEqual(1);
@@ -551,7 +552,7 @@ describe('reconnection (16 §4.5)', () => {
     }
   });
 
-  it('carries the stored display name, so a reconnect does not drop it (§4.5)', () => {
+  it('carries the stored display name, so a reconnect does not drop it', () => {
     window.history.pushState({}, '', `/game/${ROOM}`);
     useGameStore.setState({ roomCode: ROOM });
     setSessionToken(ROOM, 'tok-stored');
@@ -603,7 +604,7 @@ describe('reconnection (16 §4.5)', () => {
 
     expect(useGameStore.getState().myAlias).toBe('P3');
     expect(getSessionToken(ROOM)).toBe('tok-abc');
-    // 00-conventions §2.5: the token is used only in the join emit, never shown.
+    // The token is used only in the join emit, never shown.
     expect(snapshot()).not.toContain('tok-abc');
   });
 
@@ -629,7 +630,7 @@ describe('join_error reaches the store, not a component listener', () => {
     expect(useGameStore.getState().lastSeq).toBe(30);
   });
 
-  it('a refused host claim does not retry the emit (§4.5)', () => {
+  it('a refused host claim does not retry the emit', () => {
     window.history.pushState({}, '', `/host/${ROOM}`);
     useGameStore.setState({ roomCode: ROOM });
     dispatch('connect');
@@ -652,10 +653,10 @@ describe('join_error reaches the store, not a component listener', () => {
 });
 
 // ---------------------------------------------------------------------------
-// connect_error (failure mode 5)
+// connect_error
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 5: a refused handshake is surfaced, once', () => {
+describe('a refused handshake is surfaced, once', () => {
   it('sets connectionError and raises exactly one alert across five retries', () => {
     // Socket.IO retries automatically (reconnectionAttempts: 10). Five retries
     // must not become five toasts, and a silent failure must not become a page
@@ -669,7 +670,7 @@ describe('FAILURE MODE 5: a refused handshake is surfaced, once', () => {
     expect(typeof state.connectionError).toBe('string');
     expect(state.alerts).toHaveLength(1);
 
-    // §4.6 freezes this: a single alert of kind 'error', with `connectionError`
+    // This is fixed: a single alert of kind 'error', with `connectionError`
     // set to its message.
     const alert = state.alerts[0];
     expect(typeof alert.id).toBe('string');
@@ -770,12 +771,12 @@ describe('cold start: the backend wakes up after the socket first failed', () =>
 });
 
 // ---------------------------------------------------------------------------
-// what the client is allowed to send (failure modes 8, 9)
+// what the client is allowed to send
 // ---------------------------------------------------------------------------
 
-describe('per-week records arrive on your_week_closed (12 §2)', () => {
+describe('per-week records arrive on your_week_closed', () => {
   it('applies a record for the open week behind the seq gate', () => {
-    // 07 §3.8 names the player's own record list `own_history`; the payload is
+    // The player's own record list is `own_history` (spec §8.8); the payload is
     // `{seq, week, record}` and carries that role's own WeekRecord only.
     dispatch('your_state', {
       seq: 3,
@@ -858,7 +859,7 @@ describe('what the client sends back', () => {
       config_public: { weeks: 20 },
     });
     // Private, server-owned numbers land in the store. This is a stand-in
-    // `player_view` (07 §3.8) carrying the fields failure mode 9 is about;
+    // `player_view` carrying private fields;
     // what matters here is only that private numbers went IN.
     dispatch('your_state', {
       seq: 3,
@@ -880,7 +881,7 @@ describe('what the client sends back', () => {
     dispatch('connect');
   }
 
-  it('FAILURE MODE 8: never sends a host flag — only the host_secret proves authority', () => {
+  it('never sends a host flag — only the host_secret proves authority', () => {
     driveASession();
 
     const keys = allKeys(rec.emits.map((e) => e.payload)).map((k) => k.toLowerCase());
@@ -892,7 +893,7 @@ describe('what the client sends back', () => {
     expect(keys).toContain('host_secret');
   });
 
-  it('FAILURE MODE 9: never sends a client-computed total or any private quantity back', () => {
+  it('never sends a client-computed total or any private quantity back', () => {
     driveASession();
 
     const keys = allKeys(rec.emits.map((e) => e.payload)).map((k) => k.toLowerCase());
@@ -924,7 +925,7 @@ describe('what the client sends back', () => {
     expect(keys).not.toContain('idtoken');
   });
 
-  it('every emitted payload carries room_id (00-conventions §3)', () => {
+  it('every emitted payload carries room_id', () => {
     driveASession();
 
     for (const { event, payload } of rec.emits) {
