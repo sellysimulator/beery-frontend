@@ -755,7 +755,7 @@ Each live room is one JSON document at `room:{CODE}` in the state store (in-proc
 
 ## 13. Out of scope for v1
 
-Chains other than four stages are not built (§16). Out of scope entirely: multi-product chains; branching networks; player-to-player side deals or contracts; in-game chat in any form; Server-Sent Events (D1); real-money anything; native mobile apps; AI-generated coaching commentary.
+Chains other than four stages are not built (§16). Out of scope entirely: multi-product chains; branching networks; player-to-player side deals or contracts; in-game chat in any form; Server-Sent Events (D1); real-money anything; native mobile apps; AI-generated coaching commentary. A host's list of the games they hosted is also out of scope: the profile and match history cover only games the user played (§9.9).
 
 ---
 

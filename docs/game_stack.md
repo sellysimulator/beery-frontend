@@ -1374,7 +1374,8 @@ re-decide it. Specifically: the **real-time transport** (Socket.IO — see §2),
 model (verified Firebase ID token or guest id, established at the handshake), the
 authority model (`host_secret` compared with `hmac.compare_digest`), the three identifiers
 (`alias` / `session_token` / `identity`), Redis as the live room store and lock, and the
-deploy shape.
+deploy shape. Likewise, a user's profile and game history list only the games they
+**played**; games they hosted are never listed there.
 
 A game's own spec document is authoritative on **game semantics** — rules, costs, scoring,
 round structure, what a player sees. This file is authoritative on **plumbing**. Where the
