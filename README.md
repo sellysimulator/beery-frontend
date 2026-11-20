@@ -3,8 +3,8 @@
 React + TypeScript + Vite client for the Beer Distribution Game. Tailwind v4, Zustand, Socket.IO,
 Firebase auth.
 
-Built section by section against `../docs/plan/`. Each section document is the contract; the
-plan's `BUILD-LOG.md` records what is done and every specification defect found along the way.
+What the game does — rules, screens, data model, API — is specified in
+`docs/beer-game-spec.md`; `docs/beer-game-manual.md` is the host and player manual.
 
 This file is the human onboarding guide: how to run it, what the pieces are, and the handful of
 rules that are easy to break by accident. `DEPLOY.md` covers hosting, CI and the deploy
@@ -47,7 +47,7 @@ npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
 npm test                # vitest, watch mode
-npm run test:run        # vitest run — 1356 passed, 42 files (2026-11-16)
+npm run test:run        # vitest run
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -67,8 +67,7 @@ pure unit suite, and why changing CI or deploy config breaks tests until they ar
 
 ### What works today
 
-All of it. The plan's 24 sections are built and gated — see `../docs/plan/HANDOFF.md` — so the
-app covers the whole session: welcome screen, both manuals, the home page (create or join a
+The app covers the whole session: welcome screen, both manuals, the home page (create or join a
 room), multi-game hosting (a batch of games made at once from one full base config, watched
 from one dashboard), the
 player and host lobbies with a full-screen join QR code, the host's configuration panel, the
@@ -76,10 +75,9 @@ week-by-week decision panel, the host console, the results screen with its chart
 export anyone viewing it can download (once per format per browser session), and the player profile
 with match history.
 
-The two game shells and the configuration panel still resolve their screens through
-`pages/shellScreens.ts` rather than importing them directly. That seam was built so the shells
-could ship before those screens existed; it earns its keep now as the code-split boundary that
-keeps Chart.js, react-hook-form and Zod off the welcome and lobby path. The screens are lazy,
+The two game shells and the configuration panel resolve their screens through
+`pages/shellScreens.ts` rather than importing them directly. That seam is the code-split
+boundary that keeps Chart.js, react-hook-form and Zod off the welcome and lobby path. The screens are lazy,
 so they are fetched on the first render that actually shows one.
 
 Without a backend, `/`, `/player-manual` and `/host-manual` still render — they need neither auth
@@ -108,8 +106,9 @@ halves of this: that `firebase.ts` is tracked at the root, and that no `VITE_FIR
 exists anywhere.
 
 `firebase.ts` is **committed** and must never be gitignored or moved into `src/`. The sibling
-Tequila project gitignores it while importing it from `src/`, so its CI cannot build the frontend
-and the frontend silently never deploys while the backend auto-deploys on push.
+Tequila project once gitignored it while importing it from `src/` (since fixed): its CI could
+not build the frontend, and the frontend silently never deployed while the backend kept
+auto-deploying on push.
 
 ## Layout
 
@@ -162,7 +161,7 @@ src/
 │   │       └── board3d/        the scene: buildSceneModel plus the three.js components
 │   │                           that render its output and nothing else; the walk
 │   │                           (keyboard + drag-look, and on touch screens the MovePad
-│   │                           and a tappable Open button, 24 §5.7)
+│   │                           and a tappable Open button, spec §9.7)
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export (by
 │   │                           public_id, for every viewer)
@@ -180,8 +179,8 @@ src/
 read. No component subscribes to the socket directly — a second interpreter of the wire gets
 double-registered under StrictMode and left stale by a reconnect. There is no game arithmetic in
 the client either: inventory, cost and eligibility all arrive from the server, including whether
-the host's Start button may be pressed and the sentence explaining why not. Since 2026-11-03 that
-covers every figure a rule defines: the host form's demand preview and lead times come from
+the host's Start button may be pressed and the sentence explaining why not. That covers every
+figure a rule defines: the host form's demand preview and lead times come from
 `POST /rooms/preview`, the preset cards' figures from `/rooms/presets`, a new demand kind's
 defaults from the server's merge, and the arrival week, the stock after arrival, each pipeline
 slot's weeks to go and the weeks played from `your_state` / `host_state`. What stays here is

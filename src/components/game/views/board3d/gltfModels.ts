@@ -211,7 +211,7 @@ function extractCrateGeometry(scene: THREE.Object3D): THREE.BufferGeometry {
     // as "the crates look odd" months later rather than as a failed export.
     throw new Error(
       `box.glb no longer contains a mesh named ${CRATE_MESH_NAME} — the loader ` +
-        `spells it ${CRATE_MESH_NAME_AS_LOADED} (24 §7.2). If the asset was ` +
+        `spells it ${CRATE_MESH_NAME_AS_LOADED}. If the asset was ` +
         're-exported, re-check the mesh names before changing this.',
     )
   }

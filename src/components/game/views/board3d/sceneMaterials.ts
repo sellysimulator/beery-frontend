@@ -425,7 +425,7 @@ export function mergeParts(name: string, parts: readonly MergePart[]): THREE.Buf
 
   if (!merged) {
     throw new Error(
-      `${name}: mergeGeometries refused these parts (24 §7.1). They must share ` +
+      `${name}: mergeGeometries refused these parts. They must share ` +
         'an attribute set and all be indexed or all not — mixing an ExtrudeGeometry ' +
         'with a BoxGeometry is the usual cause.',
     )

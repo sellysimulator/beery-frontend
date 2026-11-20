@@ -1,8 +1,6 @@
 # Deploying Beery_Frontend
 
-Static hosting on Firebase (`00-decisions.md` D17). See
-`docs/plan/23-deployment-and-ci.md` for the full specification this file
-implements.
+Static hosting on Firebase (D17 in `docs/beer-game-spec.md` §15).
 
 ## Topology
 
@@ -30,6 +28,11 @@ backend host in production, e.g. `https://beery-backend.onrender.com` --
 `/index.html`, so a deep link -- `/results/:roomCode`, `/host/:roomCode`,
 `/join/:roomCode`, `/profile` -- resolves on a hard load or a shared URL
 instead of 404ing (Hosting otherwise looks for a literal file at that path).
+
+It also serves `/3dmodels/**` with `Cache-Control: public, max-age=31536000,
+immutable`. Hosting serves static files before the SPA rewrite, so the `.glb`
+files are never rewritten to `index.html`. Because the cache is immutable, a
+changed model must ship under a new filename, never overwrite the old one.
 
 ## Environment (build-time, `VITE_*`)
 
@@ -71,7 +74,7 @@ Firebase web config is literals in `firebase.ts`, at the repository root
 `api/socket.ts` and `api/http.ts`. It is deliberately committed: those values
 are public identifiers that ship in the bundle to every visitor regardless,
 and gitignoring the file while `src/` imports it is exactly the failure that
-stops CI from building the frontend at all (see failure mode 1 below).
+stops CI from building the frontend at all (see *Failure modes* below).
 
 ## The shared wire protocol -- ship together
 
@@ -95,17 +98,18 @@ same window, backend first.**
       full week, finish a game -- both as a signed-in user and as a guest.
 - [ ] `git ls-files firebase.ts` still reports the file tracked at the
       repository root -- gitignoring it silently breaks CI's ability to
-      build (failure mode 1).
+      build (see *Failure modes* below).
 - [ ] Secrets: `.env` not committed.
 
 ## Failure modes this guards against
 
-- **The frontend never deploys** (failure mode 1): CI checks out the
+- **The frontend never deploys**: CI checks out the
   repository clean and runs `npm ci && npm run build`; any file imported
   from `src/` that is not committed -- most importantly `firebase.ts` -- fails
-  the build. This is the exact failure the sibling Tequila project shipped:
-  `firebase.ts` gitignored while three modules imported it, so the backend
-  kept auto-deploying on push while the frontend silently never did again.
+  the build. This is the exact failure the sibling Tequila project once
+  shipped (since fixed): `firebase.ts` gitignored while three modules imported
+  it, so the backend kept auto-deploying on push while the frontend silently
+  never did.
 - **WebSocket through Hosting**: pointing `VITE_SOCKET_URL` at
   `beersim.web.app` instead of the Render host breaks every real-time
   feature, because Firebase Hosting does not proxy WebSocket upgrades.

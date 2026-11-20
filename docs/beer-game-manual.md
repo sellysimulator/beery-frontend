@@ -14,11 +14,11 @@ You see everything: all four players' inventory, backlog, orders and costs, and 
 
 ## Before you start
 
-You need four players (or fewer, with bots filling the gaps), a way to send them a link, and a rough idea of what you want them to learn. Thirty-six weeks of play with a 60-second timer runs a little over half an hour, plus debrief.
+You need four players (or fewer, with bots filling the gaps), a way to send them a link, and a rough idea of what you want them to learn. A Classic MIT game runs a little over half an hour, plus debrief.
 
 ## Step 1 — Create the room
 
-Sign in and create a game. You'll get a **room code** and an **invite link**. Send the link to your players however you like — chat, email, or on screen for them to type in.
+Create a game — you can sign in first to keep your results, or just start one. You'll get a **room code** and an **invite link**. Send the link to your players however you like — chat, email, or on screen for them to type in.
 
 Only you can see the room until you start.
 
@@ -34,13 +34,13 @@ This is the part that matters. Presets get you running fast:
 
 - **Classic MIT** — one permanent step up in customer demand. This is the standard scenario and the one that produces the textbook result.
 - **Fast Game** — the same scenario, shorter, for a tight schedule.
-
-*(2026-11-03: no preset figure is written here. Each preset card in the settings lists its exact weeks, starting stock, delays, demand and costs, written by the server from the preset itself, and the starting conditions show every role's lead time.)*
 - **Chaos** — long delays, random demand. Expect spectacular failure, which is the point.
+
+No preset figure is written here: each preset card in the settings lists its exact weeks, starting stock, delays, demand and costs, and the starting conditions show every role's lead time.
 
 Or set everything yourself:
 
-**Length and pacing.** Number of weeks. Seconds per decision, or untimed. What happens if someone runs out of time — repeat their last order, order zero, or match the demand they just received.
+**Length and pacing.** Number of weeks. There is no time limit — the week closes when everyone has decided, or when you close it.
 
 **Starting conditions**, per role or all at once. Opening inventory. Opening backlog. How many weeks shipments spend in transit. How many weeks a customer's orders take to reach each role — set on the role the orders travel to, so the Wholesaler's setting is how long the Retailer's orders take to reach the Wholesaler. How much is already in the pipeline at week one: units in transit, and the customer's orders already on the way (the Wholesaler's figure is what the Retailer sees as "Orders you've placed"; the Retailer's own figure only sets a Retailer bot's first guess at demand). For the Factory, the production delay and any capacity limit (0 means unlimited).
 
@@ -53,6 +53,8 @@ Or set everything yourself:
 - *Show all inventories* — full transparency across the chain.
 - *Highlight the supply line* — keep this on for beginners. It reminds players what they've already ordered but not yet received. Turn it off to make the game considerably harder.
 - *Show a live leaderboard* — competitive, but it can distort behaviour.
+- *Show running cost to players* — players see their own accumulated cost.
+- *Show neighbour inventory* — reveal the immediate neighbours' stock and backlog.
 
 **Tip:** run the classic settings first, debrief, then re-run with demand shared. The contrast does more teaching than any explanation.
 
@@ -60,15 +62,17 @@ Or set everything yourself:
 
 Three options:
 
-- **You assign** — drag each player onto Retailer, Wholesaler, Distributor or Factory. Use this when you want a specific person in a specific seat.
-- **Players choose** — first come, first served from the lobby. You can override anyone before starting.
+- **You assign** — pick Retailer, Wholesaler, Distributor or Factory for each player. Use this when you want a specific person in a specific seat.
+- **Players choose** — first come, first served from the lobby. You can still seat anyone who hasn't picked.
+
+To move someone, set their seat to *No role* first, then give the role to the other person: a role someone holds can't be handed to someone else directly.
 - **Random** — roles are dealt when the game starts. Fastest, and avoids anyone cherry-picking the easy seat.
 
-If you have fewer than four people, enable **bot fill**. Empty roles are played by an automated agent and are clearly marked so everyone knows which links in the chain are human.
+If you have fewer than four people, enable **bot fill**. Empty roles are played by an automated agent and are clearly marked so everyone knows which links in the chain are human. Bots only take seats nobody holds, so the game will not start while anyone in the room is still without a role: give everyone a seat first.
 
 ## Step 5 — Start
 
-Once all four roles are filled and your settings are valid, start the game. Settings lock at this point — they can't be changed mid-game. If you need different parameters, end the game and clone the room.
+Once all four roles are filled and your settings are valid, start the game. Settings lock at this point — they can't be changed mid-game. If you need different parameters, end the game and create a new room.
 
 ## Step 6 — Run the session
 
@@ -76,12 +80,11 @@ Your console shows all four players side by side, live, with their submission st
 
 You can:
 - **Pause** and **resume** — for questions, technical trouble, or a teaching moment.
-- **Extend the timer** for the current week if someone needs a moment.
-- **Force-close** a decision window if someone has walked away.
-- **Swap in a bot** for a player who has dropped out. You can do it while the game is paused (a dropped player pauses it automatically); the bot plays as soon as you resume. The game still counts in that player's history and statistics.
+- **Close a week** yourself if someone has walked away and the rest of the room is waiting on them.
+- **Swap in a bot** for a player who has dropped out. You can do it while the game is paused (a dropped player pauses it automatically); the bot plays as soon as you resume. The game still counts in that player's history and statistics, and if they come back they can take their role back from the bot (**Take back my role**); there is no button for you to give it back.
 - **End early** if you're running out of time — you still get full results for the weeks played. The week in progress is dropped, cost and all, so the console's totals and the results agree.
 
-Use **presentation mode** if you're projecting for a room.
+Use **presentation mode** if you're projecting for a room. It shows the chain, the week, the demand so far and who has decided — never costs, orders or future demand. Escape leaves it.
 
 **Two rules worth enforcing out loud:** players must not talk to each other about quantities, and nobody may show anyone else their screen. The silence is not an arbitrary restriction — it's the thing being simulated.
 
@@ -89,8 +92,8 @@ Use **presentation mode** if you're projecting for a room.
 
 The results screen is the lesson. Show it on the shared screen and walk through it:
 
-1. **Total cost per role and for the chain.** Ask who they think did worst, before revealing it.
-2. **The big chart** — true customer demand plotted against all four order streams. Customer demand barely moves. The Retailer's orders swing. The Wholesaler's swing more. The Factory's are wild. That's the bullwhip effect, and they produced it themselves.
+1. **Total cost per role and for the chain.** Ask who they think did worst, before revealing it: on your screen the costs start hidden behind **Reveal**.
+2. **The big chart** — true customer demand plotted against all four order streams. *Clear selection*, then switch the roles on one at a time, Retailer first, to bring the chain in stage by stage. Customer demand barely moves. The Retailer's orders swing. The Wholesaler's swing more. The Factory's are wild. That's the bullwhip effect, and they produced it themselves.
 3. **The bullwhip ratio** per role — how much each stage amplified the variation.
 4. Ask each player what they were thinking when they placed their largest order. Almost always, the answer is some version of *"I'd ordered more but nothing was arriving, so I ordered again."* That's supply-line underweighting, and it's the real finding.
 5. Point out that no one was incompetent and no one was acting in bad faith. The structure produced the outcome.
@@ -134,6 +137,8 @@ This means you are always ordering for a situation you can't see yet — and it 
 
 Open the link your host sent you. Enter a display name. Sign in if you want your results tracked across games, or continue as a guest if you don't.
 
+If you drop out mid-game, open the same link again to rejoin. If the host handed your role to a bot meanwhile, press **Take back my role** to play it again.
+
 Then wait. The host is configuring the game. You'll see who else has joined. You'll find out your role either in the lobby or when the game starts, depending on how your host set it up.
 
 ## Your screen
@@ -158,7 +163,7 @@ Then wait. The host is configuring the game. You'll see who else has joined. You
 
 Shortcuts are available — match the order you just received, repeat your last order, or order nothing.
 
-**3. Confirm and wait.** Once you submit, you'll see who else still has to decide. The other players never see your order — not now, and not after the week closes; they only see that you have decided. If there's a timer and it runs out, the system places an order for you according to your host's rule — so decide before then.
+**3. Confirm and wait.** Once you submit, you'll see who else still has to decide. The other players never see your order — not now, and not after the week closes; they only see that you have decided. There is no time limit — the week closes when everyone has decided, or when the host closes it.
 
 Then the next week begins.
 

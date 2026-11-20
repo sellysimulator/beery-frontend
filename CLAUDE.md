@@ -23,7 +23,7 @@ This repo is the **client only**:
 |---|---|---|
 | `Beery_Frontend` (here) | Firebase Hosting, site `beersim`, project `beery-30d23` | React 19 + Vite 7 SPA |
 | `Beery_Backend` | Render, `https://beery-backend.onrender.com` | FastAPI + Socket.IO, PostgreSQL + optional Redis. Timestamps arrive as ISO-8601 UTC with `Z`. Entry point `app.main:application`, dev port **8080** |
-| `Novus/game_stack.md` | repo root, one level above `Beery/` | The shared "host + room" base stack every Novus game (Beery, Lemony, Pulky, Selly/Tequila, Supply) is built from |
+| `Novus/game_stack.md` | repo root, one level above `Beery/` | The shared "host + room" base stack every Novus game (Beery, Lemony, Pulky, Selly/Tequila) is built from |
 
 `Novus/game_stack.md` is the **single source of truth**; `Beery/game_stack.md` and
 `Beery_Frontend/docs/game_stack.md` are copies — never edit a copy. Selly ("Tequila Game")
@@ -35,19 +35,16 @@ them as non-negotiable.
 
 - **`README.md`** (here) — prerequisites and the React `~19.2.0` tilde-pin rationale, setup,
   every npm script, the configuration table, the `src/` layout, the four architectural rules,
-  and the storage-scope table. Read it first. It was corrected on 2026-09-21 (shipped-screen
-  inventory, the three real env vars, test counts), so it now agrees with the code.
+  and the storage-scope table. Read it first.
 - **`DEPLOY.md`** (here) — hosting topology, build-time env vars and where CI gets them,
   the SPA rewrite, the "ship frontend and backend together" wire-contract rule, the deploy
   checklist and the two failure modes the config guards against.
-- **`docs/`** (here) — `beer-game-spec.md` (game rules/parameters/roles; wins on game
-  semantics), `beer-game-manual.md` (host + player manuals; wins on copy and UX voice),
-  `game_stack.md` (copy of the root file).
-- **`../docs/plan/`** — the 24 numbered section contracts the whole app was built against,
-  plus `00-decisions.md` (frozen decisions, `D<n>`), `00-conventions.md` (naming, error and
-  event shapes, testing rules), `BUILD-LOG.md` (authoritative build record, 149K) and
-  `HANDOFF.md`. Code comments cite these constantly as `16 §3`, `D18`, `03-game-config.md §2`.
-  When a comment cites a section, that document is the contract — go read it.
+- **`docs/`** (here) — `beer-game-spec.md` is the product contract (rules, parameters,
+  screens, data model, API; **§15 Decisions** holds the `D<n>` code comments cite, as in
+  `D18`, and **§16 Not built yet**); `beer-game-manual.md` (host + player manuals) is the
+  product voice; `game_stack.md` is a copy of the root file and wins on shared plumbing,
+  except where spec §15 records a deliberate departure. Code comments cite spec sections as
+  `spec §9.7`. Git history holds the build record.
 
 ## 3. Directory layout
 
@@ -71,7 +68,7 @@ src/
   auth/AuthContext.tsx   Firebase auth + socket (re)connect + /users/upsert
   contexts/BackendStatusContext.tsx   health poll, 'checking' | 'ok' | 'down'
   store/gameStore.ts     the one Zustand store
-  types/game.ts          TS mirrors of every wire payload (647 lines)
+  types/game.ts          TS mirrors of every wire payload
   schemas/configSchema.ts  buildConfigFormSchema(limits): the host form's checks, built
                          from the server's ranges (GET /rooms/limits) — no copy here
   utils/storage.ts       the only module that touches localStorage/sessionStorage
@@ -105,7 +102,7 @@ bearing documentation — match that style.
 |---|---|
 | `/` | public |
 | `/player-manual`, `/host-manual` | public |
-| `/results/:roomCode` | public |
+| `/results/:roomCode`, `/results/g/:gameId` | public (the second is the permanent URL, by `public_id`) |
 | `/join/:roomCode` | public (redirect into `/game/:roomCode`) |
 | `/home`, `/game/:roomCode`, `/host/:roomCode` | auth+backend |
 | `/multihost/new`, `/multihost` | auth+backend |
@@ -125,9 +122,7 @@ npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
 
-Verified green on 2026-11-16 (after the safe-area sweep): **1356 tests /
-42 files passed**, `eslint .` clean, `tsc -b` clean. `vitest run --reporter=basic` no longer exists in Vitest 4 — use the default
-reporter.
+`vitest run --reporter=basic` no longer exists in Vitest 4 — use the default reporter.
 
 CI (`.github/workflows/firebase-hosting-{merge,pull-request}.yml`) runs, on push to `main`
 and on PRs: `setup-node` from `.nvmrc` → `npm ci` → `npx tsc -b` → `npx eslint .` →
@@ -142,7 +137,7 @@ and on PRs: `setup-node` from `.nvmrc` → `npm ci` → `npx tsc -b` → `npx es
 |---|---|---|
 | `VITE_API_BASE_URL` | `api/http.ts`, `api/health.ts` | Empty → relative `/api/v1`, i.e. the dev proxy |
 | `VITE_SOCKET_URL` | `api/socket.ts` | Must be the **backend host** in prod. Firebase Hosting does not proxy WebSocket upgrades |
-| `VITE_BOARD_VIEW` | `pages/GameRoomPlaying.tsx` | Optional; `'2D'` (default) or `'3D'` — both are registered. Only the default for a browser with no stored `board_view`; the in-game toggle overrides it per browser. Unrecognised → `'2D'` (`24 §2.2`, **D20**) |
+| `VITE_BOARD_VIEW` | `pages/GameRoomPlaying.tsx` | Optional; `'2D'` (default) or `'3D'` — both are registered. Only the default for a browser with no stored `board_view`; the in-game toggle overrides it per browser. Unrecognised → `'2D'` (spec §9.7, **D20**) |
 
 There are **no `VITE_FIREBASE_*` variables and there must not be.** The web config is six
 literals in `/firebase.ts` at the repo root, imported as `'../../firebase'` by
@@ -162,7 +157,7 @@ frontend from ever deploying. `.env` *is* gitignored. `envSurface.test.ts` asser
   `@firebase/*` with `firebase`, and drei's `troika-*` / `bidi-js` / `webgl-sdf-generator`
   and fiber's `react-reconciler` / `its-fine` / `suspend-react` with `three` — splitting any
   of them from their entry point breaks the chunking. `chunkSizeWarningLimit` is `1200`
-  because the `three` chunk is ~1.1 MB, lazy, and never in the entry graph (`24 §6.4`).
+  because the `three` chunk is ~1.1 MB, lazy, and never in the entry graph.
 - `server.proxy`: `/api → http://localhost:8080`, `/socket.io → :8080 with ws: true`.
 
 **There are no path aliases.** No `resolve.alias`, no `compilerOptions.paths`. Every import
@@ -185,13 +180,13 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
    read. There is no game arithmetic in the client: inventory, cost, eligibility, even
    whether the host's Start button may be pressed and the sentence explaining why not, all
    arrive from the server. Client-derived state is the failure mode `game_stack.md`
-   invariant 7 exists to prevent. **Every figure a rule defines is the server's** (2026-11-03,
-   `00-decisions.md` §5): no demand generator, delay sum, default, preset number, cost, ratio
-   or running total is worked out here. The fields that replaced the last client sums:
-   `your_state.order_arrival_week` (was `week + order_arrival_lead_weeks`),
-   `settlement.inventory_after_arrival` (was `opening_inventory + arrived`),
-   `supply_line_slot_weeks` / `orders_in_flight_slot_weeks` (was a slot's `index + 1`) and
-   `host_state.weeks_played` (was `host_state.week`). If a screen needs a new figure, add it to
+   invariant 7 exists to prevent. **Every figure a rule defines is the server's** (spec §15):
+   no demand generator, delay sum, default, preset number, cost, ratio or running total is
+   worked out here. The server sends the figures a client would be tempted to sum:
+   `your_state.order_arrival_week` (never `week + order_arrival_lead_weeks`),
+   `settlement.inventory_after_arrival` (never `opening_inventory + arrived`),
+   `supply_line_slot_weeks` / `orders_in_flight_slot_weeks` (never a slot's `index + 1`) and
+   `host_state.weeks_played` (never `host_state.week`). If a screen needs a new figure, add it to
    the backend payload or route — never a formula here. Allowed: formatting, layout, chart
    scales and axes, sorting, filtering.
 2. **Socket listeners are registered once, at module load,** in `api/socketHandlers.ts`,
@@ -201,6 +196,13 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 3. **Every server→client game event carries a monotonic `seq`.** `applySequenced` drops any
    event with `seq <= lastSeq`, which is also what makes accidental double-application inert.
    `joined`, `join_error`, `host_claimed`, `leave_ack` and `error` carry no `seq`.
+   Three appliers merge rather than replace: `applyYourState` keeps the held `own_history`
+   when the payload omits it (the per-round `your_state`), but only for the same role;
+   `applyYourWeekClosed` appends the record unless that week is already held; and
+   `applyGameStarted` never writes `config_public` into `config` (it would overwrite the
+   host's full config). `join_error` both sets `joinError` (the durable signal HostRoom's
+   recovery screen keys on, since before the first reply "refused" and "not answered yet"
+   look identical) and raises an alert; `applyJoined` clears it.
 4. **The socket does not auto-connect.** `autoConnect: false`, and `auth` is a **callback**
    so it re-runs with a fresh ID token on every reconnect. `AuthContext` connects it once
    `onAuthStateChanged` resolves (or after an 8s watchdog). Auto-connecting would hand a
@@ -248,7 +250,7 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.
     Palette is Okabe-Ito for colour-blind safety, and **colour is never the only signal** —
     backlog and alerts always carry an icon and a label too.
-    **Safe area** (2026-11-16, `game_stack.md` "edge to edge … inside the safe area"):
+    **Safe area** (`game_stack.md` "edge to edge … inside the safe area"):
     `index.html` sets `viewport-fit=cover`, `body` pads by the left/right insets, and every
     `fixed` control (and every edge-anchored element of the 3D HUD) offsets by
     `max(<gutter>, env(safe-area-inset-<edge>))`, e.g. `left-[max(1rem,env(safe-area-inset-left))]`;
@@ -256,7 +258,7 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     element, and size flow content with `w-full`, not `w-screen`/`100vw`.
 12. **Forms**: react-hook-form + Zod, only in the host config form (the lobby's `ConfigPanel`
     and, over a draft, `/multihost/new`; both render `ConfigSections`). **The ranges are the
-    server's, never ours** (2026-11-02): `useLimits()` fetches `GET /rooms/limits` once and
+    server's, never ours**: `useLimits()` fetches `GET /rooms/limits` once and
     `buildConfigFormSchema(limits)` builds every check, `min`/`max` and hint from it (sections
     read `ConfigFormContext.limits`); there is no `FORM_LIMITS` and must never be one — add a
     bound to the backend's `core/limits.py`. Until the ranges arrive the panel shows its
@@ -268,7 +270,7 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     `PUT /rooms/{code}/config` when not (that REST reply has no `seq`, so it goes through
     `setConfig`, never `applyConfigUpdated`). Tests that mount the panel must serve
     `/rooms/limits` (`src/__tests__/limitsFixture.ts`).
-    **The preview is the server's too** (2026-11-03): `useConfigPreview(draft)` posts the
+    **The preview is the server's too**: `useConfigPreview(draft)` posts the
     stored config (with the just-picked generator or the unsaved `CUSTOM` paste in place of
     its demand) to `POST /rooms/preview`, debounced 300ms, answers shared by draft, so
     `DemandPreview` and the starting grid's `LeadTimeRow` make one request. Until the answer
@@ -280,13 +282,21 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     `{kind: 'CUSTOM', values}`. Preset cards print the server's `label`/`description`
     verbatim. Tests that mount the panel serve `/rooms/preview` too and call
     `resetPreviewCacheForTests()` in `beforeEach`. The bot slider must not call β=1
-    "steady" — it is milder, not steady (`08 §3.1`).
+    "steady" — it is milder, not steady (spec §8.5).
+    Inputs render from the stored config (`store.config`, or the draft on `/multihost/new`);
+    react-hook-form only holds the in-flight keystrokes of the field being edited. A numeric
+    blur and any switch toggle save immediately (otherwise the 400ms debounce), and every
+    patch is leaf-level and carries `preset_name: null` (e.g.
+    `{roles: {RETAILER: {initial_inventory: 14}}}`). Each control's `name` is its dotted wire
+    path (`roles.RETAILER.initial_inventory`, `bot.beta`) and its `id` is `config-` + the path
+    with dots as dashes; a server-rejected field gets `aria-invalid` with its message via
+    `aria-describedby`. Tests find fields by these.
 13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal (each chart module
     registers what it uses; `ChartJS.register` is idempotent). `components/charts/chartSetup.ts`
     owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
     builder** whose output the component passes straight through: a canvas is opaque to
     jsdom, so the *config object* is what tests assert, and tests never mock `chart.js` or
-    `react-chartjs-2`. The kit (2026-11-02, `../CHARTS-PLAN.md` BE-1):
+    `react-chartjs-2`. The kit (the charts themselves are spec §9.8):
     - **`charts/chartTheme.ts`** is the only place a canvas colour literal may live
       (`CHART_TOKENS`, keyed by the `--color-*` token it mirrors, plus `roleStyle(role)` and
       `withAlpha`). `chartTheme.test.ts` fails when a literal drifts from `src/index.css`. A
@@ -299,7 +309,9 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
       stays off.
     - **`charts/plugins/crosshairSync.ts`** syncs the hovered week across charts that opt
       in with `plugins.crosshairSync.group`. Wrap them in `plugins/CrosshairGroup.tsx` and
-      import `CrosshairGroup`/`useCrosshairGroup` from there.
+      import `CrosshairGroup`/`useCrosshairGroup` from there. Inside a group, `ChartBox`
+      makes the canvas wrapper focusable (`tabIndex` 0) and ArrowLeft/ArrowRight step the
+      shared crosshair, clamped to the shortest series in the group.
 
     Plot **server fields only**: a combination of two values is shown with geometry
     (stacking, a sign flip below the axis), never as a computed series (rule 14's principle).
@@ -311,7 +323,7 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     keeps the whole series. A lane chip shows what travels along *that* link: beer is the
     downstream role's `supply_line`, orders the **upstream** role's `orders_in_flight` (on
     `host_state` that is a role's own incoming-order pipeline, so reading the downstream
-    role's put every count one link too high until 2026-11-03).
+    role's would put every count one link too high).
 14. **The 3D board computes nothing and emits nothing.** `board3d/sceneModel.ts`'s
     `buildSceneModel(props)` returns a plain object — every pile count, sign string, fixture
     id, model placement, light, accent and prompt — and `WarehouseScene` walks it and emits
@@ -327,33 +339,41 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     field behind any of it. **A figure on screen that cannot be traced to a `PlayerView`
     field is a bug**, including a plausible one: a settlement whose
     `holding_cost ≠ closing_inventory × rate` renders the server's figure, never the product
-    (`24 §8.1`, `24 §9` AC 6, `19` FM 4). This is rule 1 wearing a different hat. Since
-    2026-11-03 the scene does no arithmetic at all: the ledger prints
+    (spec §9.7). This is rule 1 wearing a different hat. The scene does no arithmetic at
+    all: the ledger prints
     `inventory_after_arrival` and the lane/order placards read the server's slot weeks.
-    **The 3D board is offered on every pointer** (2026-11-16, `24 §5.7`): `BoardViewToggle` no
-    longer disables it on a coarse pointer. On `(any-pointer: coarse)` the HUD shows
+    **The 3D board is offered on every pointer** (spec §9.7): `BoardViewToggle` does not
+    disable it on a coarse pointer. On `(any-pointer: coarse)` the HUD shows
     `MovePad` (six held buttons: turn ↶ ↷, walk ↑ ↓, strafe ← →) and the touch legend; drag-look
     works by finger because the canvas wrapper is `touch-none`. Pad presses live in a set of
     their own (`padHeld` in `Board3D`), merged with the keyboard's by `mergeHeldKeys` so
     `stepPlayer` stays the only walk; turning is `stepYaw` at 1.7 rad/s and counts as look
     (allowed while paused). Window blur, a hidden tab and a panel opening all release the pad.
+    **The seams.** `Board3D` is registered in `GameRoomPlaying`'s `BOARD_VIEWS` only via
+    `lazy()` (a static import puts three.js in the entry chunk); `BoardViewToggle` is a sibling
+    of `<Board>`, never a prop, and `BoardViewProps` does not grow for 3D. A new `PlayerView`
+    field must be mapped in `buildSceneModel` as well as `Board2D`. `roleSets.ts` is the only
+    place the scene branches on role, and its labels are imported from `RoleBanner.tsx` /
+    `roleCopy.ts`, never retyped. A visibility gate omits the fixture from the `SceneModel`
+    (asserted on the fixture list), never `visible={false}`. The 2D panels are mounted once and
+    toggled `sr-only`/visible: never render them twice (a duplicate "What you have" landmark).
 15. **No screen says "Week cost".** Wherever a week's cost appears (recap, decision panel,
     3D ledger and cost corner) it is two figures: "Holding & backlog"
     (`settlement.carrying_cost` / `week_holding_backlog_cost`) and "Order cost"
     (`week_order_cost`, *"not yet charged"* while it is `null`). The stored sum is
-    `WeekRecord.total_week_cost` and is never shown as a single figure (2026-11-02).
+    `WeekRecord.total_week_cost` and is never shown as a single figure.
 
-### Multi-game hosting and the join QR code (2026-11-13)
+### Multi-game hosting and the join QR code
 
 `/multihost/new` (`MultiHostSetupPage`) takes a count, a host name and **the full base config**
 every game in the batch starts with, and calls `createRoomBatch` (`POST /rooms/batch-create`,
-backend `10 §3.5c`) with `{count, preset, config, host_display_name}`: `preset` is the preset the
+spec §9.10) with `{count, preset, config, host_display_name}`: `preset` is the preset the
 draft started from, `config` the validated draft itself. The count's range is the server's
-(`Limits.min_batch_rooms`/`max_batch_rooms` via `useLimits()`), refused, never clamped. Since
-2026-11-14 the config is the lobby's own form: `config/ConfigSections.tsx` is the stateless
+(`Limits.min_batch_rooms`/`max_batch_rooms` via `useLimits()`), refused, never clamped. The
+config is the lobby's own form: `config/ConfigSections.tsx` is the stateless
 rendering (no store, no room), `config/useConfigForm.ts` the form state (ranges, Zod, `useForm`,
 pending demand kind, preset/kind handlers), and each caller supplies a `ConfigSaveApi`.
-`ConfigPanel` supplies the store's config and `useConfigSave` and behaves exactly as before; the
+`ConfigPanel` supplies the store's config and `useConfigSave`; the
 setup page supplies `config/useDraftConfig.ts`, whose save posts the current draft **and the
 patch** to `POST /rooms/preview`. The server merges the patch (`merge_config_patch`: a changed
 demand kind replaces the block and gets its defaults), validates, and returns `config`, which
@@ -380,14 +400,14 @@ games"** emits the ordinary `startGame` (`api/games.ts`) for each room whose sum
 `can_start`, and sends `host_state` to the claimed host tab (or, if none is open, to the
 dashboard, which ignores it).
 
-**"Start all" refusals go on their card** (2026-11-14, identical in every Novus game). The
+**"Start all" refusals go on their card** (identical in every Novus game). The
 server names the room on every `start_game` refusal (`join_error` `{message, room_code}`). The
 dashboard registers its codes with the store's `setBatchRooms` (cleared on unmount), and the
 `join_error` handler in `socketHandlers.ts` sends a refusal whose `room_code` is in the batch to
 `setBatchStartError` instead of `applyJoinError` + a global alert; the card shows
 "Game N (CODE): <server message>" (`startErrorText`) until a later summary shows the game
 started (`hasStarted`: `RUNNING`/`PAUSED`/`FINISHED`). A refusal with no `room_code`, or for a
-room outside the batch, keeps the old behaviour. After "Start all" one status line reads
+room outside the batch, goes through `applyJoinError` and a global alert as usual. After "Start all" one status line reads
 "Started X of Y games." (+ "Z couldn't start, see their cards."; `startAllStatus`), X counted once
 from the first summary **sent** at or after the refresh ~1 s after the click:
 `useRoomsSummary` returns `asOf`, the send time of the answer it holds, so a poll already in
@@ -401,13 +421,13 @@ click. The host lobby's `InvitePanel` opens it with **Show QR** / **Hide QR**; e
 dashboard card shows a small inline QR and opens it too. `utils/clipboard.ts`'s
 `copyToClipboard` is the one copy helper both use.
 
-### Results export is open to every viewer (2026-11-14)
+### Results export is open to every viewer
 
 `results/ExportControls.tsx` renders CSV and JSON for anyone viewing a persisted game (one with a
 `public_id`), host or player, guest or signed in, and downloads from
 `GET /games/id/{public_id}/export` with no `X-Host-Secret` — the host too. The export is not
 bound to the host because a guest host has no account to fall back on once the room or tab is
-gone (backend `15 §10`, `00-decisions.md` D22). The export by room code stays host-only on the
+gone (D22). The export by room code stays host-only on the
 server and is not called from here. Each game and format can be downloaded **once per browser
 session**: after a success the button is disabled and reads "CSV already downloaded this
 session"; a failure marks nothing. That flag is UX only; the server's per-address limit (100
@@ -429,13 +449,24 @@ Don't reintroduce a host check, an expiry warning or "only the host can export" 
 | `host_batch` | sessionStorage | The multi-game dashboard's room codes (JSON array; `getHostBatch()` is null when absent or malformed). Codes only — each secret is under `host_secret_<room>` |
 | `export_downloaded_<public_id>_<format>` | sessionStorage | The results screen's once-per-session download flag (`markExportDownloaded` / `wasExportDownloaded`). **UX only**: the server's per-address export budget (100 an hour, backend `core/abuse.py`) is the real guard |
 | `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it) |
-| `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (`24 §2.3`) |
+| `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (spec §9.7) |
 
 **D18 host recovery**: closing the tab loses `host_secret`. The host lobby therefore emits
 `join_waiting` **with or without** a stored secret, and the server re-authorises against the
 verified identity and replies `host_claimed` with a fresh one. Guarding that emit on
 `getHostSecret() !== null` silently disables the whole recovery path — the symptom is a
 permanently paused game, not an error.
+
+`rejoinAfterConnect` runs on every `connect`: it emits `join_waiting` when the route is
+`/host/:roomCode` or the tab holds `host_room` for that room (with the stored secret if any),
+otherwise `join` with the stored `session_token` and display name, so a reconnect keeps the
+chosen name. A shell may also emit `join` on mount, so a cold load can send two; that is
+intended (`join` is idempotent by identity), and no emitter should try to guess whether the
+other fired.
+
+`store.myAlias` is the alias, the value every broadcast's `player_id` is compared against. The
+`session_token` is read only by the `join` emit (`storage.getSessionToken`) and is never
+displayed or compared.
 
 ## 8. Gotchas
 
@@ -472,3 +503,38 @@ permanently paused game, not an error.
   inside a `<MemoryRouter initialEntries={[...]}>` at any path. Keep it that way.
 - Without a backend, only `/`, `/player-manual` and `/host-manual` render; everything else
   sits behind `BackendGuard`'s wake-up screen (Render free tier cold-starts in 30–60s).
+- **Test the empty case of a glob against an explicit record.** `import.meta.glob` is
+  expanded at transform time, so the live `discoverRoutes()` and the `shellScreens.ts`
+  resolvers can never be empty once the files exist. Test the empty or missing case through
+  `collectRoutes(record)` / `resolveShellScreen(record, path, name)` with an explicit module
+  record, never against the live glob (that assertion holds until the file lands, then fails
+  for good).
+- **Every numeric input blurs on wheel** (`onWheel={(e) => e.currentTarget.blur()}`): Chrome
+  and Edge step a focused number input under the wheel, so scrolling the page would silently
+  change a config value or an order. React's wheel listeners are passive, so
+  `preventDefault()` cannot do it; keep the blur on any new number input.
+- **No two modules in one directory may differ only in case** (e.g. `DemandCurve.tsx` beside
+  `demandCurve.ts`): on case-insensitive macOS/Windows filesystems the extensionless import
+  resolves to the wrong file (TS1261 and a missing default export). That is why chart
+  builders are named `*Config.ts`.
+
+### The 3D board
+
+- **CSS custom properties do not resolve inside WebGL**, so `board3d/scenePalette.ts` holds
+  hexes copied from the `index.css` tokens. Accent hexes go only on architecture, quantity
+  hexes only on crates; stock crates are deliberately neutral grey because
+  `--color-inventory` equals the Retailer accent.
+- **`PlayerController` ignores keys while an INPUT/TEXTAREA/SELECT is focused**
+  (`isTypingTarget`), or typing an order walks the player. Never call `setState`
+  unconditionally from `useFrame` (report the nearest station only on change). No
+  `PointerLockControls`: it steals the cursor from the DOM panels and the toggle.
+- **The models need no Draco/Meshopt/KTX2 decoder**, and every model goes through the
+  `Box3` normalise-and-ground step (authors' units and pivots differ). The truck's materials
+  are baked to vertex colours to keep two draw calls per truck.
+- **Budgets are constants asserted by `Board3D.test.tsx`:** `MAX_LIGHTS=1` (hemisphere only;
+  a point light is unrepresentable), `MAX_DRAW_CALLS=90` via `estimateDrawCalls`,
+  `MAX_INSTANCE_POOLS=8`, `MAX_SIGNS=40`. Over budget, merge geometry first, then fold signs;
+  never drop a truck (it identifies the Wholesaler).
+- **A lost WebGL context is an event, not a throw**, so `ErrorBoundary` never sees it:
+  `contextLoss.ts` listens in the capture phase and routes to the same 2D fallback.
+- **jsdom has no WebGL:** tests never import `Board3D.tsx` or `WarehouseScene.tsx`.

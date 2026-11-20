@@ -19,7 +19,7 @@ const HOSTING_ORIGIN = /web\.app|firebaseapp\.com/
  * the build still succeeds: the bundle then asks the Hosting origin for
  * everything. REST survives that by accident — the `**` rewrite answers 200
  * with `index.html` — while the socket cannot, because Firebase Hosting does
- * not proxy WebSocket upgrades (DEPLOY.md, failure mode 7). Every real-time
+ * not proxy WebSocket upgrades (DEPLOY.md, "Failure modes"). Every real-time
  * feature then fails with "Could not reach the game server" on a deploy whose
  * own CI run was green. This turns that into a red build.
  *
@@ -55,9 +55,9 @@ function requireBackendEnv(env: Record<string, string>): Plugin {
 
 /**
  * Fails the build when the entry HTML's import graph reaches the `three` chunk
- * — 24 AC 4, enforced instead of trusted.
+ * — the lazy 3D board's promise (spec §9.7), enforced instead of trusted.
  *
- * AC 4 says `three` may appear in NO chunk the entry HTML loads. That holds
+ * The rule is that `three` may appear in NO chunk the entry HTML loads. That holds
  * only while every package in drei's and fiber's transitive tree is caught by
  * `manualChunks` above. It is a list of names, and a `npm update` that adds one
  * more transitive dependency breaks it silently: the new package falls through
@@ -65,7 +65,7 @@ function requireBackendEnv(env: Record<string, string>): Plugin {
  * the whole WebGL bundle on the login screen. Nothing fails. The only symptom
  * is a megabyte in the network tab of a player who chose the 2D board.
  *
- * So the criterion is checked here, against the emitted bundle, the same way a
+ * So the rule is checked here, against the emitted bundle, the same way a
  * human would check it: walk the entry chunk's imports transitively and look
  * for `three`. Rollup's own "Circular chunk" message is a warning and warnings
  * scroll past.
@@ -103,7 +103,7 @@ function forbidThreeInEntryGraph(): Plugin {
               cursor = path.get(cursor)
             }
             this.error(
-              `24 AC 4 violated: the entry HTML loads the \`three\` chunk.\n` +
+              `The entry HTML loads the \`three\` chunk, which must stay lazy.\n` +
                 `  ${chain.join(' -> ')}\n` +
                 'A package in drei\'s or fiber\'s tree fell through to `vendor`. Add it to the\n' +
                 '`three` bucket in `manualChunks` — see the comment there for how to find it.',
@@ -128,7 +128,7 @@ export default defineConfig(({ mode }) => {
     build: {
       // The `three` chunk is large and that is expected: it is lazy, it is
       // never in the entry graph, and it is fetched only when a player asks
-      // for the 3D board (24 §6.4, AC 4). The default 500 kB warning would
+      // for the 3D board. The default 500 kB warning would
       // fire on every build and train everyone to ignore it, which costs more
       // than it catches.
       chunkSizeWarningLimit: 1200,
@@ -156,8 +156,8 @@ export default defineConfig(({ mode }) => {
             // uses it — and because `index.html`'s own lazy routes call the
             // helper too, the entry chunk then carried a bare
             // `import{_}from"./three-*.js"` and the whole WebGL bundle was
-            // preloaded on the login screen. One tiny module, the entire 24
-            // AC 4 guarantee. It belongs in `vendor`: already in the entry
+            // preloaded on the login screen. One tiny module, the entire
+            // lazy-3D guarantee. It belongs in `vendor`: already in the entry
             // graph, already imported by `three`, so nobody pays a request.
             if (id.includes('vite/preload-helper')) return 'vendor'
             if (!id.includes('node_modules')) return undefined
@@ -165,9 +165,9 @@ export default defineConfig(({ mode }) => {
             if (/[\\/]node_modules[\\/](chart\.js|react-chartjs-2)[\\/]/.test(id)) return 'charts'
             if (/[\\/]node_modules[\\/](socket\.io-client|engine\.io-client|engine\.io-parser|socket\.io-parser)[\\/]/.test(id))
               return 'socket'
-            // The 3D board's whole dependency tree, in one lazy chunk (24 §6.4).
+            // The 3D board's whole dependency tree, in one lazy chunk.
             //
-            // §6.4 prescribes the names it could see from the import statements
+            // The first list is the names visible in the import statements
             // — `troika-three-text`, `troika-three-utils`, `troika-worker-utils`,
             // `bidi-js` and `webgl-sdf-generator` are drei `<Text>`'s SDF
             // pipeline, and `react-reconciler`, `its-fine` and `suspend-react`
@@ -185,7 +185,7 @@ export default defineConfig(({ mode }) => {
             // `vendor` then imports the `three` chunk, Rollup reports
             // `Circular chunk: vendor -> three -> vendor`, and the entry HTML
             // emits a `modulepreload` for a megabyte of WebGL that a 2D player
-            // never renders. The build stays green while AC 4 is broken, which
+            // never renders. The build stays green while that rule is broken, which
             // is why `forbidThreeInEntryGraph` below turns it red instead.
             //
             // Every name here was verified against the real module graph by its
