@@ -17,13 +17,12 @@ import {
  * Every figure here is `HALL`'s: 30 × 42 at `y = 0`, walls at `x = ±15` and
  * `z = ±21`, ten metres tall, and nothing above them.
  *
- * **There is no ceiling** (amended 2026-09-22). A player walked the hall and
- * asked for it: *"take the ceiling away and replace it with a cyan sky."* The
- * room was the *inside* of one `BoxGeometry` at `BackSide`, which is one mesh
- * for floor, walls and roof and no way to drop a single face, so the walls are
- * now four inward-facing planes merged into one geometry and the floor's
- * textured quad carries the floor by itself. Same three draw calls, same
- * `SHELL_DRAW_COST`, one surface fewer.
+ * **There is no ceiling.** A player walked the hall and asked for it: *"take
+ * the ceiling away and replace it with a cyan sky."* The inside of one
+ * `BoxGeometry` at `BackSide` would be one mesh for floor, walls and roof with
+ * no way to drop a single face, so the walls are four inward-facing planes
+ * merged into one geometry and the floor's textured quad carries the floor by
+ * itself: three draw calls, `SHELL_DRAW_COST`.
  *
  * There is no drei `<Sky>`. The hall is open to the sky, but the player asked
  * for uniform light, and a flat `<color attach="background">` is uniform by

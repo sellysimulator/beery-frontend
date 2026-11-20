@@ -11,9 +11,8 @@ import { NumberField, SwitchField } from './fields'
  * these are the settings a host changes *between* two runs of the same
  * scenario to make a point, and the point is the thing worth reading.
  *
- * There is no "negative orders" switch: the option was removed on 2026-11-02.
- * It never worked (a negative order froze the week), and every order now has a
- * floor of 0.
+ * There is no "negative orders" switch: every order has a floor of 0, and a
+ * negative order would freeze the week.
  */
 export function VisibilitySection(): ReactElement {
   const { limits } = useConfigFormContext()

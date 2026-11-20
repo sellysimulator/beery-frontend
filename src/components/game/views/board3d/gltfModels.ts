@@ -440,11 +440,10 @@ export function useMoneyModel(): THREE.Group {
   return useMemo(
     () =>
       cached(moneyCache, scene, () =>
-        // `money.glb`'s texture is ~97% of the file and an earlier round
-        // stripped it to save the GPU upload. That was wrong: the mesh is 36
-        // triangles, so without its texture a stack of bills is a featureless
-        // cuboid — which is the "white box" it renders as. The texture is the
-        // model (2026-09-22).
+        // `money.glb`'s texture is ~97% of the file, but don't strip it to
+        // save the GPU upload: the mesh is 36 triangles, so without its
+        // texture a stack of bills is a featureless cuboid — a "white box".
+        // The texture is the model.
         normalizeModel(scene.clone(), MODEL_TARGET_HEIGHT.money),
       ),
     [scene],

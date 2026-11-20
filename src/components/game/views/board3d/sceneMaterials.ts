@@ -140,11 +140,9 @@ function matte(color: string, roughness = 0.9): THREE.MeshStandardMaterial {
 /**
  * The four walls.
  *
- * This was `ROOM_MATERIAL`, on the **inside** of one box: `BackSide` gave
- * floor, walls and ceiling in one mesh. There is no ceiling any more — the
- * hall is open to `skyCyan` — so the room is four inward-facing planes merged
- * into one geometry (`WALLS_GEOMETRY`) with the floor's own textured quad
- * under them, which is the same one draw call for the same four walls.
+ * There is no ceiling — the hall is open to `skyCyan` — so the room is four
+ * inward-facing planes merged into one geometry (`WALLS_GEOMETRY`) with the
+ * floor's own textured quad under them: one draw call for the four walls.
  *
  * `FrontSide`, the default, because every plane in that merge is already
  * turned to face into the hall; there is no camera position outside them.
@@ -246,19 +244,15 @@ export function quantityMaterial(hex: string): THREE.MeshStandardMaterial {
   return tintedMaterial(hex)
 }
 
-/* ─── Fog: removed ─── */
+/* ─── Fog: none ─── */
 
 /**
- * There is no fog any more, and this comment is the reason rather than a
- * deleted constant.
+ * There is no fog, and this comment is the reason.
  *
- * The hall had `<fog>` in `--color-surface-sunken`, matching a background in
- * the same bone hue, so the far wall softened into the room instead of into a
- * seam. Both halves of that are gone: the background is `skyCyan` and there is
- * no ceiling, so fog in the old hue would sit as a bone haze across the tops
- * of the walls where the sky is, and fog retuned to the sky's cyan would wash
- * the far signs — and a player has just asked for *more* contrast on the
- * signs, not less. An open yard 60 × 42 does not need a depth cue at 26 m.
+ * The background is `skyCyan` and there is no ceiling, so fog in the bone hue
+ * of `--color-surface-sunken` would sit as a bone haze across the tops of the
+ * walls where the sky is, and fog tuned to the sky's cyan would wash the far
+ * signs — and a player asked for *more* contrast on the signs, not less. An open yard 60 × 42 does not need a depth cue at 26 m.
  */
 
 /* ─── Dressing dimensions ─── */
@@ -280,13 +274,11 @@ export const FIXTURE_SIZE = {
   /** The order road's painted surface, running west from the bay to the wall. */
   roadPaint: { width: 17, depth: 3.2 },
   /**
-   * The upstream gate, as a **painted threshold** on the road (amended
-   * 2026-09-22).
+   * The upstream gate, as a **painted threshold** on the road.
    *
-   * It was `{ width: 6.4, height: 4.4, post: 0.34 }` — two posts and a lintel
-   * the courier drove under — and a player asked for the arches to go. The
-   * place survives the arch: the threshold is where the road leaves the hall,
-   * the courier stands on it, and the signs it carried hang over it unchanged.
+   * Not an arch — a player asked for no arches. The threshold is where the
+   * road leaves the hall, the courier stands on it, and the gate's signs hang
+   * over it.
    * It is laid at `GHOST_Y`, above both the road paint under it and the
    * truck's contact quad at `PAD_Y`, so the three do not z-fight.
    */
@@ -324,16 +316,15 @@ export const FIXTURE_SIZE = {
   /**
    * The band rides one metre below the top of the wall, wherever that is.
    *
-   * It was a hardcoded `y: 6`, which was the wall height at the time — so it
-   * sat at the top by coincidence rather than by rule, and stayed at 6 when
-   * the walls went to 10, stranded halfway up (2026-09-22).
+   * It is derived from `HALL.wallHeight`, not hardcoded, so it stays at the
+   * top by rule when the wall height changes rather than stranded halfway up.
    */
   wallBand: { height: 1, y: HALL.wallHeight - 1 },
   /**
-   * The DISTRIBUTOR's through-aisle, which is now the whole of its south face.
+   * The DISTRIBUTOR's through-aisle, which is the whole of its south face.
    *
-   * Two piers and a lintel made the third of the overhead structures a player
-   * asked to have removed. The cross-dock's identity — *"the only room you can see all
+   * No piers and no lintel: a player asked for no overhead structures. The
+   * cross-dock's identity — *"the only room you can see all
    * the way through"* — is carried by what is left: a painted aisle the full
    * length of the hall, edged in the accent and arrowed down the middle, and
    * two waist-high kerbs where it leaves the building. A kerb is not a portal:
@@ -345,10 +336,8 @@ export const FIXTURE_SIZE = {
 /**
  * The floor patch a pile of `gridWidth × gridDepth` crates stands on.
  *
- * **`CRATE_PITCH`, the same figure `CratePile.tsx` steps by**, and that is the
- * whole point of the amendment of 2026-09-22: this function used to guess
- * `1.1 × 1.18` while the pile was laid out at `size × 1.06`, so the pad and
- * the pile it was under were built from two different numbers. One constant,
+ * **`CRATE_PITCH`, the same figure `CratePile.tsx` steps by**, so the pad and
+ * the pile on it are never built from two different numbers. One constant,
  * one pitch, and a pad is exactly the pile's footprint.
  */
 export function padSize(gridWidth: number, gridDepth: number): [number, number] {
@@ -362,8 +351,8 @@ export function padSize(gridWidth: number, gridDepth: number): [number, number] 
  * it inside the fixture's own local frame.
  *
  * The fields are the three a `<mesh>` takes, on purpose: a merged fixture is
- * written here exactly as it used to be written in the component, and the
- * diff between the two is a `mergeParts([...])` wrapper and nothing else.
+ * written here exactly as it would be written as a `<mesh>` in a component,
+ * wrapped in `mergeParts([...])` and nothing else.
  */
 interface MergePart {
   readonly geometry: THREE.BufferGeometry
@@ -437,11 +426,10 @@ export function mergeParts(name: string, parts: readonly MergePart[]): THREE.Buf
 /**
  * The hall's four walls, as one geometry.
  *
- * The room used to be the inside of a single `BoxGeometry` at `BackSide`,
- * which was one mesh for floor, walls **and ceiling**. A player asked for the
- * ceiling to go, and a box has no way to drop one face, so the walls are four
- * planes turned to face into the hall and merged: the same one draw call, one
- * face fewer, and the sky where the roof was.
+ * Not the inside of a single `BoxGeometry` at `BackSide`, which would be one
+ * mesh for floor, walls **and ceiling**: a player asked for no ceiling, and a
+ * box has no way to drop one face. So the walls are four planes turned to face
+ * into the hall and merged: one draw call, and the sky overhead.
  *
  * In **world** coordinates — `SceneShell` places this at the origin, because
  * the hall itself is at the origin.
@@ -493,10 +481,9 @@ const SPINE_Z = (SPINE_SOUTH_END + BAY_PAINT_SOUTH_EDGE) / 2
 
 export const SHELL_ACCENT_GEOMETRY = mergeParts('shell accent', [
   {
-    // From the south edge of the bay's paint down to the dispatch end. It used
-    // to run the full depth of the hall straight through the bay, and two
-    // accent quads at one `PAINT_Y` is the seam a player reads as a separate
-    // blue patch under each lane (2026-09-22).
+    // From the south edge of the bay's paint down to the dispatch end, not
+    // through the bay: two accent quads at one `PAINT_Y` make a seam a player
+    // reads as a separate blue patch under each lane.
     geometry: UNIT_PLANE,
     position: [0, PAINT_Y, SPINE_Z],
     rotation: [-Math.PI / 2, 0, 0],
@@ -510,20 +497,17 @@ export const SHELL_ACCENT_GEOMETRY = mergeParts('shell accent', [
 ])
 
 /**
- * **The three overhead structures are gone** (amended 2026-09-22).
+ * **There are no overhead structures**: no beam on two posts over the
+ * receiving bay, no posts-and-lintel at the upstream gate, no piers and lintel
+ * at the cross-dock. A player who walked the hall asked for none: *"remove
+ * the arches that you added … remove all ceiling like structures that you
+ * made with three rectangles, no need for these they just make less space."*
+ * Don't add a three-rectangle portal back.
  *
- * `GANTRY_GEOMETRY` (a beam on two posts over the receiving bay), the
- * upstream gate's posts-and-lintel, and `CROSS_DOCK_PIERS_GEOMETRY` with the
- * lintel above it were each three rectangles forming a portal, and a player
- * who walked the hall asked for all of them: *"remove the arches that you
- * added … remove all ceiling like structures that you made with three
- * rectangles, no need for these they just make less space."*
- *
- * What was structural about them was nothing; what was load-bearing was the
- * **signs they carried**, and those stayed — `gantry-total`, `gantry-receipt`
- * and `gantry-empty` over the bay at `SIGN_HEIGHT.bayTotal`, and the three
- * upstream signs over the gate threshold. They are `PlayerView` figures,
- * not decoration.
+ * The **signs** are what matter, and they stand on their own —
+ * `gantry-total`, `gantry-receipt` and `gantry-empty` over the bay at
+ * `SIGN_HEIGHT.bayTotal`, and the three upstream signs over the gate
+ * threshold. They are `PlayerView` figures, not decoration.
  */
 
 /**

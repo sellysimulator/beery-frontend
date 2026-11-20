@@ -1238,7 +1238,7 @@ describe('game over: the player can open the results', () => {
 });
 
 // ---------------------------------------------------------------------------
-// A seat the host swapped to a bot can be taken back (2026-11-03)
+// A seat the host swapped to a bot can be taken back
 // ---------------------------------------------------------------------------
 
 describe('A player the host swapped for a bot can take the role back', () => {

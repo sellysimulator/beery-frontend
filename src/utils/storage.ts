@@ -207,7 +207,7 @@ export function clearHostBatch(): void {
 /* ─── export downloads — a UX courtesy, sessionStorage ─── */
 //
 // Which finished games this tab has already downloaded, per format, so the
-// results screen can offer each file once per browser session (2026-11-14).
+// results screen can offer each file once per browser session.
 // It is **not** a security control: clearing storage, another tab or a direct
 // request all get round it. The real guard against draining compute is the
 // backend's per-address export budget (`core/abuse.py`, 100 an hour). Keyed by

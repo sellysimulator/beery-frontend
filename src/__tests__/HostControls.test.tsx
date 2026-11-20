@@ -665,9 +665,9 @@ describe('the end-the-game confirmation names the current week', () => {
   });
 
   it('says what ending now keeps from host_state.weeks_played, and that the open week is dropped', async () => {
-    // 2026-11-03: the warning said "the game ends at week 17", one week more
-    // than the results then reported, because `end_early` drops the open
-    // week. It now prints the server's count, here deliberately not 17 − 1.
+    // "The game ends at week 17" would be one week more than the results
+    // report, because `end_early` drops the open week. The warning prints the
+    // server's count, here deliberately not 17 − 1.
     const user = userEvent.setup();
     renderAt('RUNNING', hostView({ weeks_played: 9 }));
 

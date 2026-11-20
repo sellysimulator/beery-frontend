@@ -397,8 +397,8 @@ describe('the minimum and the maximum are stated in text', () => {
 // ---------------------------------------------------------------------------
 
 describe('the preview names the server’s order_arrival_week', () => {
-  // 2026-11-03: the form used to add `week + order_arrival_lead_weeks` itself.
-  // It now prints the server's `order_arrival_week`, and the lead in weeks.
+  // The form never adds `week + order_arrival_lead_weeks` itself. It prints
+  // the server's `order_arrival_week`, and the lead in weeks.
   it('names week 10 for week 6 and a lead of 4', async () => {
     const user = userEvent.setup();
     renderForm(

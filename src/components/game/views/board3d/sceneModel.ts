@@ -198,8 +198,7 @@ export interface SceneSign {
    * Measured here rather than in the renderer, by `signPlateSize`, because
    * every geometry decision belongs on the model: a plate sized inside
    * `SignPlates.tsx` is a plate no test can measure, and the overlap sweep
-   * that found the collisions of 2026-09-22 needs the same rectangle the
-   * player sees.
+   * needs the same rectangle the player sees.
    */
   readonly plateWidth: number
   readonly plateHeight: number
@@ -365,9 +364,8 @@ export interface SceneModel {
   /**
    * The sky over the open hall — `scenePalette.ts`'s `skyCyan`, and no fog.
    *
-   * It was `--color-surface-sunken`, matching a sealed room's walls, with a
-   * `<fog>` in the same hex so the far end softened into the hall rather than
-   * into a seam. The hall has no ceiling any more.
+   * The hall has no ceiling, so the background is the sky's colour, not a
+   * sealed room's `--color-surface-sunken`, and there is no `<fog>`.
    */
   readonly background: string
   readonly lights: readonly SceneLight[]
@@ -434,9 +432,7 @@ function sign(
  * arithmetic and not a table of hand-picked heights because the plate's height
  * depends on the *words* — a settlement that wraps onto an extra line is a
  * taller plate — and a hand-picked gap that holds for one week's copy is a
- * collision in another. The overlap sweep of 2026-09-22 found eleven pairs of
- * signs stacked at gaps chosen before the plates existed; this is what
- * replaced them.
+ * collision in another.
  */
 function below(above: SceneSign, item: SceneSign): SceneSign {
   const y =
@@ -524,10 +520,10 @@ function midpoint(rows: readonly SignRow[]): Vec3 {
  * **A drei `<Text>` is one draw call whatever it says**, and troika renders
  * multi-line content in that one mesh. A ledger wall of nine rows built as
  * nine `<Text>`s therefore spends nine of the ninety the budget allows the whole
- * hall on one board — which is how a budget that reads *"signs ~16"* came to
- * be carrying thirty and more. Rows that share a size and a colour are one
- * mesh with newlines between them; `SceneSign`'s line pitch is what spaces
- * them, in place of the per-row `y` this used to step by hand.
+ * hall on one board, and a budget that reads *"signs ~16"* ends up carrying
+ * thirty and more. Rows that share a size and a colour are one mesh with
+ * newlines between them; `SceneSign`'s line pitch is what spaces them, not a
+ * per-row `y` stepped by hand.
  *
  * **The words a player reads do not change.** The fold is a change of mesh
  * count, never of copy: the rows are joined in order, verbatim, and a row
@@ -577,8 +573,8 @@ function foldRows(
  * The lane placards reuse `SupplyLine.tsx`'s own wording, and
  * these are those words: *next week*, *the week after*, *in N weeks*. `weeks`
  * is the server's figure for that slot (`supply_line_slot_weeks` /
- * `orders_in_flight_slot_weeks`); the scene used to count it from the slot's
- * position, a copy of how a pipeline moves (2026-11-03). Never a week number —
+ * `orders_in_flight_slot_weeks`); the scene never counts it from the slot's
+ * position, which would be a copy of how a pipeline moves. Never a week number —
  * the arrival week appears only inside `DecisionForm`.
  */
 function whenLabel(weeks: number): string {
@@ -712,12 +708,11 @@ const SOUTH_FACE_Z = 20
  * when the host left the supply line prominent — the lane crates and their
  * placards.
  *
- * The totals used to hang from a gantry, a beam on two posts across the bay,
- * and the beam is gone with the other two overhead structures (amended
- * 2026-09-22). **The signs are not**: `gantry-total` is `view.supply_line`,
- * which is the whole bet of this board, and
- * `gantry-receipt` is the role's own word for what lands here. They keep
- * their ids — a test asserts against them — and now stand free over the bay
+ * There is no gantry over the bay: a player asked for no overhead structures.
+ * **The signs stay**: `gantry-total` is `view.supply_line`, which is the
+ * whole bet of this board, and `gantry-receipt` is the role's own word for
+ * what lands here. They keep their ids — a test asserts against them — and
+ * stand free over the bay
  * at `BAY_SIGN_HEIGHT`, which clears the tallest lane stack by more than a
  * metre.
  *
@@ -733,9 +728,9 @@ function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
   const lanesShown = prominent ? Math.min(slots.length, MAX_SUPPLY_LANES) : 0
 
   // Label over figure, the figure anchored at its fixed height and the
-  // label pushed up by however tall its own plate turns out to be. The two
-  // were 0.7 m apart, which is less than the height of either plate: the sweep
-  // of 2026-09-22 measured 82 cm of the receipt sitting on the total.
+  // label pushed up by however tall its own plate turns out to be. A fixed
+  // 0.7 m gap is less than the height of either plate and would sit 82 cm of
+  // the receipt on the total.
   const signs: SceneSign[] = stackAround(1, [
     // What lands in this bay, in the role's own words. For the FACTORY that is
     // "FINISHED PRODUCTION" and the bay is a production line.
@@ -818,12 +813,11 @@ function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
     'supply-lane-2',
     'supply-lane-3',
   ]
-  // **The post stands in front of the lane, not in it.** The placard fixture
-  // used to sit at the lane's own centre while its sign floated 1.4 m south of
-  // it: `PlacardPosts` then drew the post inside the crate stack — one of the
-  // intersections a player reported as clipping — and left the words hanging
-  // off nothing. Fixture and sign now share one floor position, clear of a
-  // capped stack's 1.83 m half-depth.
+  // **The post stands in front of the lane, not in it.** A placard fixture at
+  // the lane's own centre, with its sign floating south of it, would make
+  // `PlacardPosts` draw the post inside the crate stack — clipping, to a
+  // player — and leave the words hanging off nothing. Fixture and sign share
+  // one floor position, clear of a capped stack's 1.83 m half-depth.
   for (let index = 0; index < lanesShown; index += 1) {
     const stand: Vec3 = [spreadX(index, lanesShown, LANE_SPAN.from, LANE_SPAN.to), 0, base[2] + PLACARD_STAND_OFF]
     fixtures.push({
@@ -988,9 +982,9 @@ function buildNorthEnd(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
   const fixtures: SceneFixture[] = [
     {
       id: 'upstream-gate',
-      // No painted threshold under the courier any more: the accent quad read
-      // as a blue rug the truck was parked on. `placard` draws no mesh of its
-      // own, so the gate is now just its signs and the truck (2026-09-22).
+      // No painted threshold under the courier: an accent quad reads as a
+      // blue rug the truck is parked on. `placard` draws no mesh of its own,
+      // so the gate is just its signs and the truck.
       kind: 'placard',
       position: gate,
       rotationY: 0,
@@ -1289,7 +1283,7 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
 
   // **The canopy column**, stacked around `canopy-week` at `SIGN_HEIGHT.canopy`
   // so that the week a player reads stays where it is and the rest
-  // moves. Four signs at fixed 0.6-0.7 m steps used to overlap in five pairs
+  // moves. Four signs at fixed 0.6-0.7 m steps would overlap in five pairs
   // at once: the role sign is a 1.1 m face and its plate is 1.65 m tall on its
   // own. All four wrap at the open-floor width — the desk stands in the middle
   // of the hall, and `WHOLESALER` at 1.1 m does not fit a board's 5.8 m.
@@ -1406,7 +1400,7 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
  * beside the server's money figure — the multiplication is never performed
  * here. The stock after receiving is the server's
  * `inventory_after_arrival`, exactly as 2D prints it: this function does no
- * arithmetic at all (2026-11-03; it used to add `opening_inventory + arrived`).
+ * arithmetic at all, and never adds `opening_inventory + arrived`.
  */
 function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
   const base = ZONES.ledgerBoard
@@ -1418,7 +1412,7 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
     lines.push('Nothing has settled yet')
   } else {
     // The server's stock after receiving, never `opening_inventory + arrived`
-    // added here (2026-11-03), exactly as the 2D recap prints it.
+    // added here, exactly as the 2D recap prints it.
     const afterArrival = settlement.inventory_after_arrival
     lines.push(`Week ${settlement.week} settlement`)
     lines.push(
@@ -1452,7 +1446,7 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
       )} ${money(settlement.backlog_cost)}`,
     )
     // Two lines, never one "week cost": the order cost is charged only when
-    // the week closes, so while it is open it is still to come (2026-11-02).
+    // the week closes, so while it is open it is still to come.
     lines.push(`Holding & backlog ${money(settlement.carrying_cost)}`)
     lines.push(
       typeof view.week_order_cost === 'number'
@@ -1523,7 +1517,7 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
   const signs: SceneSign[] = []
 
   // "Holding & backlog", never "this week": the order cost is a figure of its
-  // own and is not charged until the week closes (2026-11-02).
+  // own and is not charged until the week closes.
   if (view.week_holding_backlog_cost !== undefined) {
     signs.push(
       sign(
@@ -1604,18 +1598,17 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
  * The team board: four plaques in `ROLE_ORDER`, names only, never a quantity
  * (spec §9.7). Plus the leaderboard beside it, when the host sends one.
  *
- * **Flat against the east wall** (amended 2026-09-22). It stood free in open
- * floor at `[15, 0, 9]` — a pane of nothing hanging in the middle of the
- * dispatch side — until a player asked for *"the still deciding / submitted
- * square"* to be against the wall *"just like the week settlement summary"*.
- * It is now the ledger wall's arrangement mirrored: the panel at `x = +29`
+ * **Flat against the east wall**, not free in open floor — a pane of nothing
+ * hanging in the middle of the dispatch side: a player asked for *"the still
+ * deciding / submitted square"* to be against the wall *"just like the week
+ * settlement summary"*. It is the ledger wall's arrangement mirrored: the panel at `x = +29`
  * facing `−x`, and `ZONES.teamWall` three metres out as the stand-off, which
  * is what `INTERACT_ZONES` resolves `team-board` at. A target centred on a
  * panel flat against a wall is a target the player has to walk into the wall
  * to reach.
  *
- * The leaderboard used to hang on the **back** of the board, which on a wall
- * is inside the wall. It stands beside it instead, eight metres north, on the
+ * The leaderboard cannot hang on the **back** of the board, which on a wall
+ * is inside the wall. It stands beside it, eight metres north, on the
  * same wall and facing the same way.
  */
 function buildTeamBoard(view: PlayerView, awaitingRoles: Role[]): SceneFixture[] {
@@ -1886,10 +1879,9 @@ function buildSouthEnd(props: BoardViewProps, roleSet: RoleSet): SceneFixture[] 
  * The neighbour hatch and the chain table: two independent visibility gates,
  * each a fixture that is simply not built when its key is absent.
  *
- * Both were checked over on 2026-09-22 against the complaint that made the
- * team board move, and neither is a floating pane: the hatch is recessed into
- * the east wall at `x = +29` (and `FixtureMesh.tsx` now lays it *on* that wall
- * rather than standing it off as a fin), and the chain table is a plinth —
+ * Neither is a floating pane: the hatch is recessed into the east wall at
+ * `x = +29` (and `FixtureMesh.tsx` lays it *on* that wall rather than
+ * standing it off as a fin), and the chain table is a plinth —
  * a table standing on the floor, moved over to the east wall so it is a thing
  * in a place rather than an object in the middle of the room.
  */
@@ -2080,13 +2072,13 @@ export function buildSceneModel(props: BoardViewProps): SceneModel {
 /**
  * What one fixture costs the renderer in meshes, dressing only.
  *
- * `FIXTURE_DRAW_COST` has the per-kind figure; the two fixtures that carry a
- * conditional piece of themselves are topped up here, from the fixture, so
- * the count follows the same branches `FixtureMesh.tsx` follows rather than
+ * `FIXTURE_DRAW_COST` has the per-kind figure; a fixture that carries a
+ * conditional piece of itself is topped up here, from the fixture, so the
+ * count follows the same branches `FixtureMesh.tsx` follows rather than
  * assuming the expensive case everywhere.
  *
- * There used to be five. The desk's clipboard, the empty stock floor's pallet
- * ghost and the racking's shelves have stopped varying the count: a clipboard
+ * The desk's clipboard, the empty stock floor's pallet ghost and the racking's
+ * shelves do not vary the count: a clipboard
  * is a choice between two merged surface geometries, a ghost is one merged
  * outline where the pad is one quad, and both racking bays' shelves are a
  * single mesh at any tier count.
@@ -2107,11 +2099,9 @@ function dressingDrawCalls(fixture: SceneFixture): number {
  * This is to the draw-call budget what `MAX_LIGHTS` is to the light count: the number the
  * budget is *asserted* against, in `Board3D.test.tsx`, so that a board which
  * grows one more sign, one more placard or another truck fails a test rather
- * than a laptop. Before it existed the scene had drifted to three times
- * the budget's ~16 signs — every one of them doubled by an outline pass — and
- * nothing anywhere said so. It is asserted against `MAX_DRAW_CALLS` itself;
- * the ratchet that stood in for that ceiling while the architecture was drawn
- * unmerged is gone, and `sceneLayout.ts` records what closed the gap.
+ * than a laptop. Without it a scene drifts past the budget and nothing
+ * anywhere says so. It is asserted against `MAX_DRAW_CALLS` itself, and
+ * `sceneLayout.ts` records what keeps the scene under it.
  *
  * What it counts, item for item against the budget's own arithmetic:
  *

@@ -370,7 +370,7 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Open to every viewer of the results screen (2026-11-14)
+// Open to every viewer of the results screen
 // ---------------------------------------------------------------------------
 
 describe('the export is open to anyone who can see the results', () => {

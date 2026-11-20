@@ -88,8 +88,8 @@ export function HostConsole(): ReactElement {
 
   const isFinished = roomState === 'FINISHED' || hostState.phase === 'FINISHED'
   const isPaused = !isFinished && (paused || roomState === 'PAUSED')
-  // The server's count either way. The fallback was `hostState.week`, one
-  // too many after an early end, which drops the open week (2026-11-03).
+  // The server's count either way. Not `hostState.week`, which is one too
+  // many after an early end, because that drops the open week.
   const weeksPlayed = finished?.weeks_played ?? hostState.weeks_played
 
   const entries: SubmissionEntry[] = ROLE_ORDER.map((role) => ({

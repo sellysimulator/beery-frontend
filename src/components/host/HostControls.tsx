@@ -56,9 +56,8 @@ function substituteWarning(playerName: string): string {
 /**
  * What ending now keeps. Both figures are the server's: `week` is the open
  * week, which `end_early` drops, and `weeksPlayed` is `host_state.weeks_played`,
- * the complete weeks the results will report. The warning used to say "the
- * game ends at week N" — one week more than the results then showed
- * (2026-11-03).
+ * the complete weeks the results will report. The warning does not say "the
+ * game ends at week N", which would be one week more than the results show.
  */
 function endGameWarning(week: number, weeksPlayed: number): string {
   const played = weeksPlayed === 1 ? '1 week' : `${weeksPlayed} weeks`

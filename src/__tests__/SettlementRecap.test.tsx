@@ -382,8 +382,8 @@ describe('the recap reproduces the ledger for the fixture', () => {
   });
 
   it('never says "Week cost": the order cost is its own line, not yet charged', () => {
-    // 2026-11-02: one "week cost" was holding + backlog on screen and the
-    // whole week in the record, and "Total so far" jumped by the difference.
+    // One "week cost" would be holding + backlog on screen and the whole week
+    // in the record, and "Total so far" would jump by the difference.
     renderRecap(fixtureView());
 
     expect(recapText()).not.toMatch(/week cost/i);
@@ -519,7 +519,7 @@ describe('with the running cost hidden, the last line is absent', () => {
 // Client-computed cost
 // ---------------------------------------------------------------------------
 
-describe('2026-11-03: the stock after arrival is the server’s figure, never a sum', () => {
+describe('the stock after arrival is the server’s figure, never a sum', () => {
   it('prints settlement.inventory_after_arrival even when it contradicts opening + arrived', () => {
     // 12 opening + 4 arrived would be 16. The server says 23, and the recap
     // prints the server's figure on both lines that show it.

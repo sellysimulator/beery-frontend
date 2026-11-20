@@ -26,29 +26,26 @@ export type Vec3 = readonly [number, number, number]
 /**
  * The hall: a floor, four walls, and **open sky above them**.
  *
- * It was an enclosed room with a ceiling at `y = 7` until a player walked it
- * and said the ceiling did nothing but take the space away. It is now a yard
- * with walls: `30 × 42` of floor, walls `10` metres high, and nothing overhead
- * but `scenePalette.ts`'s `skyCyan`. There is still no drei `<Sky>` — that
- * line stays for a new reason, which is that a flat background colour is
- * uniform by construction and a procedural sky is not.
+ * A yard with walls: `30 × 42` of floor, walls `10` metres high, and nothing
+ * overhead but `scenePalette.ts`'s `skyCyan`, because a player who walked it
+ * said a ceiling did nothing but take the space away. There is no drei
+ * `<Sky>`: a flat background colour is uniform by construction and a
+ * procedural sky is not.
  *
- * The hall is 42 metres deep rather than an earlier 30 for the same reason: the
- * seven zones were 16 metres apart in a 44-metre hall and read as one crowded
- * room rather than as seven places. `HALL.width` below says why it is 30 wide.
+ * The hall is 42 metres deep so the seven zones read as seven places rather
+ * than as one crowded room. `HALL.width` below says why it is 30 wide.
  */
 export const HALL = {
   /**
    * Floor plane, `30 × 42` at `y = 0`.
    *
-   * The emptiness was on the **east–west** axis, not the north–south one.
-   * `60 × 42` left the east wall's boards alone in open floor; shrinking
-   * both axes to `46 × 32` then put the south wall in front of the customers
-   * standing at `CUSTOMER_FIGURE_POSITIONS` (`z = 18.5`) and cut them out of
-   * the hall entirely. The depth is back to what the customer bay, the
-   * checkout and the dock truck were always positioned against; only the
-   * width came in, so the east wall now stands a little past where the OWED
-   * pen ends (2026-09-22).
+   * Narrow on the **east–west** axis, not the north–south one. A 60-wide
+   * hall leaves the east wall's boards alone in open floor; a shallower one
+   * (`32` deep) puts the south wall in front of the customers standing at
+   * `CUSTOMER_FIGURE_POSITIONS` (`z = 18.5`) and cuts them out of the hall
+   * entirely. The depth is what the customer bay, the checkout and the dock
+   * truck are positioned against; only the width is narrow, so the east wall
+   * stands a little past where the OWED pen ends.
    */
   width: 30,
   depth: 42,
@@ -139,8 +136,8 @@ export const CRATE_PITCH = CRATE_SIZE + CRATE_CLEARANCE
  * The **order and the axis are the hall's design and do not change**: orders
  * north, beer south, one line, with the order desk between the player and
  * everything upstream, so *you cannot walk to the receiving bay without
- * passing the desk.* What changed on 2026-09-22 is only the spacing — the
- * same seven places, further apart, in a hall with room for them.
+ * passing the desk.* The spacing puts the seven places far apart, in a hall
+ * with room for them.
  */
 export const ZONES = {
   /** The four receiving lanes span `x ∈ [−9, +9]` at `z = −15`. */
@@ -209,13 +206,11 @@ export const INTERACT_ZONES = {
 /**
  * The two halves of the T's bar, and the rule that fills them.
  *
- * These were fixed tables — four lane positions and three marker positions,
- * indexed by slot. A week with two shipments therefore used the two leftmost
- * of four slots and left the rest of its half empty, which is the uneven
- * distribution a player sees: the arms bunch toward the outside and the
- * middle of each half is dead floor. The span is what is fixed now; the
- * positions inside it are dealt out evenly for however many arms that week
- * actually has (2026-09-22).
+ * The span is fixed; the positions inside it are dealt out evenly for however
+ * many arms that week actually has. Fixed tables of positions indexed by slot
+ * would put a week with two shipments in the two leftmost of four slots and
+ * leave the rest of its half empty: the arms bunch toward the outside and the
+ * middle of each half is dead floor.
  */
 export const LANE_SPAN = { from: -10.5, to: -4 } as const
 export const ORDER_MARKER_SPAN = { from: 2.5, to: 7 } as const
@@ -259,10 +254,9 @@ export const FRONT_LANE_SCALE = 1.15
 /**
  * How high the receiving bay's two totals hang over it.
  *
- * This was `GANTRY_HEIGHT`, the top of a beam on two posts. The beam is gone
- * with the rest of the overhead structures; the **signs it carried are not**,
- * because `TOTAL ON THE WAY TO YOU` is a `PlayerView` figure the board needs
- * and the gantry was only ever what it hung from. Four-and-a-bit metres
+ * There is no beam to hang them from — there are no overhead structures — but
+ * the **signs stay**, because `TOTAL ON THE WAY TO YOU` is a `PlayerView`
+ * figure the board needs. Four-and-a-bit metres
  * clears the tallest lane stack — two tiers at `CRATE_PITCH`, scaled `1.15`
  * in the front lane, so `2.67` — by more than a metre.
  */
@@ -296,12 +290,12 @@ export const ORDER_ROAD_Z = -16.5
 /**
  * How far in front of the thing it labels a placard stands, on `z`.
  *
- * A placard is a post with a sign on it (`PlacardPosts.tsx`), and the post
- * used to be placed at the crate pile's own centre while the sign floated
- * 1.4 m in front of it — so the post was drawn *inside* the stack and the
- * words hung off nothing. A player reported it as clipping. Post and sign now
- * share one floor position, and this is that offset: clear of the 1.83 m
- * half-depth of the deepest capped pile in the hall.
+ * A placard is a post with a sign on it (`PlacardPosts.tsx`). Post and sign
+ * share one floor position: a post at the crate pile's own centre with the
+ * sign floating in front of it would be drawn *inside* the stack, with the
+ * words hanging off nothing, which a player reads as clipping. This is the
+ * offset: clear of the 1.83 m half-depth of the deepest capped pile in the
+ * hall.
  */
 export const PLACARD_STAND_OFF = 2.6
 
@@ -531,15 +525,11 @@ export const SKY_LIGHT_INTENSITY = 2.8
  *
  * `estimateDrawCalls` in `sceneModel.ts` is what counts them, and
  * `Board3D.test.tsx` asserts that count against **this** number over all four
- * roles in three variants each. It did not always: the count stood at 132 in
- * its worst view and was held to a ratchet, because the budget's arithmetic assumed
- * one draw call per fixture and `FixtureMesh.tsx` drew between one and ten. On
- * 2026-09-22 the static architecture was merged — see `mergeParts` in
- * `sceneMaterials.ts` — the truck's thirteen materials were baked into vertex
- * colours (`gltfModels.ts`), and the placard posts became one `InstancedMesh`.
- * That brought the worst view to 81; removing the three overhead structures
- * later the same day brought it to 79, and the headroom is what the signs are
- * about to spend.
+ * roles in three variants each. What keeps the worst view under it: the
+ * static architecture is merged — see `mergeParts` in `sceneMaterials.ts` —
+ * the truck's thirteen materials are baked into vertex colours
+ * (`gltfModels.ts`), the placard posts are one `InstancedMesh`, and there are
+ * no overhead structures. The headroom is for the signs.
  */
 export const MAX_DRAW_CALLS = 90
 
@@ -570,20 +560,18 @@ export const MAX_SIGNS = 40
  * and `estimateDrawCalls` is only as truthful as this table is: **a mesh
  * added to one of those components is a number to change here.**
  *
- * Most of these were four, six or ten until the static parts of each fixture
- * were merged into one geometry per material (`mergeParts`, `sceneMaterials.ts`).
- * What is left above one is what genuinely differs within a fixture: a second
+ * The static parts of each fixture are merged into one geometry per material
+ * (`mergeParts`, `sceneMaterials.ts`), so most of these are one. What is above one is what genuinely differs within a fixture: a second
  * material, a part that moves, or a part in another coordinate frame.
  *
  * One variable part remains, and it is not per-kind: the pen's warning glyph,
  * which takes its hex from the pool inside the pen, so it is counted from the
- * fixture itself in `estimateDrawCalls`. The receiving bay's gantry used to be
- * the other; it is gone.
+ * fixture itself in `estimateDrawCalls`.
  */
 export const FIXTURE_DRAW_COST = {
   'bay-paint': 1,
-  /** One painted threshold quad across the road where it leaves the hall.
-   *  It was an arch — two posts and a lintel — until 2026-09-22. */
+  /** One painted threshold quad across the road where it leaves the hall,
+   *  not an arch: there are no overhead structures. */
   'gate-threshold': 1,
   road: 1,
   /** Zero: every placard's post is an instance in `PlacardPosts`, counted
@@ -608,8 +596,8 @@ export const FIXTURE_DRAW_COST = {
   /** Three frames merged, three leaves merged — the leaves roll up as one. */
   'dock-doors': 2,
   /** The aisle markings — arrows and both edge stripes, merged — and the two
-   *  low kerbs that flank the opening. The piers and the lintel above them
-   *  were the third of the overhead structures removed on 2026-09-22. */
+   *  low kerbs that flank the opening. No piers and no lintel: there are no
+   *  overhead structures. */
   'cross-dock': 2,
   'dispatch-yard': 2,
   /** A figure group and a vehicle *are* their models, which are counted with
@@ -699,25 +687,25 @@ export const SIGN_HEIGHT = {
    *
    * `pileStackTop` is the number this has to beat: the tallest capped pile in
    * the hall is the front receiving lane at `2.32 × 1.15 = 2.67`, so `3.2`
-   * stands half a metre clear of it. It did not, before the grids were
-   * widened: a 40-crate stock floor reached `4.76` and swallowed its own sign.
+   * stands half a metre clear of it, as long as the grids stay wide: a narrow
+   * grid would stack a 40-crate stock floor to `4.76` and swallow its own sign.
    */
   pile: 3.2,
   /**
    * The desk's canopy row — `Week n of m` — and the anchor the whole desk
    * column is stacked around.
    *
-   * `2.8` until 2026-09-22. The column above it (the role sign, the strapline)
-   * and the column below it (the lead-time caption, then the clipboard plate
-   * and the SUBMITTED stamp on the desk itself) have to clear each other now
-   * that every sign carries a plate, and 2.8 left the caption's plate sitting
-   * on the stamp's. Raising the anchor by 0.6 opens the whole column; the role
-   * sign tops out at 6.2 m, well under the 9 m walls.
+   * The column above it (the role sign, the strapline) and the column below
+   * it (the lead-time caption, then the clipboard plate and the SUBMITTED
+   * stamp on the desk itself) have to clear each other, since every sign
+   * carries a plate; at `2.8` the caption's plate would sit on the stamp's.
+   * At this height the whole column is open and the role sign tops out at
+   * 6.2 m, well under the 9 m walls.
    */
   canopy: 4.3,
   /** On a wall board. */
   wall: 3,
-  /** Over the receiving bay, where the gantry used to hang them. */
+  /** Over the receiving bay, standing free. */
   bayTotal: BAY_SIGN_HEIGHT,
   /** A placard on a post. */
   placard: 1.6,
@@ -822,9 +810,8 @@ export const SIGN_WIDE_MAX_WIDTH = 9
  * The wrap width for the four receiving-lane placards.
  *
  * `SUPPLY_LANE_X` puts them on a 6 m pitch, so a plate wider than about 5.5 m
- * touches its neighbour — and the overlap sweep of 2026-09-22 found exactly
- * that: four 6.14 m plates 6 m apart, a 14 cm collision repeated the length of
- * the bay. At `4.4` the placard wraps to two short lines and leaves 1.4 m of
+ * touches its neighbour: four 6.14 m plates 6 m apart would be a 14 cm
+ * collision repeated the length of the bay. At `4.4` the placard wraps to two short lines and leaves 1.4 m of
  * bay paint between one lane's words and the next's.
  */
 export const SIGN_LANE_MAX_WIDTH = 3
@@ -835,9 +822,9 @@ export const SIGN_LANE_MAX_WIDTH = 3
  * A sign that turns to face the player sweeps a circle of its own plate
  * width, so "inside the hall" has to hold at every yaw rather than at the one
  * it happens to be built at. Without this the west lane's placard — 3.4 m of
- * plate centred at `SUPPLY_LANE_X[0] = -13`, against a wall at -15 — had its
- * first characters behind the wall, and `4 UNITS ARRIVING` read as
- * `NITS ARRIVING` (2026-09-22).
+ * plate centred at `SUPPLY_LANE_X[0] = -13`, against a wall at -15 — would have
+ * its first characters behind the wall, and `4 UNITS ARRIVING` would read as
+ * `NITS ARRIVING`.
  */
 export const SIGN_WALL_CLEARANCE = 0.7
 

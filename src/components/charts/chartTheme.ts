@@ -3,8 +3,8 @@
  *
  * A CSS custom property is never resolved on a canvas, so the hues the rest of
  * the screen takes from `src/index.css` have to be written out as literals for
- * the charts. They used to be copied into each chart file and kept in step by
- * hand; they now live here once, keyed by the `--color-*` token each mirrors,
+ * the charts. They live here once, not copied into each chart file, keyed by
+ * the `--color-*` token each mirrors,
  * and `chartTheme.test.ts` fails the suite when a literal stops matching its
  * token.
  */

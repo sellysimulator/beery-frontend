@@ -41,9 +41,8 @@ export interface BoardViewToggleProps {
  * toggle button: the label already says what pressing it will do, and
  * `aria-pressed` on top of that announces a state the copy contradicts.
  *
- * It is enabled on every pointer. Until 2026-11-16 a coarse pointer got it
- * `disabled` with *"The 3D warehouse needs a keyboard and a mouse."*; the
- * warehouse now has touch controls — drag to look, an on-screen pad to walk
+ * It is enabled on every pointer, coarse ones included: the warehouse has
+ * touch controls — drag to look, an on-screen pad to walk
  * and turn, and an Open button at each station — so a phone or a
  * tablet is offered 3D like anything else.
  *

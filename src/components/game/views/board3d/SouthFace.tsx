@@ -28,8 +28,7 @@ import {
  * - **shopfront** — glass `y` 0 → 3.5 and a checkout counter. The only room
  *   in the game you can see out of, and the only one with people in it.
  * - **dock-doors** — three roller doors at `−7, 0, +7`. No glass, no people.
- * - **cross-dock** — no doors and, since 2026-09-22, no piers and no lintel
- *   either: the bay is open at both ends, and the accent aisle runs straight
+ * - **cross-dock** — no doors, no piers and no lintel: the bay is open at both ends, and the accent aisle runs straight
  *   through it past the order desk between two waist-high kerbs.
  * - **dispatch-yard** — one door, onto the yard the finished beer leaves by.
  *

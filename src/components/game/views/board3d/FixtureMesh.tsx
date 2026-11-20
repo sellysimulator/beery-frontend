@@ -232,11 +232,10 @@ function Dressing({
   const [x, , z] = fixture.position
 
   switch (fixture.kind) {
-    // Paint, and nothing overhead. The receiving bay carried a gantry — a beam
-    // on two posts — and the bay's two totals hung from it; the beam is one of
-    // the three overhead structures a player asked to have removed, and the
-    // signs it carried are still here, at `SIGN_HEIGHT.bayTotal`, because they
-    // are `PlayerView` figures and the beam was scenery (amended 2026-09-22).
+    // Paint, and nothing overhead: a player asked for no overhead structures,
+    // so the bay has no gantry. The bay's two totals stand at
+    // `SIGN_HEIGHT.bayTotal` on their own, because they are `PlayerView`
+    // figures and a beam would only be scenery.
     case 'bay-paint':
       return (
         <mesh
@@ -248,9 +247,8 @@ function Dressing({
         />
       )
 
-    // What is left of the upstream gate: a painted threshold across the road
-    // where it leaves the hall, in the role accent. The posts and the lintel
-    // "the courier drives under" are gone with the other two arches. It is
+    // The upstream gate: a painted threshold across the road where it leaves
+    // the hall, in the role accent, with no posts and no lintel overhead. It is
     // laid at `GHOST_Y` so it sits above both the road paint beneath it and
     // the courier's contact quad at `PAD_Y` rather than z-fighting either.
     case 'gate-threshold':
@@ -325,12 +323,12 @@ function Dressing({
         />
       )
 
-    // The neighbour hatch, **flat against the wall it is recessed into**. Its
-    // scale used to be `[0.2, height, width]`, and three.js applies scale
-    // before rotation, so at the fixture's `−π/2` the 0.2 landed on `z` and
-    // the 3.6 on `x`: a fin standing out into the room off the east wall
+    // The neighbour hatch, **flat against the wall it is recessed into**.
+    // three.js applies scale before rotation, so a scale of
+    // `[0.2, height, width]` at the fixture's `−π/2` would put the 0.2 on `z`
+    // and the 3.6 on `x`: a fin standing out into the room off the east wall
     // rather than a panel in it. Width on the local `x`, thickness on the
-    // local `z`, and the rotation lays it on the wall (amended 2026-09-22).
+    // local `z`, and the rotation lays it on the wall.
     case 'hatch':
       return (
         <mesh

@@ -1023,7 +1023,7 @@ describe('every figure carries its explanatory line', () => {
   });
 });
 
-describe('2026-11-02: the summary says its figures pool games of every length and setting', () => {
+describe('the summary says its figures pool games of every length and setting', () => {
   it('renders the pooled-games note beside the averages and the best game', async () => {
     await renderProfileReady();
 
@@ -1093,7 +1093,7 @@ describe('a null best_game_id renders the empty treatment', () => {
   it('links nowhere and renders no null, and does not crash', async () => {
     await renderProfileReady();
 
-    // The match history's rows link to `/profile/games/:id` too (2026-11-03);
+    // The match history's rows link to `/profile/games/:id` too;
     // what is asserted is that nothing outside it — the best game — does.
     const detailLinks = links().filter(
       (a) => (a.getAttribute('href') ?? '').startsWith('/profile/games') && !a.closest('table'),

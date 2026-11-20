@@ -72,7 +72,7 @@ export async function listPresets(): Promise<PresetListResponse> {
 
 /**
  * Every range the host form checks. The backend is the only copy of these
- * numbers; the form builds its checks from this response (2026-11-02).
+ * numbers; the form builds its checks from this response.
  */
 export async function getLimits(): Promise<Limits> {
   const { data } = await http.get<Limits>('/rooms/limits')
@@ -86,7 +86,7 @@ export async function getLimits(): Promise<Limits> {
  *
  * With a `patch`, the server first merges it over `config` exactly as a
  * config save merges it, and the answer's `config` is the validated result:
- * the multi-game setup form edits its local draft this way (2026-11-14).
+ * the multi-game setup form edits its local draft this way.
  */
 export async function previewConfig(config: object, patch?: object): Promise<ConfigPreview> {
   const body = patch === undefined ? { config } : { config, patch }

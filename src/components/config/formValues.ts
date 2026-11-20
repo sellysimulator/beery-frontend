@@ -7,7 +7,7 @@
  * edited, and what the server stored reappears in the input the moment the
  * response lands.
  *
- * There is no placeholder config here and no table of defaults (2026-11-03).
+ * There is no placeholder config here and no table of defaults.
  * The panel renders nothing until the stored config arrives, so `useForm` is
  * given no values until then; and a newly picked demand generator gets its
  * defaults from the server, which fills every field a patch leaves out

@@ -111,9 +111,9 @@ interface Parser {
 let cached: Parser | null = null;
 
 /**
- * The form's checks, built from the ranges the server serves. Amended
- * 2026-11-02: the module exports a factory, `buildConfigFormSchema(limits)`,
- * and keeps no table of its own; the test feeds it the backend's defaults.
+ * The form's checks, built from the ranges the server serves. The module
+ * exports a factory, `buildConfigFormSchema(limits)`, and keeps no table of
+ * its own; the test feeds it the backend's defaults.
  */
 function schema(): Parser {
   if (cached) return cached;
@@ -328,7 +328,7 @@ describe('random_seed (D11)', () => {
   });
 });
 
-describe('the four ranges that drifted from the server (2026-11-02)', () => {
+describe('the four ranges a hand-copied table gets wrong', () => {
   it('reads every bound from the limits it is given, not from a copy', () => {
     const tight = configSchemaModule.buildConfigFormSchema({ ...TEST_LIMITS, max_weeks: 20 });
     expect(tight.safeParse(validConfig({ duration_weeks: 20 })).success).toBe(true);
@@ -402,7 +402,7 @@ describe('the four ranges that drifted from the server (2026-11-02)', () => {
     ).toBe(false);
   });
 
-  it('has no allow_negative_orders field: the option was removed', () => {
+  it('has no allow_negative_orders field: orders have a floor of 0', () => {
     const parsed = configSchemaModule
       .buildConfigFormSchema(TEST_LIMITS)
       .safeParse({ ...validConfig(), visibility: { ...visibilityDefaults(), allow_negative_orders: true } });

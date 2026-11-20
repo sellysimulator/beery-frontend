@@ -33,8 +33,8 @@ function weeksPhrase(weeks: number): string {
  *
  * The arrival preview does no arithmetic: the lead time and the arrival week
  * are `your_state.order_arrival_lead_weeks` and `order_arrival_week`, both
- * computed by the server for exactly this sentence (2026-11-03; the form used
- * to add the week itself). The form never assembles a lead time out of
+ * computed by the server for exactly this sentence; the form does not add
+ * the week itself. The form never assembles a lead time out of
  * individual delays — none are sent, because the Retailer and the Factory
  * each break a different term of that sum (spec §8.8).
  */

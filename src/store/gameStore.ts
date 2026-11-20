@@ -97,7 +97,7 @@ export interface GameState {
    */
   lastError: ServerError | null
 
-  // multi-game dashboard (2026-11-14)
+  // multi-game dashboard
   /** The dashboard's batch codes, so a `start_game` refusal naming one of
    * them goes on that game's card instead of into a global alert. */
   batchRooms: string[]
@@ -257,9 +257,8 @@ function mintAlertId(): string {
  * `host_state` is what the console reads every "decided" mark from, and the
  * server sends one per submission. `order_submitted` is the same fact,
  * broadcast to the room including the host, so applying it here too means a
- * `host_state` that never arrives cannot leave a seat on "Still deciding" —
- * which is exactly what happened on the final week, whose closing submission
- * used to send the host no state at all. The tick and the awaiting list are
+ * `host_state` that never arrives cannot leave a seat on "Still deciding",
+ * for example on the final week, whose closing submission ends the game. The tick and the awaiting list are
  * server facts, not arithmetic; the next `host_state` replaces both wholesale.
  */
 function markDecided(view: HostView | null, role: Role, week: number): HostView | null {

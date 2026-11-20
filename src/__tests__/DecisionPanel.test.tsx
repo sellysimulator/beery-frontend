@@ -402,7 +402,7 @@ describe('the supply line renders slot by slot, plus the total', () => {
   });
 
   it('says when each slot lands from the server’s weeks to go, never its position', () => {
-    // 2026-11-03: `supply_line_slot_weeks` and `orders_in_flight_slot_weeks`.
+    // `supply_line_slot_weeks` and `orders_in_flight_slot_weeks`.
     // Not 1 and 2, so a panel counting positions would say "next week".
     renderPanel(
       viewFor('WHOLESALER', {
@@ -725,13 +725,13 @@ describe('with show_running_cost_to_players off, no running total appears', () =
 });
 
 // ---------------------------------------------------------------------------
-// 2026-11-02 — a week's cost is two figures, never one "week cost"
+// A week's cost is two figures, never one "week cost"
 // ---------------------------------------------------------------------------
 
 describe('the week’s cost is holding & backlog and an order cost, never "this week"', () => {
   it('shows holding & backlog and an order cost that is not yet charged', () => {
     // The example from the review: $10 fixed + $1/unit, a week-1 order of 4.
-    // The panel used to say "This week $6.00", and then the total jumped $26.
+    // A single "This week $6.00" would be followed by the total jumping $26.
     renderPanel(
       viewFor('WHOLESALER', {
         accumulated_cost: 6,
@@ -744,7 +744,7 @@ describe('the week’s cost is holding & backlog and an order cost, never "this 
     expect(text).toMatch(/holding & backlog this week \$6\.00/i);
     expect(text).toMatch(/order cost this week: not yet charged/i);
     expect(text).not.toMatch(/week cost/i);
-    // The old single figure, "This week $6.00", is gone.
+    // No single figure, "This week $6.00".
     expect(text).not.toMatch(/This week \$/);
   });
 

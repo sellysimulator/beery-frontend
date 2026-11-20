@@ -8,12 +8,12 @@ import type { RouteDescriptor } from '../routes/registry'
 /**
  * `beer-game-manual.md` Part 1, as UI copy.
  *
- * Amended in three places against the frozen decisions:
+ * It differs from that text in four places:
  *   - **D6**: v1 is untimed, so the per-decision countdown, the timeout rule
- *     and the control that extended the countdown are all gone.
- *   - **D3**: hosting needs no account, so Step 1 no longer asks for one.
+ *     and the control that extended the countdown are left out.
+ *   - **D3**: hosting needs no account, so Step 1 does not ask for one.
  *   - **D14**: `clone_room` is phase 2, so Step 5 says to create a new room.
- *   - 2026-11-03: no preset figure is restated here. The manual is public and
+ *   - No preset figure is restated here. The manual is public and
  *     calls no API, so it cannot read `/rooms/presets`; it names
  *     each preset's idea and sends the host to the preset card, whose figures
  *     the server writes from the preset's own config.

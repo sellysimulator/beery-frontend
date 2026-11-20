@@ -18,7 +18,7 @@ export const NULL_RATIO_EXPLANATION =
  * owed. "Fill rate" reads as "the share of orders eventually filled", which
  * this is not: a unit that waits three weeks is owed three times and shipped
  * once. The name says what it measures instead, and the definition sits beside
- * it so nobody has to guess (2026-11-02). The field keeps its wire name.
+ * it so nobody has to guess. The field keeps its wire name.
  */
 export const SHIPPED_VS_WAITING_LABEL = 'Shipped vs waiting'
 

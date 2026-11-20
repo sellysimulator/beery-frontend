@@ -1,10 +1,10 @@
 /**
  * The "Final cost per role and for the chain" cards (spec §9.8).
  *
- * A bot's card used to come out a different shape from a player's: the live
- * results had no participant entry for a bot seat, so its card had no name
- * row and no Bot tag, and its cost figure sat higher than its neighbours'.
- * Every card now carries the same rows, and a bot's carries the tag.
+ * A bot's card is the same shape as a player's, even though the live results
+ * may have no participant entry for a bot seat: every card carries the same
+ * rows (so no cost figure sits higher than its neighbours'), and a bot's
+ * carries the Bot tag.
  */
 import { describe, expect, it } from 'vitest'
 import { render, within } from '@testing-library/react'

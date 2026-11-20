@@ -18,7 +18,7 @@ export const NULL_BULLWHIP_AVG_EXPLANATION =
   "None of your games had customer demand that varied, so there's nothing to amplify."
 
 /**
- * What the averages and *Best game* are compared across (2026-11-02).
+ * What the averages and *Best game* are compared across.
  *
  * The server pools every finished game into one figure — `avg_cost_per_week`
  * is total cost over total weeks, `bullwhip_avg` the mean of each game's

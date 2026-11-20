@@ -2,11 +2,11 @@
  * What a draft config will play: the customer demand series and each role's
  * lead time, worked out by the server (`POST /rooms/preview`).
  *
- * This replaced the panel's own copy of the demand generators (2026-11-03).
- * That copy had to reproduce the server's half-up rounding, the ramp's `+ 1`
- * and the seasonal `w - 1` offset exactly, and a lead time was about to need a
- * second copy of the engine's delay arithmetic. The server now runs the
- * functions the engine itself runs, on the draft, and the panel only draws
+ * The panel keeps no copy of the demand generators: a copy would have to
+ * reproduce the server's half-up rounding, the ramp's `+ 1` and the seasonal
+ * `w - 1` offset exactly, and a lead time would need a second copy of the
+ * engine's delay arithmetic. The server runs the functions the engine itself
+ * runs, on the draft, and the panel only draws
  * the answer. A draft the server refuses comes back as its own message,
  * naming the field and the range, which the preview shows in place of a chart.
  *

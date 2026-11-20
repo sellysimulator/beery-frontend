@@ -37,7 +37,7 @@ interface StartAttempt {
  * screen, and the host view goes to the claimed host tab — or here, when no
  * host screen is open, where it is ignored until one opens and re-claims.
  *
- * **Refusals go on their card** (2026-11-14, identical in every Novus game).
+ * **Refusals go on their card** (identical in every Novus game).
  * The server names the room on every `start_game` refusal (`join_error`
  * `{message, room_code}`); `socketHandlers.ts` puts one for this batch on the
  * store's `batchStartErrors`, and the card shows "Game N (CODE): <message>"

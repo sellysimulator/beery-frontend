@@ -328,7 +328,7 @@ describe('toolchain manifest (FROZEN)', () => {
     }
   });
 
-  it('the scaffold Vite 8 / TypeScript 6 combination is gone (D16)', () => {
+  it('does not use the scaffold Vite 8 / TypeScript 6 combination (D16)', () => {
     expect(pkg.devDependencies?.vite).not.toMatch(/8\./);
     expect(pkg.devDependencies?.typescript).not.toMatch(/^[~^]?6\./);
     expect(pkg.dependencies).not.toHaveProperty('vite');

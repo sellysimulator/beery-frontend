@@ -275,7 +275,7 @@ socket.on('host_claimed', (payload: HostClaimedPayload) => {
 })
 
 socket.on('join_error', (payload: JoinErrorPayload) => {
-  // A `start_game` refusal names its room (2026-11-14). For a room of the
+  // A `start_game` refusal names its room. For a room of the
   // multi-game dashboard's batch it goes on that game's card, not into a
   // global alert or `joinError`. Anything else keeps the behaviour below.
   const refusedRoom = payload?.room_code

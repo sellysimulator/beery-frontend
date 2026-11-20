@@ -680,7 +680,7 @@ describe('preset cards', () => {
     await waitFor(() => expect(inputValue(field('duration_weeks'))).toBe('20'));
   });
 
-  it('renders the server’s label and description verbatim, with no copy of its own (2026-11-03)', async () => {
+  it('renders the server’s label and description verbatim, with no copy of its own', async () => {
     // The figures are written by the server from each preset's config. A card
     // that kept its own text would still say "36 weeks" here.
     rest.presets = {
@@ -848,7 +848,7 @@ describe('per-role editors', () => {
 
 describe('save path', () => {
   it('refuses 500 weeks beside the field and never sends it', async () => {
-    // Amended 2026-11-02: nothing is clamped. The range comes from the
+    // Nothing is clamped. The range comes from the
     // server's own limits (`GET /rooms/limits`), the message says it, and the
     // value never reaches the wire, where the server would refuse it too.
     const user = await mountPanel();
@@ -1062,8 +1062,8 @@ describe('visibility levers', () => {
   });
 });
 
-describe('labels that say what the engine does (2026-11-02)', () => {
-  it('has no negative-orders switch: the option was removed', async () => {
+describe('labels that say what the engine does', () => {
+  it('has no negative-orders switch: orders have a floor of 0', async () => {
     await mountPanel();
     expect(findField('visibility.allow_negative_orders')).toBeNull();
     expect(bodyText()).not.toMatch(/negative order/i);
@@ -1203,7 +1203,7 @@ describe('mouse wheel over a focused number field', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2026-11-03 — the lead times are the server's (`POST /rooms/preview`)
+// The lead times are the server's (`POST /rooms/preview`)
 // ---------------------------------------------------------------------------
 
 describe('lead times', () => {

@@ -159,7 +159,7 @@ export interface GameConfig {
 /**
  * Every range the host form checks, as `GET /rooms/limits` serves it
  * (`app/core/limits.py`). The backend is the only copy: the form builds its
- * checks from this response and keeps no number of its own (2026-11-02).
+ * checks from this response and keeps no number of its own.
  */
 export interface Limits {
   /** Orders, demand quantities, and both optional caps (where 0 means "unlimited"). */
@@ -190,8 +190,7 @@ export interface Limits {
 /**
  * What a draft config will play, from `POST /rooms/preview`
  * (`app/core/preview.py`). The server runs the engine's own demand generator
- * and lead-time function on the draft; the host form keeps no copy of either
- * (2026-11-03).
+ * and lead-time function on the draft; the host form keeps no copy of either.
  */
 export interface ConfigPreview {
   /** Weeks 1..duration_weeks of customer demand, index 0 = week 1. */
@@ -202,7 +201,7 @@ export interface ConfigPreview {
   lead_times: Record<Role, number>
   /**
    * The validated draft as a stored config holds it: the request's `patch`
-   * merged in and every default filled (additive, 2026-11-14). Optional here
+   * merged in and every default filled. Optional here
    * because only the multi-game setup form reads it.
    */
   config?: GameConfig
@@ -243,7 +242,7 @@ export interface WeekRecord {
   /**
    * Holding + backlog + fixed order + purchase cost for the week. Never shown
    * as one "week cost": the screens show holding & backlog and the order cost
-   * as two figures. Was `week_cost` until 2026-11-02.
+   * as two figures, which is why it is not named `week_cost`.
    */
   total_week_cost: number
   cumulative_cost: number
@@ -266,7 +265,7 @@ export interface WeekSettlement {
   arrived: number
   /**
    * Stock after receiving and before shipping, read off the engine's own
-   * settlement step (2026-11-03). The recap prints it; it never adds
+   * settlement step. The recap prints it; it never adds
    * `opening_inventory + arrived` itself.
    */
   inventory_after_arrival: number
@@ -338,8 +337,8 @@ export interface PlayerView {
   supply_line: number
   supply_line_slots: number[]
   /**
-   * Weeks until each slot of `supply_line_slots` arrives, aligned with it
-   * (2026-11-03). The board labels a slot from this, never from its position.
+   * Weeks until each slot of `supply_line_slots` arrives, aligned with it.
+   * The board labels a slot from this, never from its position.
    */
   supply_line_slot_weeks: number[]
   /**
@@ -498,7 +497,7 @@ export interface PresetSummary {
   label: string
   description: string
   config: GameConfig
-  /** The preset `/create` and `/batch-create` use when none is named (2026-11-14). */
+  /** The preset `/create` and `/batch-create` use when none is named. */
   is_default?: boolean
 }
 
@@ -687,7 +686,7 @@ export interface HostClaimedPayload {
 export interface JoinErrorPayload {
   message: string
   /**
-   * The room a `start_game` refusal was for (additive, 2026-11-14), so the
+   * The room a `start_game` refusal was for, so the
    * multi-game dashboard can put it on that game's card. Absent on every
    * other `join_error`.
    */

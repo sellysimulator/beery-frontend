@@ -587,7 +587,7 @@ describe('the supply line: four lanes, front lane first', () => {
   })
 
   it('a lane and an order marker say when from the server s weeks to go, never their position', () => {
-    // 2026-11-03: `supply_line_slot_weeks` / `orders_in_flight_slot_weeks`.
+    // `supply_line_slot_weeks` / `orders_in_flight_slot_weeks`.
     // Deliberately not 1, 2: a scene counting positions would say NEXT WEEK.
     const model = modelFor('WHOLESALER', {
       supply_line_slots: [41, 62],
@@ -688,7 +688,7 @@ describe('cost visibility: absent means absent, not hidden', () => {
 
   it('the holding & backlog figure alone builds the corner; balance outranks accumulated_cost', () => {
     // Never "this week": the order cost is a figure of its own, not yet
-    // charged while the week is open (2026-11-02).
+    // charged while the week is open.
     const weekOnly = modelFor('DISTRIBUTOR', { week_holding_backlog_cost: 7.5, week_order_cost: null })
     expect(fixtureIds(weekOnly)).toContain('cost-corner')
     expect(signText(weekOnly, 'cost-week')).toBe('HOLDING & BACKLOG $7.50')
@@ -952,13 +952,9 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
     // red test that keeps that regression from being a frame-rate report
     // nobody runs.
     //
-    // It asserted **four** — a hemisphere, a directional key and two point
-    // lights — until 2026-09-22, when a player who walked the hall asked for
-    // the lighting to be removed and replaced with lighting uniform across the
-    // whole board. The rule it enforces did not change and is the reason the
-    // assertion was rewritten rather than deleted: the light count is bounded
-    // and deliberate. What changed is the bound and the *kind*. A hemisphere
-    // light has no position and no falloff, so it lights the far corner of a
+    // The light count is bounded and deliberate: one, and a hemisphere,
+    // because a player who walked the hall asked for lighting uniform across
+    // the whole board. A hemisphere light has no position and no falloff, so it lights the far corner of a
     // 60 × 42 hall exactly as it lights the desk; a `pointLight` falls off
     // with the square of the distance and is by definition a hotspot with dark
     // corners round it, which is what the player was objecting to.
@@ -1076,7 +1072,7 @@ describe('the budget ceilings hold for every role and a maximal view', () => {
   })
 
   it('the ledger prints the server s stock after arrival, never opening + arrived', () => {
-    // 2026-11-03: 12 opening + 14 arrived would be 26; the server says 31.
+    // 12 opening + 14 arrived would be 26; the server says 31.
     const model = modelFor('RETAILER', {
       settlement: settlementFor('RETAILER', { inventory_after_arrival: 31 }),
     })

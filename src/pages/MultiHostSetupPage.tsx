@@ -27,7 +27,7 @@ function startingPreset(presets: PresetSummary[]): PresetSummary | null {
  * makes them all at once and the dashboard (`/multihost`) lists them.
  *
  * The config is the lobby's own form (`ConfigSections`, `useConfigForm`) over
- * a local draft (`useDraftConfig`) instead of a room (2026-11-14). The draft
+ * a local draft (`useDraftConfig`) instead of a room. The draft
  * starts from the server's default preset; the preset cards switch it to
  * another, and any field changes it from there. Every edit is merged,
  * defaulted and checked by `POST /rooms/preview`, exactly as a lobby save is,

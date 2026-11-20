@@ -613,7 +613,7 @@ describe('a null ratio in the table is "—"', () => {
 // ---------------------------------------------------------------------------
 
 describe('a row opens /profile/games/:gameId', () => {
-  // By game id, not room code (2026-11-03): room codes are recycled, so a
+  // By game id, not room code: room codes are recycled, so a
   // code can name a later game the player never played. Lemony and Pulky
   // link their history by game id too.
   it('navigates to that game, by its id', async () => {

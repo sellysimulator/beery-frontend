@@ -1209,8 +1209,8 @@ describe('at FINISHED the console shows the final chain, the weeks played and a 
   });
 
   it('before game_finished arrives, reads the count from host_state.weeks_played, never week', () => {
-    // 2026-11-03: the fallback was `host_state.week`, one too many after an
-    // early end (the open week is dropped). The server's count wins.
+    // Not `host_state.week`, which is one too many after an early end (the
+    // open week is dropped). The server's count wins.
     seatRoom('RUNNING');
     deliverHostState(hostView({ phase: 'FINISHED', weeks_played: 11 }));
     renderConsole();
@@ -1534,7 +1534,7 @@ describe('the chain’s order counts sit on the link the orders are travelling a
   // host_state.roles[R].orders_in_flight is R's OWN order pipeline: orders its
   // downstream customer placed that are still on their way TO R (spec §9.6). So
   // it belongs on the link between R and its customer, one lane below R — not
-  // on the lane between R and its supplier, where the diagram used to draw it.
+  // on the lane between R and its supplier.
   // Every figure below is distinct, so a count on the wrong lane cannot pass.
   const IN_TRANSIT: Record<Role, { supply_line: number; orders_in_flight: number }> = {
     RETAILER: { supply_line: 301, orders_in_flight: 0 },

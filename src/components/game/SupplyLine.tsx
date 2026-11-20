@@ -15,7 +15,7 @@ export interface SupplyLineProps {
   /**
    * The server's weeks until each slot lands, aligned with `slots`
    * (`supply_line_slot_weeks` / `orders_in_flight_slot_weeks`). A slot's label
-   * is read from here, never worked out from its position (2026-11-03).
+   * is read from here, never worked out from its position.
    */
   slotWeeks: number[]
   /** The server's total. Never a sum of `slots` computed here. */

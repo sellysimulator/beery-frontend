@@ -8,8 +8,8 @@
  *
  * No string here states a game figure. The preset cards are the server's
  * (`GET /rooms/presets`, whose figures are written from each preset's own
- * config), and every number the panel previews comes from `POST /rooms/preview`
- * (2026-11-03): copy that restates an engine value is a second copy of it.
+ * config), and every number the panel previews comes from `POST /rooms/preview`:
+ * copy that restates an engine value is a second copy of it.
  *
  * English only, inline, no i18n layer (D13).
  */

@@ -1,7 +1,7 @@
 /**
  * The save path: debounce, transport choice, noticing a stored value that
  * differs from the one sent, and 422 handling. The server refuses an
- * out-of-range value rather than clamping it (2026-11-02); the field never
+ * out-of-range value rather than clamping it; the field never
  * sends one in the first place.
  *
  * `config_update` over the socket when it is connected, `PUT /rooms/{code}/config`

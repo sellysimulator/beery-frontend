@@ -16,7 +16,7 @@ export interface LeadTimeRowProps {
  * The last row of the starting-conditions grid: how long each role waits
  * between ordering and the beer arriving.
  *
- * The figure is the server's (`POST /rooms/preview`, 2026-11-03), from the
+ * The figure is the server's (`POST /rooms/preview`), from the
  * same `GameConfig.order_arrival_lead_weeks` the engine sends every player as
  * `order_arrival_lead_weeks`. It is not the sum of two cells above: an order
  * spends the **supplier's** order delay travelling, the Factory's lead time is

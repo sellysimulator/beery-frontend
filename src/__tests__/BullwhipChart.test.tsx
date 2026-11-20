@@ -792,10 +792,10 @@ describe('the DOM legend toggles one series at a time', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * The DOM switches are the legend. Chart.js's canvas legend used to be
- * left on as well, so the screen showed two legends, and the one people click
- * drew solid swatches: the dash that separates the roles without colour
- * was only in the copy nobody could reach.
+ * The DOM switches are the legend. Chart.js's canvas legend stays off: with
+ * both on, the screen shows two legends, and the one people click draws solid
+ * swatches, so the dash that separates the roles without colour is only in
+ * the copy nobody can reach.
  */
 describe('the legend is the DOM switches alone, and it shows each role’s dash', () => {
   function switches(): HTMLElement[] {

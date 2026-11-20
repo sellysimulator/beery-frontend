@@ -883,9 +883,10 @@ describe('one row per role, in ROLE_ORDER, with all seven columns', () => {
   it('calls the fill_rate column "Shipped vs waiting", never "Fill rate", and defines it', async () => {
     await renderReady();
 
-    // 2026-11-02: the figure is sum(shipped) / sum(obligation), and obligation
-    // counts each week's backlog again, so "fill rate" promised something it
-    // does not measure. The computation is unchanged; only the words are.
+    // The figure is sum(shipped) / sum(obligation), and obligation counts
+    // each week's backlog again, so "fill rate" would promise something it
+    // does not measure. The column keeps its `fill_rate` name; only the words
+    // on screen say what it is.
     const headers = Array.from(ratioTable().querySelectorAll('th[scope="col"]')).map(textOf);
     expect(headers).toContain('Shipped vs waiting');
     expect(document.body.textContent ?? '').not.toMatch(/fill rate/i);

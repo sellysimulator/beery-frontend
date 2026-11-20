@@ -38,7 +38,7 @@ function saveFile(data: unknown, filename: string): void {
 
 /**
  * CSV and JSON of the complete week-by-week record, for anyone who can see
- * this results screen (2026-11-14).
+ * this results screen.
  *
  * The export is not bound to the host. A host may be a guest, and a guest
  * host has no account to fall back on once the room or the tab is gone, so

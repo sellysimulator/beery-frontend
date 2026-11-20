@@ -52,11 +52,11 @@ import { toTriple } from './sceneMaterials'
  * 3. **One light, exactly** — a `hemisphereLight`, emitted from `model.lights`
  *    and capped there by `MAX_LIGHTS`, which is 1. It has no position and no
  *    falloff, so the far corner of the hall is lit exactly as the desk is:
- *    that is what "uniform across the whole board" means, and it is why the
- *    two point lights are gone. Tequila ships ~18 point lights against
+ *    that is what "uniform across the whole board" means, and it is why
+ *    there are no point lights. Tequila ships ~18 point lights against
  *    `meshStandardMaterial`, a per-fragment cost on every pixel of every
  *    frame, and that is the single largest reason its scene is slow; this
- *    board now pays for one light that cannot hotspot at all.
+ *    board pays for one light that cannot hotspot at all.
  * 4. **No shadows, anywhere.** `shadows` is off on the `<Canvas>` and
  *    `castShadow` is written nowhere in this directory — Tequila sets it on
  *    meshes while never enabling shadows, which is dead code that reads like
@@ -125,9 +125,8 @@ export function WarehouseScene({ model, children }: WarehouseSceneProps): ReactE
    * The hall's lighting, which is one `hemisphereLight` and has no other
    * branch to take (`MAX_LIGHTS`).
    *
-   * `SceneLight.kind` is the literal `'hemisphere'` — the directional and
-   * point branches this loop used to carry are not dead code that was left
-   * behind, they are **unrepresentable**. A future edit that wants a point
+   * `SceneLight.kind` is the literal `'hemisphere'` — directional and point
+   * branches are not just absent from this loop, they are **unrepresentable**. A future edit that wants a point
    * light back has to widen the model's type, change `MAX_LIGHTS`, and fail
    * `Board3D.test.tsx`'s light assertion on the way, which is exactly the
    * amount of friction a change the player has already rejected deserves.

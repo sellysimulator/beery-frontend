@@ -2,12 +2,12 @@
  * The Zod checks behind the host configuration panel (spec §6.6), built from
  * the server's own ranges.
  *
- * **The numbers are the server's, not ours** (2026-11-02). Every bound below
- * comes from the `Limits` object `GET /rooms/limits` returns — the same
+ * **The numbers are the server's, not ours.** Every bound below comes from
+ * the `Limits` object `GET /rooms/limits` returns — the same
  * `app/core/limits.py` the server validates against — so the form and the
- * server cannot disagree about a range. They did, on four fields, while the
- * form carried a hand-copied table: a step in week 1, a seasonal period past
- * 104, a stochastic mean of a million, and a cap of 0.
+ * server cannot disagree about a range. A hand-copied table would drift: a
+ * step in week 1, a seasonal period past 104, a stochastic mean of a million,
+ * a cap of 0.
  *
  * **A value outside its range is refused, never clamped.** The panel shows the
  * message below beside the field and does not send the value; the server
@@ -129,7 +129,7 @@ export function buildConfigFormSchema(limits: Limits) {
       kind: z.literal('STOCHASTIC'),
       distribution: z.enum(['NORMAL', 'POISSON', 'UNIFORM']),
       // A mean or spread above the order ceiling cannot be ordered against,
-      // and the server refuses it (it used to clamp it to 9999 silently).
+      // and the server refuses it rather than clamping it.
       mean: z
         .number()
         .min(0, 'Cannot be negative.')

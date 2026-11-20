@@ -2,11 +2,10 @@
  * The server's ranges for every field the host form checks.
  *
  * The backend is the only copy of these numbers (`app/core/limits.py`, served
- * by `GET /rooms/limits`). The form used to carry its own table, and four of
- * its bounds had drifted from the server's: that is the bug this hook exists
- * to make impossible (2026-11-02). Nothing here falls back to a built-in
+ * by `GET /rooms/limits`). The form carries no table of its own, so its
+ * bounds cannot drift from the server's. Nothing here falls back to a built-in
  * number when the request fails — a guessed range is exactly the hand-copied
- * value this replaced — so the panel shows the error instead.
+ * value this hook exists to prevent — so the panel shows the error instead.
  *
  * The response never changes while the app is open, so it is fetched once
  * and shared; a failed fetch is forgotten, so the next mount tries again.

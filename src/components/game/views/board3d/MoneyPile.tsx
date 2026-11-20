@@ -132,8 +132,8 @@ export function MoneyPile({ pool }: MoneyPileProps): ReactElement | null {
   if (!geometry || !material || total === 0) return null
 
   // The bills keep `money.glb`'s own textured material: an instance tint
-  // multiplies, so any colour here would wash the note artwork out — which is
-  // what made a stack of bills read as a plain white box (2026-09-22).
+  // multiplies, so any colour here would wash the note artwork out and a
+  // stack of bills would read as a plain white box.
   return <instancedMesh ref={meshRef} args={[geometry, material, total]} />
 }
 

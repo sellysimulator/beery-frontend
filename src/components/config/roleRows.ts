@@ -12,7 +12,7 @@ import type { Limits, Role } from '../../types/game'
 /**
  * Which of the server's ranges a row is checked against. The numbers
  * themselves come from `GET /rooms/limits` at render time (`boundsFor`): the
- * form keeps no copy of them (2026-11-02).
+ * form keeps no copy of them.
  */
 export type RowBounds = 'quantity' | 'money' | 'delay' | 'cap'
 
@@ -69,7 +69,7 @@ export function boundsFor(row: RoleRow, limits: Limits): Bounds {
  * the engine does with them (`config_models.order_delay_weeks`): a role's
  * order delay is how long its customer's orders take to reach it, so the
  * Distributor's sets the Wholesaler's lead time, not the Distributor's own.
- * The labels said the opposite until 2026-11-02.
+ * Don't label them the other way round.
  */
 export const STARTING_ROWS: RoleRow[] = [
   {

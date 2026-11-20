@@ -23,11 +23,11 @@ export interface PresetCardsProps {
  * MIT when they are not, because "we ran the standard scenario" is the claim
  * the whole debrief rests on.
  *
- * The card copy is the server's label and description, as sent (2026-11-03).
+ * The card copy is the server's label and description, as sent.
  * The description's figures are written from the preset's own config, so a
- * card cannot promise "36 weeks" for a preset that plays 20. This section used
- * to carry its own copy of that text, keyed by name, which restated every
- * figure a second time.
+ * card cannot promise "36 weeks" for a preset that plays 20. This section
+ * carries no copy of that text of its own, which would restate every figure a
+ * second time.
  */
 export function PresetCards({
   presetName,

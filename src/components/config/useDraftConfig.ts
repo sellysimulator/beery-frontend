@@ -1,6 +1,6 @@
 /**
  * A config form over a local draft, with no room behind it: the multi-game
- * setup page (`/multihost/new`, 2026-11-14).
+ * setup page (`/multihost/new`).
  *
  * It is `useConfigSave`'s twin. The lobby's save path sends a patch to the
  * room and renders whatever the server stored; this one sends the patch, with
