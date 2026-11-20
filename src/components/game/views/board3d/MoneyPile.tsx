@@ -6,12 +6,12 @@ import type { InstancePool } from './sceneModel'
 
 /**
  * The cost corner's bills, as one `InstancedMesh` — `CratePile` for
- * `money.glb` (24 §7.2).
+ * `money.glb`.
  *
- * The pool budget of 24 §7.1 counts money as one of its six instanced pools,
+ * The pool budget (`MAX_INSTANCE_POOLS`) counts money as one of its pools,
  * and `PILE_SCALE.money` caps it at twenty bills. Twenty individually
  * placed groups would be twenty draw calls for 720 triangles, which is the
- * arithmetic 24 §7.4 says Tequila got wrong and this board does not.
+ * arithmetic Tequila got wrong and this board does not.
  *
  * **Why this is not `CratePile`.** `CratePile` is hard-wired to
  * `useCrateGeometry()` — every pool it draws is `box.glb`, which is right for

@@ -1,18 +1,18 @@
 /**
- * The lost-context path of 24 §7.6.3 (AC 21), with the renderer taken out of
- * it.
+ * The lost-context path of the 3D board (spec §9.7), with the renderer taken
+ * out of it.
  *
  * An `ErrorBoundary` catches a **render** throw — WebGL missing when the canvas
  * first mounts. It never hears about a context the GPU takes away twenty
  * minutes later, on a driver reset or a laptop switching graphics adapters,
  * because nothing throws: the canvas simply stops painting and the player is
- * left staring at a frozen warehouse with a week to submit. §7.6.3 is explicit
+ * left staring at a frozen warehouse with a week to submit. The spec is explicit
  * that **a lost WebGL context must not cost a player their week**, so the loss
  * has to be heard as an event and routed into the same fallback the boundary
  * already uses.
  *
- * That subscription lived inline in `Board3D.tsx`, which is the one file 24
- * §8.1 forbids a test to import — jsdom has no WebGL — so the whole of AC 21
+ * That subscription lived inline in `Board3D.tsx`, which is the one file no
+ * test may import — jsdom has no WebGL — so the whole lost-context path
  * was code nothing had ever run. It lives here instead, for the same reason
  * `playerMotion.ts` exists: *assert the object, not the renderer*. Nothing in
  * this module imports three.js, `@react-three/fiber` or React, so a jsdom test

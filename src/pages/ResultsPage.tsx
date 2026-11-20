@@ -23,7 +23,7 @@ import { ROLE_ORDER, type GameFinishedPayload, type Participant } from '../types
 import { isHostForRoom } from '../utils/storage'
 import type { RouteDescriptor } from '../routes/registry'
 
-/* ─── Normalisation: two sources, one view model (section 2.0, FROZEN) ─── */
+/* ─── Normalisation: two sources, one view model ─── */
 
 /**
  * The live path — `game_finished` plus the store, available the instant the
@@ -74,7 +74,7 @@ function viewFromFinished(
   }
 }
 
-/* ─── Fetching (section 3.1) ─── */
+/* ─── Fetching ─── */
 
 /** Short, because three attempts happen while somebody watches a blank panel. */
 const RETRY_DELAY_MS = 150
@@ -99,7 +99,7 @@ function isNotFound(err: unknown): boolean {
   return response?.status === 404
 }
 
-/* ─── Print (section 3.3, FROZEN) ─── */
+/* ─── Print ─── */
 
 /**
  * The print rules key off `data-print` and nothing else.
@@ -168,9 +168,9 @@ function CostSoFar({
 /**
  * The per-week series, which only the persisted payload carries.
  *
- * Absent entirely on the live path rather than zeroed (section 2.0), and
+ * Absent entirely on the live path rather than zeroed, and
  * omitted from the handout so the chart and the ratio table still fit on one
- * page (section 3.3).
+ * page.
  */
 function WeekByWeek({ view }: { view: ResultsView }): ReactElement | null {
   const withSeries = view.per_role.filter(
@@ -244,7 +244,7 @@ function WeekByWeek({ view }: { view: ResultsView }): ReactElement | null {
  * the specification, not a layout preference.
  *
  * Nothing here is computed. Every ratio, variance, peak and total is a server
- * field, printed as it arrived (section 3.2).
+ * field, printed as it arrived (spec §9.8).
  */
 export function ResultsPage(): ReactElement {
   // Two routes, one screen: `/results/:roomCode`, or the permanent
@@ -299,7 +299,7 @@ export function ResultsPage(): ReactElement {
   const [outcome, setOutcome] = useState<FetchOutcome | null>(null)
 
   useEffect(() => {
-    // The store already holds this room's finished payload: no fetch (§3.1).
+    // The store already holds this room's finished payload: no fetch.
     if (liveView || fetchKey === '') return
 
     let cancelled = false
@@ -313,7 +313,7 @@ export function ResultsPage(): ReactElement {
           if (!cancelled) setOutcome({ code: fetchKey, view: resultsViewFromResponse(response.data) })
           return
         } catch (err) {
-          // Persistence is non-blocking (`12 §3.8`), so a 404 right after the
+          // Persistence is non-blocking (spec §10.2), so a 404 right after the
           // game ends means "not written yet", not "no such game".
           if (!isNotFound(err)) break
         }

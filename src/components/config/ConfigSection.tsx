@@ -19,7 +19,7 @@ export interface ConfigSectionProps {
  * disclosures reads as an empty page.
  *
  * The toggle is a real button carrying `aria-expanded` and `aria-controls`, so
- * the panel is operable from the keyboard end to end (AC 19) and a screen
+ * the panel is operable from the keyboard end to end and a screen
  * reader announces the state rather than the caret.
  */
 export function ConfigSection({

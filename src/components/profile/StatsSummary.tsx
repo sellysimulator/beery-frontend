@@ -10,9 +10,9 @@ export interface StatsSummaryProps {
 /**
  * Why an average ratio can be missing.
  *
- * Section 21's sentence is about one game — "Customer demand never varied" —
- * and does not fit an average across several, so the dash treatment is reused
- * and the sentence is not (§2.1).
+ * The results page's sentence is about one game — "Customer demand never
+ * varied" — and does not fit an average across several, so the dash treatment
+ * is reused and the sentence is not.
  */
 export const NULL_BULLWHIP_AVG_EXPLANATION =
   "None of your games had customer demand that varied, so there's nothing to amplify."
@@ -23,7 +23,7 @@ export const NULL_BULLWHIP_AVG_EXPLANATION =
  * The server pools every finished game into one figure — `avg_cost_per_week`
  * is total cost over total weeks, `bullwhip_avg` the mean of each game's
  * ratio, and `best_game_id` the lowest cost per week — whatever each game's
- * length, preset or cost settings (`14 §3.7`). That is deliberate and stays,
+ * length, preset or cost settings (spec §10.5). That is deliberate and stays,
  * but a player comparing a 20-week Fast Game with a 52-week Chaos game would
  * otherwise read the result as like for like, so the screen says so.
  */
@@ -128,7 +128,7 @@ export function StatsSummary({ stats }: StatsSummaryProps): ReactElement {
             MISSING
           ) : (
             /* By id, never by room code: a room code can belong to several
-               games (`13 §2.2`), so the link has to name the game. */
+               games (spec §10.1), so the link has to name the game. */
             <Link
               to={`/profile/games/${stats.best_game_id}`}
               className="text-brand-strong underline"

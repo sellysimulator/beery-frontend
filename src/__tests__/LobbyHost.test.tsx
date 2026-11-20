@@ -1,20 +1,17 @@
 /**
- * `17-frontend-lobby.md §2.0` and `§2.4` — `HostRoom.tsx`, the host-side shell
- * and the lobby it renders before the game starts.
+ * `HostRoom.tsx`, the host-side shell and the lobby it renders before the game
+ * starts (spec §9.10).
  *
- * Covers acceptance criteria 15, 16, 17, 18, 19, 20, 21, 22, 24 (the host half),
- * 25 and 26, and failure modes 6, 8 and 9.
- *
- * The three that matter most here are 8, 9 and 18: a host tab that lost its
- * `host_secret` must neither fall through to the player join flow (which eats a
- * seat) nor show the recovery screen before the server has answered — showing it
- * early makes D18's whole recovery path invisible to the one person who needs it.
+ * What matters most here: a host tab that lost its `host_secret` must neither
+ * fall through to the player join flow (which eats a seat) nor show the
+ * recovery screen before the server has answered — showing it early makes
+ * D18's whole recovery path invisible to the one person who needs it.
  *
  * Harness notes: as in `LobbyPlayer.test.tsx`, `socket.io-client` is a recorder
  * and `src/api/socketHandlers.ts` is imported for its side effect, reproducing
- * `main.tsx`'s registration (16 §4.3). `host_claimed` is therefore delivered to
- * the same handler the browser would deliver it to (16 §4.5). Controls are
- * located by the accessible names §2.4b freezes.
+ * `main.tsx`'s registration. `host_claimed` is therefore delivered to the same
+ * handler the browser would deliver it to. Controls are located by their fixed
+ * accessible names.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { StrictMode } from 'react';
@@ -141,7 +138,7 @@ vi.mock('../api/http', () => ({
 
 vi.mock('../api/health', () => ({ checkHealth: vi.fn(async () => true) }));
 
-/** §2.2's alphabet excludes 0, O, 1, I and L. */
+/** The room-code alphabet excludes 0, O, 1, I and L. */
 const ROOM = 'ABC234';
 
 // ---------------------------------------------------------------------------
@@ -152,8 +149,8 @@ function dispatch(event: string, payload?: unknown): void {
   const listeners = [...(rec.listeners.get(event) ?? [])];
   if (listeners.length === 0) {
     throw new Error(
-      `Nothing is listening for "${event}". Section 16 §4.5 registers the lobby events as a ` +
-        'module side effect, and §2.4 requires the host shell to act on host_claimed and join_error.',
+      `Nothing is listening for "${event}". The socket handlers register the lobby events as a ` +
+        'module side effect, and the host shell must act on host_claimed and join_error.',
     );
   }
   act(() => {
@@ -199,7 +196,7 @@ const FOUR_PLAYERS = [
   participant({ alias: 'P4', display_name: 'Eve', role: 'FACTORY' }),
 ];
 
-/** `11 §2`: `start_blocked_reason` is null exactly when `can_start` is true. */
+/** `start_blocked_reason` is null exactly when `can_start` is true. */
 function lobbyUpdate(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     seq: 1,
@@ -237,13 +234,13 @@ function bodyText(): string {
 
 function descriptorsOf(mod: unknown, label: string): RouteDescriptor[] {
   const route = (mod as { route?: RouteDescriptor | RouteDescriptor[] }).route;
-  if (!route) throw new Error(`${label} exports no \`route\` descriptor (17 §3.0).`);
+  if (!route) throw new Error(`${label} exports no \`route\` descriptor.`);
   return Array.isArray(route) ? route : [route];
 }
 
 function hostDescriptor(): RouteDescriptor {
   const found = descriptorsOf(HostRoomModule, 'HostRoom.tsx').find((d) => d.path === '/host/:roomCode');
-  if (!found) throw new Error('HostRoom.tsx declares no descriptor for `/host/:roomCode` (17 §3.0).');
+  if (!found) throw new Error('HostRoom.tsx declares no descriptor for `/host/:roomCode`.');
   return found;
 }
 
@@ -272,10 +269,10 @@ function settleClaim(update: Record<string, unknown> = lobbyUpdate()): void {
 }
 
 /**
- * Writes the store through section 16's applier, bypassing the wire entirely.
+ * Writes the store through its applier, bypassing the wire entirely.
  *
- * `16 §3` puts `canStart`, `startBlockedReason` and `joinError` in the store
- * rather than leaving a screen to read them from its own `socket.on(...)`,
+ * The store holds `canStart`, `startBlockedReason` and `joinError` rather
+ * than leaving a screen to read them from its own `socket.on(...)`,
  * because a screen that subscribes directly is a second interpreter of the wire
  * — one StrictMode double-registers and a reconnect can leave stale. Driving the
  * applier with no socket event in flight is how a test tells the two designs
@@ -294,7 +291,7 @@ function applyJoinError(message: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Locating controls — §2.4b freezes every accessible name used below
+// Locating controls — every accessible name used below is fixed
 // ---------------------------------------------------------------------------
 
 const NAMES = {
@@ -316,7 +313,7 @@ function isDisabled(el: HTMLElement): boolean {
 }
 
 /**
- * The per-participant placement control, by the accessible name §2.4b freezes:
+ * The per-participant placement control, by its fixed accessible name:
  * `Assign role for <display name>`. The widget behind that name is the
  * implementer's choice, so this accepts a select, a group of buttons, or a
  * single button — but it accepts no control that is not named this way.
@@ -343,7 +340,7 @@ function assignControl(displayName: string): HTMLElement {
     if (inner) return inner as HTMLElement;
   }
 
-  throw new Error(`No control carries the frozen accessible name "${label}" (17 §2.4b, AC 26).`);
+  throw new Error(`No control carries the frozen accessible name "${label}".`);
 }
 
 /** The option for `role` in a combobox seat picker's list, open or not. */
@@ -366,7 +363,7 @@ async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName
       (candidate) => candidate.value === role || new RegExp(role, 'i').test(candidate.textContent ?? ''),
     );
     if (!option) {
-      throw new Error(`"Assign role for ${displayName}" offers no ${role} option (AC 26).`);
+      throw new Error(`"Assign role for ${displayName}" offers no ${role} option.`);
     }
     await user.selectOptions(control, option.value);
     return;
@@ -376,7 +373,7 @@ async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName
     await user.click(control);
     const option = seatOption(control, role);
     if (!option) {
-      throw new Error(`"Assign role for ${displayName}" offers no ${role} option (AC 26).`);
+      throw new Error(`"Assign role for ${displayName}" offers no ${role} option.`);
     }
     await user.click(option);
     return;
@@ -390,7 +387,7 @@ async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName
     return;
   }
 
-  throw new Error(`"Assign role for ${displayName}" offers no way to choose ${role} (AC 26).`);
+  throw new Error(`"Assign role for ${displayName}" offers no way to choose ${role}.`);
 }
 
 const RECOVERY = /isn.?t the host of that room/i;
@@ -442,10 +439,10 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 15, 16 — the claim, with and without a stored secret
+// The claim, with and without a stored secret
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 15: the host lobby claims with the stored secret', () => {
+describe('the host lobby claims with the stored secret', () => {
   it('emits join_waiting carrying the host_secret this tab holds', () => {
     armedTab();
 
@@ -475,7 +472,7 @@ describe('CRITERION 15: the host lobby claims with the stored secret', () => {
   });
 });
 
-describe('CRITERION 16 / FAILURE MODE 8: a tab that lost its secret still claims', () => {
+describe('a tab that lost its secret still claims', () => {
   it('emits join_waiting with no host_secret at all', () => {
     expect(getHostSecret(ROOM)).toBeNull();
 
@@ -491,7 +488,7 @@ describe('CRITERION 16 / FAILURE MODE 8: a tab that lost its secret still claims
     expect(payloads[0].host_secret ?? null).toBeNull();
   });
 
-  it('FAILURE MODE 8: does not fall through to the player join flow', () => {
+  it('does not fall through to the player join flow', () => {
     renderHostRoom();
 
     // Joining as a player would consume one of the four seats — in a room the
@@ -499,7 +496,7 @@ describe('CRITERION 16 / FAILURE MODE 8: a tab that lost its secret still claims
     expect(emitsOf('join')).toHaveLength(0);
   });
 
-  it('FAILURE MODE 8: still emits no player join after the claim is refused', () => {
+  it('still emits no player join after the claim is refused', () => {
     renderHostRoom();
     dispatch('join_error', { message: "This tab isn't the host of that room." });
 
@@ -514,7 +511,7 @@ describe('CRITERION 16 / FAILURE MODE 8: a tab that lost its secret still claims
   });
 });
 
-describe('FAILURE MODE 9: the recovery screen is not shown before the server answers', () => {
+describe('the recovery screen is not shown before the server answers', () => {
   it('renders no refusal on mount, when nothing has been refused yet', () => {
     renderHostRoom();
 
@@ -531,7 +528,7 @@ describe('FAILURE MODE 9: the recovery screen is not shown before the server ans
     expect(bodyText()).not.toMatch(RECOVERY);
   });
 
-  it('the in-flight state is explanatory prose, not a bare spinner (CRITERION 22)', () => {
+  it('the in-flight state is explanatory prose, not a bare spinner', () => {
     renderHostRoom();
 
     const text = bodyText();
@@ -542,7 +539,7 @@ describe('FAILURE MODE 9: the recovery screen is not shown before the server ans
   it('store.joinError is what separates "refused" from "not answered yet"', () => {
     renderHostRoom();
 
-    // 16 §3: before the first reply, "the server refused this tab's claim" and
+    // Before the first reply, "the server refused this tab's claim" and
     // "the server has not answered" look identical from the route and `isHost`
     // alone. `joinError` is the field that tells them apart, and D18's whole
     // recovery path depends on the distinction.
@@ -556,10 +553,10 @@ describe('FAILURE MODE 9: the recovery screen is not shown before the server ans
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 17, 18 — what each answer does
+// What each answer does
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 17: host_claimed re-arms the tab and the lobby renders', () => {
+describe('host_claimed re-arms the tab and the lobby renders', () => {
   it('stores the secret handed back by the server', () => {
     renderHostRoom();
     expect(getHostSecret(ROOM)).toBeNull();
@@ -591,7 +588,7 @@ describe('CRITERION 17: host_claimed re-arms the tab and the lobby renders', () 
   });
 });
 
-describe('CRITERION 18: join_error, and only join_error, shows the recovery screen', () => {
+describe('join_error, and only join_error, shows the recovery screen', () => {
   it('renders the refusal with a way back to /home', async () => {
     renderHostRoom();
     dispatch('join_error', { message: "This tab isn't the host of that room." });
@@ -633,10 +630,10 @@ describe('CRITERION 18: join_error, and only join_error, shows the recovery scre
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 19, 25 and failure mode 6 — Start is the server's decision
+// Start is the server's decision
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 19 / FAILURE MODE 6: a disabled Start button explains itself', () => {
+describe('a disabled Start button explains itself', () => {
   const TWO_EMPTY = 'Two roles are still empty. Assign them, or turn on bot fill.';
 
   function renderWithTwoEmptyRoles() {
@@ -679,7 +676,7 @@ describe('CRITERION 19 / FAILURE MODE 6: a disabled Start button explains itself
   });
 });
 
-describe('CRITERION 25: Start follows can_start, and the reason is rendered verbatim', () => {
+describe('Start follows can_start, and the reason is rendered verbatim', () => {
   it('is enabled exactly when can_start is true', async () => {
     const user = userEvent.setup();
     armedTab();
@@ -706,7 +703,7 @@ describe('CRITERION 25: Start follows can_start, and the reason is rendered verb
 
   it('derives no eligibility of its own: four filled roles but can_start false stays disabled', () => {
     // A client that re-derived the seat-filling rule would enable this button.
-    // §3.0c: the client computes no eligibility of its own, because the rule
+    // The client computes no eligibility of its own, because the rule
     // lives in `can_start(room)` and a second implementation drifts.
     const reason = 'The configuration has not been saved yet. Save it, then start.';
     armedTab();
@@ -738,7 +735,7 @@ describe('CRITERION 25: Start follows can_start, and the reason is rendered verb
     expect(emitsOf('start_game')).toHaveLength(1);
   });
 
-  it('writes both fields into the store, where the button reads them (16 §3)', () => {
+  it('writes both fields into the store, where the button reads them', () => {
     const reason = 'One role is still empty. Assign it, or turn on bot fill.';
     armedTab();
     renderHostRoom();
@@ -799,10 +796,10 @@ describe('CRITERION 25: Start follows can_start, and the reason is rendered verb
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 26 — the two role-assignment controls
+// The two role-assignment controls
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 26: the host changes the assignment mode and places participants', () => {
+describe('the host changes the assignment mode and places participants', () => {
   it('the `Role assignment` selector emits set_role_mode with the host_secret', async () => {
     const user = userEvent.setup();
     armedTab();
@@ -841,7 +838,7 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
     expect(payloads).toHaveLength(1);
     expect(payloads[0].room_id).toBe(ROOM);
     expect(payloads[0].host_secret).toBe('hs-from-server');
-    // 00-conventions §2: the alias is the public id, and the only one on the wire.
+    // The alias is the public id, and the only one on the wire.
     expect(payloads[0].alias).toBe('P1');
     expect(payloads[0].role).toBe('DISTRIBUTOR');
   });
@@ -865,9 +862,9 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
   });
 
   it('lists a role someone else holds as taken by them, and does not let the host pick it', async () => {
-    // Picking a held role used to move it silently, leaving its holder
-    // roleless. The server now refuses it (11 §3.5), so the picker must not
-    // offer it: it is listed, disabled, with who holds it.
+    // Picking a held role would move it silently, leaving its holder
+    // roleless. The server refuses it, so the picker must not offer it: it is
+    // listed, disabled, with who holds it.
     const user = userEvent.setup();
     armedTab();
     renderHostRoom();
@@ -901,7 +898,7 @@ describe('CRITERION 26: the host changes the assignment mode and places particip
 });
 
 // ---------------------------------------------------------------------------
-// 11 §2.2: nobody may be left in the room without a role, bot fill or not
+// Nobody may be left in the room without a role, bot fill or not (spec §4.3)
 // ---------------------------------------------------------------------------
 
 describe('a person without a role blocks Start, and the host can seat them', () => {
@@ -971,10 +968,10 @@ describe('a person without a role blocks Start, and the host can seat them', () 
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 20 — the invite link
+// The invite link
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 20: copying the invite link', () => {
+describe('copying the invite link', () => {
   function renderReady() {
     armedTab();
     renderHostRoom();
@@ -998,7 +995,7 @@ describe('CRITERION 20: copying the invite link', () => {
     });
   });
 
-  it('confirms with the word "Copied" (§2.4b)', async () => {
+  it('confirms with the word "Copied"', async () => {
     renderReady();
 
     fireEvent.click(copyControl());
@@ -1047,10 +1044,10 @@ describe('the join QR code on the host screen', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 21 — bots are labelled on the host side too
+// Bots are labelled on the host side too
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 21: the host participant list badges bots', () => {
+describe('the host participant list badges bots', () => {
   it('renders a Bot badge as text', () => {
     armedTab();
     renderHostRoom();
@@ -1070,23 +1067,20 @@ describe('CRITERION 21: the host participant list badges bots', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 24 and §2.0 — three resolvers, two distinct placeholders
+// Three resolvers, two distinct placeholders
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 24: the host shell resolves section 20 by discovery', () => {
+describe('the host shell resolves the host console by discovery', () => {
   const CONSOLE = './HostConsole.tsx';
 
   it('resolves an absent console to null rather than a compile error', () => {
     // Asserted against an explicit module record, never against the live
     // `hostConsoleScreen()`: `import.meta.glob` is expanded at transform time,
-    // so once section 20 shipped its file the live resolver can never return
-    // null again. The two assertions this replaced said `toBeNull()` and
-    // expected the placeholder, and were true for exactly as long as section
-    // 20 did not exist -- the same expiring criterion as section 16's empty
-    // route registry and section 01's Alembic table set. The record now maps a
-    // path to the module's LOADER, because the console is fetched on first use
-    // rather than shipped in the initial bundle; "is it built?" is still
-    // answered synchronously, from whether a loader is there at all.
+    // so with the console's file in the tree the live resolver can never
+    // return null. The record maps a path to the module's LOADER, because the
+    // console is fetched on first use rather than shipped in the initial
+    // bundle; "is it built?" is still answered synchronously, from whether a
+    // loader is there at all.
     expect(resolveShellScreen({}, CONSOLE, 'HostConsole')).toBeNull();
     expect(resolveShellScreen({ [CONSOLE]: undefined }, CONSOLE, 'HostConsole')).toBeNull();
   });
@@ -1095,7 +1089,7 @@ describe('CRITERION 24: the host shell resolves section 20 by discovery', () => 
     // `not.toBeNull()` rather than `toBeTypeOf('function')`: the console is
     // fetched on first use, and `React.lazy` hands back an exotic component
     // object rather than a function. What the shell needs to know is only
-    // whether section 20 is there at all.
+    // whether the console is there at all.
     expect(hostConsoleScreen()).not.toBeNull();
 
     armedTab();
@@ -1134,14 +1128,14 @@ describe('CRITERION 24: the host shell resolves section 20 by discovery', () => 
   });
 });
 
-describe('§2.0: the host lobby resolves section 18 by discovery too', () => {
+describe('the host lobby resolves the config panel by discovery too', () => {
   const PANEL = '../components/config/ConfigPanel.tsx';
 
   it('resolves an absent panel to null rather than a compile error', () => {
-    // The settings panel had the same static-import problem as the two shells:
-    // without a resolver, section 18 would have to edit HostLobby.tsx, which
-    // D19 forbids. Asserted against an explicit loader record, because the live
-    // glob can never yield null again now that section 18 has shipped.
+    // The settings panel had the same static-import problem as the two shells,
+    // so the host lobby resolves it too. Asserted against an explicit loader
+    // record, because the live glob can never yield null while the panel's
+    // file is in the tree.
     expect(resolveShellScreen({}, PANEL, 'ConfigPanel')).toBeNull();
     expect(resolveShellScreen({ [PANEL]: undefined }, PANEL, 'ConfigPanel')).toBeNull();
   });

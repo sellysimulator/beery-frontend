@@ -1,22 +1,21 @@
 /**
- * `24-frontend-3d-board.md §5.1` and `§7.6.2` — the controller's decisions,
- * asserted away from the renderer.
+ * The 3D board controller's decisions (spec §9.7), asserted away from the
+ * renderer.
  *
- * Covers failure modes **6** (the typing guard), **9** (`setState` from
- * `useFrame`) and **10** (reduced motion), plus the movement clamp that
- * criterion 19's hall depends on, and the motion half of §5.7's touch
- * controls: the pad's walking buttons folded into the keyboard's set, and the
+ * Covers the typing guard, `setState` from `useFrame`, and reduced motion,
+ * plus the movement clamp the hall depends on, and the motion half of the
+ * touch controls: the pad's walking buttons folded into the keyboard's set, and the
  * pad's turn.
  *
  * Harness notes:
  *  - This file imports `playerMotion.ts` and `sceneLayout.ts` and **nothing
- *    else from `board3d/`**. §8.1 is the line: jsdom has no WebGL, so
+ *    else from `board3d/`**. That is the line: jsdom has no WebGL, so
  *    `PlayerController.tsx`, `WarehouseScene.tsx` and `Board3D.tsx` may never
  *    be imported here, and the answer is not to mock `@react-three/fiber` but
  *    to have put the decisions somewhere a test can reach. `playerMotion.ts`
  *    is that somewhere.
  *  - It is `Board3D.test.tsx`'s sibling, not its replacement: that file owns
- *    the scene model and the DOM layers, this one owns the four failure modes
+ *    the scene model and the DOM layers, this one owns the four decisions
  *    that lived inside components until the seam was cut.
  *  - No fake timers and no rendering. Every test below is a function call with
  *    an expected return value, which is the entire point of the extraction.
@@ -72,9 +71,9 @@ const contentEditable = (): HTMLElement => {
   return node;
 };
 
-/** The three real interact targets of §3.2, at their real radii. Built from
+/** The three real interact targets, at their real radii. Built from
  *  `INTERACT_ZONES` rather than from literals so a moved desk moves this
- *  fixture with it (FM 5's rule, applied to a different record). */
+ *  fixture with it. */
 const TARGETS: readonly InteractTarget[] = (
   ['order-desk', 'ledger-wall', 'team-board'] as const
 ).map((id) => ({
@@ -91,21 +90,21 @@ const held = (...keys: readonly string[]): ReadonlySet<string> => new Set(keys);
 const NORTH = 0;
 
 // ---------------------------------------------------------------------------
-// FM 6 — the typing guard
+// The typing guard
 // ---------------------------------------------------------------------------
 
-describe('24 §5.1 / FM 6: isTypingTarget keeps the order input from walking the player', () => {
+describe('isTypingTarget keeps the order input from walking the player', () => {
   // [HARD-WON] The order panel contains a real `<input type="number">`.
   // Without this guard, typing `8` then `W` into it walks the player across
-  // the hall mid-decision. Tequila shipped that bug; §5.1 names it.
+  // the hall mid-decision. Tequila shipped that bug.
   it.each([['input'], ['textarea'], ['select']])(
-    'is true for a <%s>, which §5.1 names one by one',
+    'is true for a <%s>',
     (tag) => {
       expect(isTypingTarget(el(tag))).toBe(true);
     },
   );
 
-  it('is true for a contenteditable element, a superset of what §5.1 names', () => {
+  it('is true for a contenteditable element too', () => {
     expect(isTypingTarget(contentEditable())).toBe(true);
   });
 
@@ -141,10 +140,10 @@ describe('24 §5.1 / FM 6: isTypingTarget keeps the order input from walking the
 });
 
 // ---------------------------------------------------------------------------
-// FM 9 — never call setState unconditionally from useFrame
+// Never call setState unconditionally from useFrame
 // ---------------------------------------------------------------------------
 
-describe('24 §5.1 / FM 9: proximity is reported only when the nearest id changes', () => {
+describe('proximity is reported only when the nearest id changes', () => {
   it('does not report when the id is unchanged, including null to null', () => {
     expect(shouldReportNearest(null, null)).toBe(false);
     expect(shouldReportNearest('order-desk', 'order-desk')).toBe(false);
@@ -204,7 +203,7 @@ describe('24 §5.1 / FM 9: proximity is reported only when the nearest id change
   });
 
   it('finds nothing at all in the middle of the hall', () => {
-    // §3.2 puts the three zones round the edges; a player standing between
+    // The three zones sit round the edges; a player standing between
     // them has no prompt, and `null` is the honest answer rather than the
     // least-distant target.
     expect(nearestTargetId({ x: 0, z: -6 }, TARGETS)).toBeNull();
@@ -220,7 +219,7 @@ describe('24 §5.1 / FM 9: proximity is reported only when the nearest id change
   });
 
   it('compares against each target’s own radius, never a constant of its own', () => {
-    // §8.1: the radius arrives on the model. A target with a radius of zero is
+    // The radius arrives on the model. A target with a radius of zero is
     // a target you can never be in range of, and the controller must honour
     // that without knowing why it was set.
     const desk = INTERACT_ZONES['order-desk'];
@@ -230,10 +229,10 @@ describe('24 §5.1 / FM 9: proximity is reported only when the nearest id change
 });
 
 // ---------------------------------------------------------------------------
-// FM 10 — reduced motion
+// Reduced motion
 // ---------------------------------------------------------------------------
 
-describe('24 §7.6.2 / FM 10: reduced motion disables animation, not the board', () => {
+describe('reduced motion disables animation, not the board', () => {
   const original = window.matchMedia;
   afterEach(() => {
     window.matchMedia = original;
@@ -264,9 +263,9 @@ describe('24 §7.6.2 / FM 10: reduced motion disables animation, not the board',
   });
 
   it('still offers the board: the rule gates motion, never the 3D view', () => {
-    // §7.6.2 is explicit that 3D is still offered under reduced motion — what
-    // is dropped is the week-change lane lift, with the colour flash carrying
-    // §5.5 alone. The only thing this predicate may ever return is a boolean
+    // 3D is still offered under reduced motion — what is dropped is the
+    // week-change lane lift, with the colour flash carrying the week change
+    // alone. The only thing this predicate may ever return is a boolean
     // about animation.
     expect(typeof shouldAnimateIdle(true)).toBe('boolean');
   });
@@ -276,7 +275,7 @@ describe('24 §7.6.2 / FM 10: reduced motion disables animation, not the board',
 // Movement — the clamp, the diagonal and the delta
 // ---------------------------------------------------------------------------
 
-describe('24 §5.1: the walk is clamped to the hall on both axes', () => {
+describe('the walk is clamped to the hall on both axes', () => {
   it('clamps a step that would leave the hall to the east', () => {
     // `D` with `yaw = 0` strafes toward `+x`. A one-second frame is five times
     // the whole half-width: the clamp is the only thing between the player and
@@ -295,7 +294,7 @@ describe('24 §5.1: the walk is clamped to the hall on both axes', () => {
   it('clamps both axes at once in a corner', () => {
     // The diagonal into a corner is the case an axis-at-a-time clamp gets
     // wrong, and a camera pressed flat against a wall renders the inside of
-    // it — which is why §3.1's bounds are tighter than the walls.
+    // it — which is why the hall's bounds are tighter than the walls.
     const next = stepPlayer({ x: 18, z: -12 }, NORTH, held('w', 'd'), 5);
     expect(next).toEqual({ x: MOVEMENT_BOUNDS.maxX, z: MOVEMENT_BOUNDS.minZ });
   });
@@ -323,7 +322,7 @@ describe('24 §5.1: the walk is clamped to the hall on both axes', () => {
   });
 
   it('walks forward down the order axis and strafes across it', () => {
-    // `yaw = 0` faces `−z` (§3.1), so `W` decreases `z` and `D` increases `x`.
+    // `yaw = 0` faces `−z`, so `W` decreases `z` and `D` increases `x`.
     // Inverting either is a controller that feels haunted.
     const forward = stepPlayer({ x: 0, z: 0 }, NORTH, held('w'), 1 / 7);
     expect(forward.z).toBeCloseTo(-1, 10);
@@ -352,8 +351,8 @@ describe('24 §5.1: the walk is clamped to the hall on both axes', () => {
   });
 });
 
-describe('24 §5.1: pitch is clamped and yaw is not', () => {
-  it('clamps looking up and looking down to the section’s own limits', () => {
+describe('pitch is clamped and yaw is not', () => {
+  it('clamps looking up and looking down to the controller’s own limits', () => {
     expect(clampPitch(Math.PI)).toBeCloseTo(Math.PI / 3.2, 10);
     expect(clampPitch(-Math.PI)).toBeCloseTo(-Math.PI / 3, 10);
   });
@@ -365,13 +364,13 @@ describe('24 §5.1: pitch is clamped and yaw is not', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 24 §5.7 — the on-screen pad's motion, away from the renderer
+// The on-screen pad's motion, away from the renderer
 // ---------------------------------------------------------------------------
 
 const pad = (...controls: PadControl[]): ReadonlySet<PadControl> => new Set(controls);
 const keys = (...names: string[]): ReadonlySet<string> => new Set(names);
 
-describe('24 §5.7: the pad walks through stepPlayer, never beside it', () => {
+describe('the pad walks through stepPlayer, never beside it', () => {
   it('maps each walking button to the keyboard key it stands for', () => {
     expect(PAD_WALK_KEY).toEqual({ forward: 'w', backward: 's', 'strafe-left': 'a', 'strafe-right': 'd' });
     // The turn buttons have no keyboard twin: the arrows walk, unchanged.
@@ -426,7 +425,7 @@ describe('24 §5.7: the pad walks through stepPlayer, never beside it', () => {
   });
 });
 
-describe('24 §5.7: the pad turns at TURN_SPEED, and turning is look', () => {
+describe('the pad turns at TURN_SPEED, and turning is look', () => {
   it('turns at Samby s 1.7 rad/s', () => {
     expect(TURN_SPEED).toBe(1.7);
   });

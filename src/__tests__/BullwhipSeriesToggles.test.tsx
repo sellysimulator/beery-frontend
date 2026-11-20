@@ -1,16 +1,15 @@
 /**
- * BE-2 (`CHARTS-PLAN.md`), B2, as amended 2026-11-02: the series switches in
- * `BullwhipChart`.
+ * The bullwhip series switches in `BullwhipChart` (results charts).
  *
- * B2 shipped as a cumulative stage stepper ("Customer", "+ Retailer", …
+ * The chart shipped as a cumulative stage stepper ("Customer", "+ Retailer", …
  * "+ Factory"), and pressing "+ Factory" showed all four stages — not what a
  * button named after one stage reads as doing. It is now one switch per
  * series, each adding or removing that series only, plus a single Show all /
  * Clear selection toggle. The role switched on last is emphasised.
  *
  * Covers: each switch changes exactly its own series; the all toggle; the
- * emphasis; and ratio bars matching the roles shown (B2's failure mode:
- * a ratio bar visible for a stage that is not in).
+ * emphasis; and ratio bars matching the roles shown (the failure to
+ * guard against: a ratio bar visible for a stage that is not in).
  *
  * `chart.js` and `react-chartjs-2` are never mocked. `chartSetup.ts` and
  * `resultsChartsConfig.ts` are wrapped, not replaced: the real builders run
@@ -337,7 +336,7 @@ describe('the series switches', () => {
 
 /* --- ratio bars ------------------------------------------------------ */
 
-describe('FAILURE MODE: a role`s ratio bar is shown exactly when its series is', () => {
+describe('a role`s ratio bar is shown exactly when its series is', () => {
   it('has no bars once the selection is cleared', async () => {
     const user = userEvent.setup()
     render(<BullwhipChart view={makeView()} />)

@@ -1,22 +1,20 @@
 /**
- * `22-frontend-profile.md` §2.3 and §3.2 — the match history table.
+ * The match history table on the profile page (spec §9.9).
  *
- * Covers acceptance criteria 8, 9, 10 and 11, the "—" treatment §2.3 reuses
- * for a null ratio (criterion 6, failure mode 3), and failure modes 1, 9 and
- * 12. The rest of section 22 is in `ProfilePage.test.tsx`.
+ * Covers the rows and columns, opening a row, pagination, and the "—"
+ * treatment for a null ratio. The rest of the profile page is in
+ * `ProfilePage.test.tsx`.
  *
  * Harness notes:
- *  - `MatchHistoryTable` has no frozen props — §2.0 freezes only
- *    `src/api/users.ts` — so the table is driven through `/profile`, exactly
- *    as `21 §2.0` says of `src/components/results/`. What is asserted is what
- *    `GET /users/me/games` puts on the screen, not how the component is
- *    factored.
+ *  - `MatchHistoryTable` has no fixed props — only `src/api/users.ts` is a
+ *    fixed surface — so the table is driven through `/profile`, as the results
+ *    components are. What is asserted is what `GET /users/me/games` puts on the
+ *    screen, not how the component is factored.
  *  - `src/api/http.ts` is a recorder, so the page's requests are observed as
- *    wire calls; `src/auth/AuthContext.tsx` is a stub of the value `16 §3`
- *    freezes, which is the only declared way to put the page in its
- *    authenticated state.
+ *    wire calls; `src/auth/AuthContext.tsx` is a stub, which is the only
+ *    declared way to put the page in its authenticated state.
  *  - The history is 25 games, so page 1 is full at 20 and page 2 has 5 — the
- *    shape failure modes 1 and 12 are about.
+ *    shape the request-count tests are about.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Component, type ReactNode } from 'react';
@@ -157,7 +155,7 @@ const STATS = {
   games_as_factory: 5,
 };
 
-/** `10 §2`'s alphabet excludes 0, O, 1, I and L. */
+/** The room-code alphabet excludes 0, O, 1, I and L. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function roomCodeFor(index: number): string {
@@ -187,7 +185,7 @@ interface MatchFixture {
   preset_name: string | null;
 }
 
-/** 25 games, newest first — `15 §3.5` orders by `finished_at` descending. */
+/** 25 games, newest first — the server orders by `finished_at` descending. */
 const MATCHES: MatchFixture[] = Array.from({ length: 25 }, (_, i) => ({
   game_id: 4000 + i,
   room_code: roomCodeFor(i),
@@ -196,7 +194,7 @@ const MATCHES: MatchFixture[] = Array.from({ length: 25 }, (_, i) => ({
   role: ROLE_ORDER[i % 4],
   weeks_played: 12 + (i % 9),
   total_cost: 1000 + i * 37.25,
-  // Row index 3 is the null the "—" treatment is for (§2.3).
+  // Row index 3 is the null the "—" treatment is for.
   bullwhip_ratio: i === 3 ? null : Number((1.05 + i * 0.37).toFixed(2)),
   chain_total_cost: 5000 + i * 111.5,
   preset_name: PRESETS[i % PRESETS.length],
@@ -353,7 +351,7 @@ function rowFor(match: MatchFixture): HTMLElement {
   const found = matchRows().find((entry) => entry.match.room_code === match.room_code);
   if (!found) {
     throw new Error(
-      `§2.3 renders a row per match; none names ${match.room_code}. The screen rendered: ${bodyText()}`,
+      `Expected a row per match; none names ${match.room_code}. The screen rendered: ${bodyText()}`,
     );
   }
   return found.row;
@@ -373,14 +371,14 @@ function headerCellCount(table: HTMLElement): number {
 function profileDescriptors(): RouteDescriptor[] {
   const exported = (ProfilePageModule as { route?: RouteDescriptor | RouteDescriptor[] }).route;
   if (!exported) {
-    throw new Error('ProfilePage.tsx exports no `route` descriptor (22 §3.0, 16 §3 registry).');
+    throw new Error('ProfilePage.tsx exports no `route` descriptor.');
   }
   return Array.isArray(exported) ? exported : [exported];
 }
 
 function profileRoute(): RouteDescriptor {
   const found = profileDescriptors().find((d) => d.path === '/profile');
-  if (!found) throw new Error('ProfilePage.tsx registers no /profile route (22 §3.0).');
+  if (!found) throw new Error('ProfilePage.tsx registers no /profile route.');
   return found;
 }
 
@@ -475,7 +473,7 @@ function paramsOf(call: unknown[]): Record<string, unknown> {
   return { ...fromUrl, ...fromConfig };
 }
 
-/** §3.3: only the requests under `/users/me/` are this section's. */
+/** Only the requests under `/users/me/` are the profile page's. */
 function mineCalls(): unknown[][] {
   return httpRec.get.mock.calls.filter((call) => pathOf(call).startsWith('/users/me/'));
 }
@@ -536,10 +534,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 8 — the rows and the columns
+// The rows and the columns
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 8: rows newest first, with all eight columns', () => {
+describe('rows newest first, with all eight columns', () => {
   it('renders page 1 in the order the server returned it, newest first', async () => {
     await renderHistory();
 
@@ -548,7 +546,7 @@ describe('CRITERION 8: rows newest first, with all eight columns', () => {
 
     const times = matchRows().map((entry) => Date.parse(entry.match.finished_at));
     for (let i = 1; i < times.length; i += 1) {
-      expect(times[i - 1], 'the newest game is rendered first (§2.3)').toBeGreaterThan(times[i]);
+      expect(times[i - 1], 'the newest game is rendered first').toBeGreaterThan(times[i]);
     }
   });
 
@@ -558,7 +556,7 @@ describe('CRITERION 8: rows newest first, with all eight columns', () => {
     const table = historyTable(PAGE_ONE) as HTMLElement;
     expect(
       headerCellCount(table),
-      '§2.3: Date, Room, Role, Weeks, Your cost, Bullwhip, Chain total, Preset',
+      'Date, Room, Role, Weeks, Your cost, Bullwhip, Chain total, Preset',
     ).toBeGreaterThanOrEqual(8);
   });
 
@@ -586,10 +584,10 @@ describe('CRITERION 8: rows newest first, with all eight columns', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 6 and failure mode 3 — the bullwhip column's "—"
+// The bullwhip column's "—"
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 6 and FAILURE MODE 3: a null ratio in the table is "—"', () => {
+describe('a null ratio in the table is "—"', () => {
   it('renders a dash, and never 0 or 0.00', async () => {
     await renderHistory();
 
@@ -599,22 +597,22 @@ describe('CRITERION 6 and FAILURE MODE 3: a null ratio in the table is "—"', (
     // followed by a digit, which would make it a negative number.
     expect(
       cells.some((cell) => /^[-–—](?![\d.])/.test(cell.trim())),
-      `§2.3 reuses the "—" treatment for a null ratio; the row rendered ${cells.join(' | ')}`,
+      `A null ratio gets the "—" treatment; the row rendered ${cells.join(' | ')}`,
     ).toBe(true);
     expect(textOf(row)).not.toMatch(/NaN|Infinity|∞|null|undefined/);
 
     // Every 0 in that row would have to be a server value; none of this
     // fixture's columns is 0, so a 0 can only be the null rendered as one.
     const zeroes = cells.filter((cell) => asNumber(cell) === 0);
-    expect(zeroes, 'a null ratio rendered as 0 (failure mode 3)').toEqual([]);
+    expect(zeroes, 'a null ratio rendered as 0').toEqual([]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 9 — opening a row
+// Opening a row
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 9: a row opens /profile/games/:gameId', () => {
+describe('a row opens /profile/games/:gameId', () => {
   // By game id, not room code (2026-11-03): room codes are recycled, so a
   // code can name a later game the player never played. Lemony and Pulky
   // link their history by game id too.
@@ -634,7 +632,7 @@ describe('CRITERION 9: a row opens /profile/games/:gameId', () => {
 
     expect(
       currentPath(),
-      `§2.3: a row opens ${href}. The row rendered: ${textOf(row)}`,
+      `A row opens ${href}. The row rendered: ${textOf(row)}`,
     ).toBe(href);
   });
 
@@ -667,10 +665,10 @@ describe('CRITERION 9: a row opens /profile/games/:gameId', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 10 and 11 — pagination
+// Pagination
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10: paging replaces the table and writes the page into the URL', () => {
+describe('paging replaces the table and writes the page into the URL', () => {
   function nextPageControl(): HTMLElement {
     const named = (re: RegExp) => controls().filter((el) => re.test(accessibleName(el)));
     const found =
@@ -681,7 +679,7 @@ describe('CRITERION 10: paging replaces the table and writes the page into the U
       named(/[›»→⟩>]/)[0];
     if (!found) {
       throw new Error(
-        `§3.2 pages the history at 20; no control moves to page 2. The screen rendered: ${bodyText()}`,
+        `The history pages at 20; no control moves to page 2. The screen rendered: ${bodyText()}`,
       );
     }
     return found;
@@ -699,7 +697,7 @@ describe('CRITERION 10: paging replaces the table and writes the page into the U
     await flush();
 
     const rendered = matchRows().map((entry) => entry.match.room_code);
-    expect(rendered, '§3.2: loading a page replaces the table rather than appending').toEqual(
+    expect(rendered, 'loading a page replaces the table rather than appending').toEqual(
       PAGE_TWO.map((match) => match.room_code),
     );
     expect(pagesRequested()).toContain(2);
@@ -718,12 +716,12 @@ describe('CRITERION 10: paging replaces the table and writes the page into the U
     expect(currentPath()).toBe('/profile');
     expect(
       currentPageParam(),
-      `§3.2 puts the page number in the URL query; the location was "${currentSearch()}"`,
+      `The page number belongs in the URL query; the location was "${currentSearch()}"`,
     ).toBe(2);
   });
 });
 
-describe('CRITERION 11: a reload on ?page=2 returns to page 2', () => {
+describe('a reload on ?page=2 returns to page 2', () => {
   it('requests page 2 and renders its rows', async () => {
     await renderHistory('/profile?page=2', PAGE_TWO);
     await flush();
@@ -735,10 +733,10 @@ describe('CRITERION 11: a reload on ?page=2 returns to page 2', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 9 — a page beyond the end
+// A page beyond the end
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 9: a page beyond the end', () => {
+describe('a page beyond the end', () => {
   it('renders an empty table and a "no more results" state, and does not crash', async () => {
     renderAt('/profile?page=99');
 
@@ -754,19 +752,19 @@ describe('FAILURE MODE 9: a page beyond the end', () => {
       /no (more )?(results|games|matches)|nothing (more )?(to show|here)|that page is empty|no rows|empty/i.test(
         bodyText(),
       ),
-      `failure mode 9 wants a "no more results" state, not a bare empty table. The screen rendered: ${bodyText()}`,
+      `A page beyond the end wants a "no more results" state, not a bare empty table. The screen rendered: ${bodyText()}`,
     ).toBe(true);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Failure modes 1 and 12 — what a 25-game history costs
+// What a 25-game history costs
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODES 1 and 12: two requests for a 25-game history', () => {
+describe('two requests for a 25-game history', () => {
   it('issues exactly two /users/me/ requests on mount and no per-row detail', async () => {
-    // Section 16's providers are mounted around this page; their traffic is
-    // not this section's (§3.3), so it is simulated here to prove the count
+    // The app's providers are mounted around this page; their traffic is
+    // not the page's own, so it is simulated here to prove the count
     // is of `/users/me/*` rather than of the axios instance.
     void httpRec.post('/users/upsert', { display_name: 'Ada Lovelace' });
     void httpRec.get('/health');
@@ -776,7 +774,7 @@ describe('FAILURE MODES 1 and 12: two requests for a 25-game history', () => {
 
     expect(
       mineCalls().map(urlOf),
-      'a client that fetches each game to fill a column undoes 15 §3.5’s single-query guarantee',
+      'a client that fetches each game to fill a column undoes the single-query guarantee',
     ).toHaveLength(2);
     expect(detailCalls()).toHaveLength(0);
     expect(httpRec.get.mock.calls.length).toBeGreaterThan(mineCalls().length);
@@ -791,7 +789,7 @@ describe('FAILURE MODES 1 and 12: two requests for a 25-game history', () => {
     expect(Number(params.page ?? 1)).toBe(1);
     expect(
       Number(params.page_size ?? PAGE_SIZE),
-      '§3.2 fixes the page size at 20; the client never asks for more',
+      'the page size is 20; the client never asks for more',
     ).toBe(20);
     expect(Number(params.page_size ?? PAGE_SIZE)).toBeLessThanOrEqual(20);
   });

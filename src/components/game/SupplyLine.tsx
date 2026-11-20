@@ -23,7 +23,7 @@ export interface SupplyLineProps {
   /**
    * `your_state.show_supply_line_prominently`. When false the breakdown is not
    * rendered at all — not hidden, absent. The host turned it off to make the
-   * game harder, and helpfully compensating defeats that (§2.2).
+   * game harder, and helpfully compensating defeats that.
    */
   prominent: boolean
 }

@@ -253,7 +253,7 @@ socket.on('connect_error', (error: Error) => {
   connectErrorAlertId = store().addAlert({ kind: kind === 'auth' ? 'error' : 'info', message })
 })
 
-/* ─── lobby (section 11) ─── */
+/* ─── lobby ─── */
 
 socket.on('joined', (payload: JoinedPayload) => {
   if (!payload?.alias) return
@@ -338,7 +338,7 @@ socket.on('game_started', (payload: GameStartedPayload) => {
   store().applyGameStarted(payload)
 })
 
-/* ─── play (section 12) ─── */
+/* ─── play ─── */
 
 socket.on('your_state', (payload: YourStatePayload) => {
   store().applyYourState(payload)

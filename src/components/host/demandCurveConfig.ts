@@ -1,16 +1,14 @@
 /**
- * The host demand curve's Chart.js registration and its one pure builder
- * (`20-frontend-host-console.md` section 2.1a, FROZEN).
+ * The host demand curve's Chart.js registration and its one pure builder.
  *
  * A Chart.js canvas is opaque to jsdom, so the configuration the chart is
  * handed has to be assertable without one. `buildDemandCurveConfig` returns
  * **exactly** what `DemandCurve` renders — the component passes it straight
- * through and adds nothing — which is what lets the chart's acceptance
- * criteria be checked against an object rather than against a mocked library.
+ * through and adds nothing — which is what lets the chart's tests
+ * be checked against an object rather than against a mocked library.
  *
- * Registration lives here rather than being imported from section 21's
- * `chartSetup.ts`, because that file belongs to section 21 (**D19**) and
- * `ChartJS.register` is idempotent.
+ * Registration lives here as well as in the results charts' `chartSetup.ts`;
+ * `ChartJS.register` is idempotent, so registering twice is harmless.
  */
 import {
   CategoryScale,
@@ -77,11 +75,11 @@ export interface DemandCurveOptions {
  * the open week included.
  *
  * It is the engine's own rule, not a second one: `player_view` truncates
- * `customer_demand_series` to `demand_series[:week]` (`07 §3.8`), because the
+ * `customer_demand_series` to `demand_series[:week]` (spec §8.8), because the
  * open week has already been settled and its demand is the Retailer's incoming
  * order on screen right now. Anything after it is the future, which only the
  * host may see — so the projector, which every player is looking at, plots
- * this and nothing else (`20 §2.4`). A week before the first, or a series
+ * this and nothing else (spec §9.6). A week before the first, or a series
  * shorter than `week`, simply yields what exists.
  */
 export function revealedDemand(demandSeries: number[], week: number): number[] {
@@ -122,7 +120,7 @@ const currentWeekBand: Plugin<'line'> = {
  * weeks not yet played, with the current week marked.
  *
  * The host is the only person entitled to see the future of the series
- * (`07 §3.9` sends it to their sid alone), and seeing where the step lands
+ * (`host_view` goes to their sid alone), and seeing where the step lands
  * before it lands is what lets them run the session — so the console's curve
  * never truncates at `currentWeek`.
  *
@@ -159,7 +157,7 @@ export function buildDemandCurveConfig(
     borderWidth: 3,
     tension: 0,
     // The mark, in three channels at once: size, shape and colour. Size alone
-    // would be invisible on a projector; colour alone fails section 3.5.
+    // would be invisible on a projector; colour must never be the only signal.
     pointRadius: plotted.map((_, index) =>
       isCurrent(index) ? CURRENT_WEEK_POINT_RADIUS : 0,
     ),

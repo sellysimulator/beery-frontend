@@ -49,7 +49,7 @@ const ORDERS_LEGEND: LegendItem[] = [
 
 /**
  * Each `WeekRecord` field is in exactly one of the two tables, once per week,
- * so every figure is in the document once (the 3D board's AC 17).
+ * so every figure is in the document once (spec §9.7).
  */
 function StockTable({ history }: { history: WeekRecord[] }): ReactElement {
   return (
@@ -150,7 +150,7 @@ function Panels({ history }: { history: WeekRecord[] }): ReactElement {
  *
  * Never anyone else's: the only input is `your_state.own_history`, which the
  * server built for this role alone. The chart the whole class sees belongs to
- * the results screen (section 21).
+ * the results screen (spec §9.8).
  *
  * Each `ChartBox` wraps its canvas in an error boundary, because a chart that
  * cannot get a drawing context must not take the game screen down with it;

@@ -20,10 +20,10 @@ export interface WaitingForOthersProps {
  * handlers fill from the server's `awaiting_roles`. It carries role names and
  * a submitted / still-deciding state, and it carries **no quantity, for any
  * role, ever** — the `order_submitted` event behind it does not even contain
- * one (`12-socket-play.md` section 2).
+ * one (spec §11.2).
  *
  * A player may change their order until the window closes, so this state
- * offers a way back to the form rather than being a dead end (§2.4).
+ * offers a way back to the form rather than being a dead end.
  */
 export function WaitingForOthers({
   myRole,

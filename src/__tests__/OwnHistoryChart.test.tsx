@@ -1,12 +1,12 @@
 /**
- * BE-3 (`CHARTS-PLAN.md`): the player's history, as two panels in one
- * crosshair group.
+ * The player's own history chart (spec §9.3), as two panels in one crosshair
+ * group.
  *
- * Covers acceptance (1) every plotted value is a `WeekRecord` field, (2) the
- * supply line is a stacked dataset on top of on hand rather than a summed
- * series, (3) the orders panel shows both series, (4) the tables list the five
- * fields per week; and the failure modes "inventory position computed as a
- * sum" and "another role's history leaking in".
+ * Covers: every plotted value is a `WeekRecord` field, the supply line is a
+ * stacked dataset on top of on hand rather than a summed series, the orders
+ * panel shows both series, the tables list the five fields per week; and
+ * guards against inventory position computed as a sum and another role's
+ * history leaking in.
  *
  * `chart.js` and `react-chartjs-2` are never mocked. The builders are pure, so
  * the configuration is asserted directly, and the tables are the DOM surface.
@@ -133,7 +133,7 @@ describe('buildOwnStockConfig', () => {
     expect(onHand.fill).toBe('origin')
   })
 
-  it('AC 2 / FM 1: on the way is supply_line_after exactly, never a sum', () => {
+  it('on the way is supply_line_after exactly, never a sum', () => {
     const onTheWay = dataset(config, ON_THE_WAY_LABEL)
     expect(onTheWay.data).toEqual(ON_THE_WAY)
     // The inventory position, as a sum, is the bug this guards against.
@@ -144,7 +144,7 @@ describe('buildOwnStockConfig', () => {
     }
   })
 
-  it('AC 2: on the way shares on hand’s stack and fills to the dataset below it', () => {
+  it('on the way shares on hand’s stack and fills to the dataset below it', () => {
     const onHand = dataset(config, ON_HAND_LABEL)
     const onTheWay = dataset(config, ON_THE_WAY_LABEL)
     expect(onHand.stack).toBeTruthy()
@@ -190,7 +190,7 @@ describe('buildOwnStockConfig', () => {
     expect(alone.crosshairSync).toBeUndefined()
   })
 
-  it('FM 2: with no records it plots nothing', () => {
+  it('with no records it plots nothing', () => {
     const empty = buildOwnStockConfig([], null)
     expect(empty.data.labels).toEqual([])
     for (const d of empty.data.datasets) expect(d.data).toEqual([])
@@ -200,7 +200,7 @@ describe('buildOwnStockConfig', () => {
 describe('buildOwnOrdersConfig', () => {
   const config = buildOwnOrdersConfig(history(), 'g')
 
-  it('AC 3: shows orders you received and orders you placed', () => {
+  it('shows orders you received and orders you placed', () => {
     expect(config.data.labels).toEqual(['1', '2', '3'])
     expect(config.data.datasets.map((d) => d.label)).toEqual([RECEIVED_LABEL, PLACED_LABEL])
     expect(dataset(config as never, RECEIVED_LABEL).data).toEqual(RECEIVED)
@@ -226,7 +226,7 @@ describe('buildOwnOrdersConfig', () => {
   })
 })
 
-describe('AC 1: every plotted value is a WeekRecord field', () => {
+describe('every plotted value is a WeekRecord field', () => {
   it('plots only the five fields (backlog sign-flipped), and no other field', () => {
     const fields = new Set([...ON_HAND, ...BACKLOG, ...ON_THE_WAY, ...RECEIVED, ...PLACED])
     const plotted: number[] = []
@@ -270,7 +270,7 @@ describe('OwnHistoryChart', () => {
     for (const img of screen.getAllByRole('img', { name: /week by week/ })) expect(img).toHaveAttribute('tabindex', '0')
   })
 
-  it('AC 4: the tables carry the five fields, week by week', () => {
+  it('the tables carry the five fields, week by week', () => {
     render(<OwnHistoryChart history={history()} />)
     const tables = screen.getAllByRole('table', { hidden: true })
     expect(tables).toHaveLength(2)
@@ -318,7 +318,7 @@ describe('OwnHistoryChart', () => {
     }
   })
 
-  it('Board3D AC 17: every history figure is in the DOM exactly once', () => {
+  it('every history figure is in the DOM exactly once', () => {
     render(<OwnHistoryChart history={history()} />)
     const body = document.body.textContent ?? ''
     for (const figure of [...ON_HAND, ...BACKLOG, ...ON_THE_WAY, ...RECEIVED, ...PLACED]) {
@@ -326,7 +326,7 @@ describe('OwnHistoryChart', () => {
     }
   })
 
-  it('FM 2: no field outside the five reaches the DOM', () => {
+  it('no field outside the five reaches the DOM', () => {
     render(<OwnHistoryChart history={history()} />)
     const body = document.body.textContent ?? ''
     for (const base of NOT_PLOTTED) {
@@ -334,7 +334,7 @@ describe('OwnHistoryChart', () => {
     }
   })
 
-  it('FM 2: names no role in the DOM', () => {
+  it('names no role in the DOM', () => {
     render(<OwnHistoryChart history={history('RETAILER')} />)
     const body = document.body.textContent ?? ''
     for (const role of ['retailer', 'wholesaler', 'distributor', 'factory']) {

@@ -7,14 +7,13 @@ export interface PausedOverlayProps {
 
 /**
  * What covers the screen while the game is paused (`beer-game-spec.md`
- * section 9.4, §2.7).
+ * section 9.4).
  *
  * Every wait says what is being waited for: the server sends the reason —
  * "The host has paused the game." or "Waiting for the Distributor to
  * reconnect." — and this renders it rather than guessing. The decision form
- * beneath is disabled, and a submission would be refused by the server anyway
- * (`12-socket-play.md` section 3.1), so the overlay is the explanation, not
- * the enforcement.
+ * beneath is disabled, and a submission would be refused by the server anyway,
+ * so the overlay is the explanation, not the enforcement.
  */
 export function PausedOverlay({ reason }: PausedOverlayProps): ReactElement {
   return (

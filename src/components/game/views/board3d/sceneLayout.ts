@@ -1,9 +1,9 @@
 /**
  * The hall, frozen: every coordinate, every clamp and every display-scaling
- * constant the 3D board is allowed to use (24 §3.1, §3.2, §4.2).
+ * constant the 3D board is allowed to use.
  *
- * There are **not** four scenes, there is one hall with four dressings
- * (24 §3.0), and this file is why: every number below is identical for all
+ * There are **not** four scenes, there is one hall with four dressings,
+ * and this file is why: every number below is identical for all
  * four roles, so a player who sits in the Retailer's seat on Monday and the
  * Factory's on Tuesday does not re-learn the room, and the debrief compares
  * like with like. Only `roleSets.ts` varies per role, and it varies four
@@ -11,7 +11,7 @@
  *
  * Nothing here is a magic number in a component. `WarehouseScene.tsx` reads
  * the `SceneModel` that `sceneModel.ts` builds out of these constants, and
- * 24 §8.1 makes that boundary a hard rule: *a geometry decision made inside
+ * that boundary is a hard rule: *a geometry decision made inside
  * the renderer rather than in the model is untestable, and is a defect.* A
  * coordinate typed into a `<mesh position>` is exactly that decision.
  *
@@ -21,21 +21,21 @@
 /** A world-space point. Readonly because every constant here is shared. */
 export type Vec3 = readonly [number, number, number]
 
-/* ─── The shell (24 §3.1, amended 2026-09-22) ─── */
+/* ─── The shell ─── */
 
 /**
  * The hall: a floor, four walls, and **open sky above them**.
  *
  * It was an enclosed room with a ceiling at `y = 7` until a player walked it
  * and said the ceiling did nothing but take the space away. It is now a yard
- * with walls: `60 × 42` of floor, walls `9` metres high, and nothing overhead
- * but `scenePalette.ts`'s `skyCyan`. There is still no drei `<Sky>` — 24 §7.4
- * keeps that line for a new reason, which is that a flat background colour is
+ * with walls: `30 × 42` of floor, walls `10` metres high, and nothing overhead
+ * but `scenePalette.ts`'s `skyCyan`. There is still no drei `<Sky>` — that
+ * line stays for a new reason, which is that a flat background colour is
  * uniform by construction and a procedural sky is not.
  *
- * `60 × 42` rather than the shipped `44 × 30` for the same reason: the seven
- * zones of §3.2 were 16 metres apart in a 44-metre hall and read as one
- * crowded room rather than as seven places.
+ * The hall is 42 metres deep rather than an earlier 30 for the same reason: the
+ * seven zones were 16 metres apart in a 44-metre hall and read as one crowded
+ * room rather than as seven places. `HALL.width` below says why it is 30 wide.
  */
 export const HALL = {
   /**
@@ -58,7 +58,7 @@ export const HALL = {
   /**
    * Wall top, and the height of the sky's lower edge.
    *
-   * Nine metres, chosen against two numbers: the Distributor's three-tier
+   * Ten metres, chosen against two numbers: the Distributor's three-tier
    * racking reaches `6.2` (`RACKING_HEIGHT`) and must stand clear of the top
    * of the wall rather than poke over it, and a wall much taller than that in
    * a hall this wide reads as the bottom of a well instead of a yard. There
@@ -66,7 +66,7 @@ export const HALL = {
    * player sees.
    */
   wallHeight: 10,
-  /** Camera eye height, and the sanity check for every model target in §7.3. */
+  /** Camera eye height, and the sanity check for every model target height. */
   eyeHeight: 1.7,
 } as const
 
@@ -75,7 +75,7 @@ export const HALL = {
 export const SPAWN: Vec3 = [0, HALL.eyeHeight, 12]
 
 /**
- * Movement clamps (24 §3.1). Tighter than the walls on purpose: a first-person
+ * Movement clamps. Tighter than the walls on purpose: a first-person
  * camera pressed flat against a wall renders the inside of it.
  *
  * The stand-off is the one the hall shipped with — 3 metres on `x`, 2.5 on
@@ -92,21 +92,21 @@ export const MOVEMENT_BOUNDS = {
 
 /**
  * How close the player must stand to an interact target for its prompt to
- * appear (24 §5.2). There are no clickable meshes anywhere in this board:
+ * appear. There are no clickable meshes anywhere in this board:
  * proximity plus a keypress is one interaction model rather than two.
  */
 export const INTERACT_DISTANCE = 3.6
 
-/* ─── The crate, and everything measured off it (24 §4.2, §7.3) ─── */
+/* ─── The crate, and everything measured off it ─── */
 
 /**
  * The normalised crate, on its longest axis.
  *
- * `gltfModels.ts` scales `box.glb` to this with the `Box3` block of 24 §7.3,
+ * `gltfModels.ts` scales `box.glb` to this with its `Box3` normalisation,
  * centred in `x`/`z` and grounded at `y = 0`. It is restated here rather than
  * imported because `gltfModels.ts` imports three.js and this module may not:
  * `sceneModel.ts` is loaded by a test file that never touches a renderer
- * (24 §8.2). `MODEL_TARGET_HEIGHT.box` is the other copy, and the two are one
+ * at all. `MODEL_TARGET_HEIGHT.box` is the other copy, and the two are one
  * number.
  */
 export const CRATE_SIZE = 1.1
@@ -130,13 +130,13 @@ export const CRATE_CLEARANCE = 0.12
 /** Centre-to-centre spacing of crates in a pile, on every axis: `1.22`. */
 export const CRATE_PITCH = CRATE_SIZE + CRATE_CLEARANCE
 
-/* ─── Fixed zones (24 §3.2, respaced 2026-09-22) ─── */
+/* ─── Fixed zones ─── */
 
 /**
  * Every zone centre in the hall. These are **centres**, not corners — the
  * piles, pens and boards built on them are centred on their own footprints.
  *
- * The **order and the axis are 24 §3.1's design and do not change**: orders
+ * The **order and the axis are the hall's design and do not change**: orders
  * north, beer south, one line, with the order desk between the player and
  * everything upstream, so *you cannot walk to the receiving bay without
  * passing the desk.* What changed on 2026-09-22 is only the spacing — the
@@ -147,7 +147,7 @@ export const ZONES = {
   receivingBay: [0, 0, -15] as Vec3,
   /**
    * Where the order road leaves the hall, and where the courier stands on it.
-   * Absent for the FACTORY (24 §3.7).
+   * Absent for the FACTORY.
    *
    * It was an arch — two posts and a lintel "the courier drives under" —
    * until a player asked for the arches to go. What is left is the place and
@@ -156,7 +156,7 @@ export const ZONES = {
   upstreamGate: [9, 0, -16.5] as Vec3,
   /** The FACTORY's brewhouse tank row, where the other three have a road. */
   brewhouse: [0, 0, -18] as Vec3,
-  /** The FACTORY's blank north-west wall and its sign (24 §3.7). */
+  /** The FACTORY's blank north-west wall and its sign. */
   blankWall: [9, 0, -20.4] as Vec3,
   stockFloor: [-8, 0, 0] as Vec3,
   backlogPen: [8, 0, 0] as Vec3,
@@ -165,11 +165,11 @@ export const ZONES = {
   orderDesk: [0, 0, 5] as Vec3,
   /**
    * Where the player stands to read the ledger — a stand-off from the board
-   * itself, which is flat against the west wall at `x = −29` (24 §3.2).
+   * itself, which is flat against the west wall at `x = −29`.
    */
   ledgerWall: [-11, 0, 6] as Vec3,
   ledgerBoard: [-14, 0, 6] as Vec3,
-  /** Only when a cost field is present. Absent entirely otherwise (19 AC 6). */
+  /** Only when a cost field is present. Absent entirely otherwise. */
   costCorner: [-11, 0, 13] as Vec3,
   /**
    * The team board, flat against the **east** wall, and the stand-off the
@@ -190,7 +190,7 @@ export const ZONES = {
   chainTable: [11, 0, 1] as Vec3,
 } as const
 
-/** The three interact targets of 24 §3.2. Four would be more prompts than a
+/** The three interact targets. Four would be more prompts than a
  *  first-time player can hold, which is why this list is closed.
  *
  *  Each resolves at the **stand-off**, never at the panel: a target centred
@@ -204,7 +204,7 @@ export const INTERACT_ZONES = {
 
 /* ─── The receiving bay and the roads ─── */
 
-/** Lane *i* sits at `x = −9 + 6i`, `z = −15` (24 §4.2). Six metres apart, for
+/** Lane *i* sits at `x = −9 + 6i`, `z = −15`. Six metres apart, for
  *  a three-wide stack that is 3.66 across and 4.21 in the front lane. */
 /**
  * The two halves of the T's bar, and the rule that fills them.
@@ -245,12 +245,12 @@ export const SUPPLY_LANE_X: readonly number[] = [0, 1, 2, 3].map((index) =>
 )
 
 /** Lanes rendered is `min(slots.length, 4)`; a fifth and beyond fold into a
- *  `+{n} MORE LANES` placard rather than a fifth lane (24 §4.2). */
+ *  `+{n} MORE LANES` placard rather than a fifth lane (spec §9.7). */
 export const MAX_SUPPLY_LANES = 4
 
 /**
- * The front lane is nearest the player and `1.15×` scale (24 §4.2). The beer
- * arriving next week is the thing 24 §1.1 wants largest in the field of view,
+ * The front lane is nearest the player and `1.15×` scale. The beer
+ * arriving next week is the thing the hall wants largest in the field of view,
  * because underweighting the supply line is the game's commonest losing
  * mistake.
  */
@@ -261,7 +261,7 @@ export const FRONT_LANE_SCALE = 1.15
  *
  * This was `GANTRY_HEIGHT`, the top of a beam on two posts. The beam is gone
  * with the rest of the overhead structures; the **signs it carried are not**,
- * because `TOTAL ON THE WAY TO YOU` is a `PlayerView` figure §4.2 requires
+ * because `TOTAL ON THE WAY TO YOU` is a `PlayerView` figure the board needs
  * and the gantry was only ever what it hung from. Four-and-a-bit metres
  * clears the tallest lane stack — two tiers at `CRATE_PITCH`, scaled `1.15`
  * in the front lane, so `2.67` — by more than a metre.
@@ -270,8 +270,8 @@ export const BAY_SIGN_HEIGHT = 4.2
 
 /**
  * Where each order-road marker group stands, receding west from the bay along
- * `z = −16.5` (24 §4.2). At most three groups are shown; the road is a
- * painted quad, not `road.glb` (24 §6.1).
+ * `z = −16.5`. At most three groups are shown; the road is a
+ * painted quad, not `road.glb`.
  *
  * The westmost group clears the courier truck standing on the gate threshold
  * at `x = −26`: the truck is 3.8 m broadside, so its nose is at `−24.1` and
@@ -305,7 +305,7 @@ export const ORDER_ROAD_Z = -16.5
  */
 export const PLACARD_STAND_OFF = 2.6
 
-/* ─── Racking (24 §3.4–§3.7) ─── */
+/* ─── Racking ─── */
 
 /** Shelf height by tier count: 1 tier reads as a shop, 3 stand clear of the
  *  wall top without reaching it. */
@@ -319,9 +319,9 @@ export const RACKING_HEIGHT: Record<1 | 2 | 3, number> = {
  * Where the racking bays stand, by tier count.
  *
  * Two tiers flank the stock floor and three tiers run wall to wall — both
- * given by 24 §3.5 and §3.6, respaced with the hall. One tier is not placed
- * by the spec; it reuses the two-tier positions so the Retailer's shop is the
- * same room at a lower shelf height, which is the whole point of §3.0.
+ * respaced with the hall. One tier has no positions of its own; it
+ * reuses the two-tier positions so the Retailer's shop is the
+ * same room at a lower shelf height, which is the whole point of one hall.
  */
 export const RACKING_BAYS: Record<1 | 2 | 3, readonly Vec3[]> = {
   1: [
@@ -338,7 +338,7 @@ export const RACKING_BAYS: Record<1 | 2 | 3, readonly Vec3[]> = {
   ],
 }
 
-/* ─── The south face (24 §3.4–§3.7) ─── */
+/* ─── The south face ─── */
 
 /** The Retailer's checkout counter, and the two customers standing at it. */
 export const CHECKOUT_Z = 16.5
@@ -347,11 +347,11 @@ export const CUSTOMER_FIGURE_POSITIONS: readonly Vec3[] = [
   [3, 0, 18.5],
 ]
 
-/** The Wholesaler's three roller doors (24 §3.5), across a 30 m wall. */
+/** The Wholesaler's three roller doors, across a 30 m wall. */
 export const DOCK_DOOR_X: readonly number[] = [-8, 0, 8]
 
 /** Where each south-end truck stands. Never more than two trucks in the hall
- *  at once — 24 §7.1's draw-call budget drops the truck count first. */
+ *  at once — the draw-call budget drops the truck count first. */
 export const TRUCK_POSITIONS = {
   /** On the road at the gate threshold, when `orders_in_flight > 0`. */
   upstream: [9, 0, -16.5] as Vec3,
@@ -368,7 +368,7 @@ export const TRUCK_POSITIONS = {
 } as const
 
 /**
- * The dock truck faces tail-in at `y`-rotation π (24 §3.5); the upstream
+ * The dock truck faces tail-in at `y`-rotation π; the upstream
  * courier sits broadside on the east–west road.
  */
 export const TRUCK_ROTATION = {
@@ -376,11 +376,11 @@ export const TRUCK_ROTATION = {
   onTheRoad: Math.PI / 2,
 } as const
 
-/* ─── Display scaling (24 §4.1, §4.2) ─── */
+/* ─── Display scaling ─── */
 
 /**
  * Units of beer per crate mesh. A quantity may decide how many meshes are
- * drawn; it may never be re-derived from them (24 §4.1).
+ * drawn; it may never be re-derived from them (spec §9.7).
  */
 export const UNITS_PER_CRATE = 2
 
@@ -388,12 +388,12 @@ export const UNITS_PER_CRATE = 2
 export const UNITS_PER_BILL = 10
 
 /**
- * Every divisor and cap in 24 §4.2's table, in one place.
+ * Every divisor and cap of spec §9.7's figures, in one place.
  *
  * The caps are draw-budget decisions, not display decisions: the sign beside
  * each pile always carries the server's true, uncapped figure, so a capped
  * pile understates nothing — the crates are a texture on the number, not a
- * substitute for it (24 §4.1, AC 7, FM 1).
+ * substitute for it.
  */
 export const PILE_SCALE = {
   /** `inventory` → stock floor. */
@@ -414,8 +414,8 @@ export const PILE_SCALE = {
  * The footprint each instanced pool stacks into: `gridWidth` across,
  * `gridDepth` back, then up a tier.
  *
- * **Wide and low, not narrow and tall** (amended 2026-09-22). The stock floor
- * was 24 §4.2's `5 × 2`, which turns a capped 40-crate pile into a four-tier
+ * **Wide and low, not narrow and tall**. The stock floor
+ * was once `5 × 2`, which turns a capped 40-crate pile into a four-tier
  * tower 4.76 m high — through the `ON HAND` sign at 3.2, which is the second
  * of the two intersections a player called clipping. Eight by three is
  * twenty-four crates a tier, so the same cap is two tiers and `2.32` m, and
@@ -449,13 +449,13 @@ export function pileStackTop(cap: number, grid: { width: number; depth: number }
 }
 
 /**
- * The ceiling on instanced pools (24 §7.1). Six are budgeted — inventory,
+ * The ceiling on instanced pools. Six are budgeted — inventory,
  * backlog, supply lanes, order markers, production queue, money — and eight is
  * the hard stop. The four supply lanes share **one** pool with four offsets.
  */
 export const MAX_INSTANCE_POOLS = 8
 
-/* ─── Lighting (24 §7.1, §7.4, amended 2026-09-22) ─── */
+/* ─── Lighting ─── */
 
 /**
  * **One light, and it is positionless.**
@@ -517,11 +517,11 @@ export const LIGHT_POSITIONS = {
  */
 export const SKY_LIGHT_INTENSITY = 2.8
 
-/* ─── The draw-call budget (24 §7.1, AC 19) ─── */
+/* ─── The draw-call budget ─── */
 
 /**
- * The hard ceiling of 24 §7.1's budget table: **steady-state draw calls ≤ 90**,
- * against a target of 60, and the number AC 19 holds this board to.
+ * The hard ceiling of the draw-call budget: **steady-state draw calls ≤ 90**,
+ * against a target of 60, and the number the budget test holds this board to.
  *
  * It is stated here because nothing in this board counted at all. `MAX_LIGHTS`
  * made Tequila's eighteen point lights a red test rather than a frame-rate
@@ -532,7 +532,7 @@ export const SKY_LIGHT_INTENSITY = 2.8
  * `estimateDrawCalls` in `sceneModel.ts` is what counts them, and
  * `Board3D.test.tsx` asserts that count against **this** number over all four
  * roles in three variants each. It did not always: the count stood at 132 in
- * its worst view and was held to a ratchet, because §7.1's arithmetic assumed
+ * its worst view and was held to a ratchet, because the budget's arithmetic assumed
  * one draw call per fixture and `FixtureMesh.tsx` drew between one and ten. On
  * 2026-09-22 the static architecture was merged — see `mergeParts` in
  * `sceneMaterials.ts` — the truck's thirteen materials were baked into vertex
@@ -546,7 +546,7 @@ export const MAX_DRAW_CALLS = 90
 /**
  * The ceiling on in-scene text meshes.
  *
- * 24 §7.1 budgets *"signs ~16 (one per drei `<Text>`)"*, and that is the
+ * The budget allows *"signs ~16 (one per drei `<Text>`)"*, and that is the
  * number to hold this board to; this constant is the **hard** stop above it,
  * in the same relation as 6 budgeted instance pools to `MAX_INSTANCE_POOLS`'s
  * 8. A drei `<Text>` is one draw call whatever it says, so the answer to a
@@ -566,7 +566,7 @@ export const MAX_SIGNS = 40
  * `FixtureMesh.tsx`'s `Dressing` switch, and `Racking.tsx`, `Brewhouse.tsx`
  * and `SouthFace.tsx` under it — and three.js issues one draw call per mesh
  * whatever geometry and material it shares with its neighbours. The table is
- * therefore the honest cost of a fixture, not 24 §7.1's per-fixture average,
+ * therefore the honest cost of a fixture, not the budget's per-fixture average,
  * and `estimateDrawCalls` is only as truthful as this table is: **a mesh
  * added to one of those components is a number to change here.**
  *
@@ -601,7 +601,7 @@ export const FIXTURE_DRAW_COST = {
   /** Both bays' uprights merged, and all their shelves merged: two at any
    *  tier count (`Racking.tsx`). */
   racking: 2,
-  /** Four tank bodies merged, four accent bands merged (24 §3.7). */
+  /** Four tank bodies merged, four accent bands merged. */
   brewhouse: 2,
   /** Glass, merged mullions, counter, counter top. */
   shopfront: 4,
@@ -628,12 +628,12 @@ export const PLACARD_POST_DRAW_COST = 1
 
 /**
  * What one placed GLB costs, model plus the painted contact patch under it
- * (`PlacedModel.tsx`; shadows are off, so contact is a quad — 24 §7.4).
+ * (`PlacedModel.tsx`; shadows are off, so contact is a quad).
  *
  * The truck's 33 primitives across 13 materials are baked to **two** meshes at
  * load — one lit, one for the lamps that cannot give up their emission — so it
- * is 2 and not 33, and not the 13 a per-material merge left it at (24 §7.3,
- * `gltfModels.ts`). It was the largest single item in the budget; at two
+ * is 2 and not 33, and not the 13 a per-material merge left it at
+ * (`gltfModels.ts`). It was the largest single item in the budget; at two
  * trucks it is now six calls.
  *
  * `person.glb` is one mesh with one material and needs no bake.
@@ -659,12 +659,12 @@ export const MODEL_DRAW_COST = {
  */
 export const SHELL_DRAW_COST = 3
 
-/* ─── Signs (24 §3.8) ─── */
+/* ─── Signs ─── */
 
 /**
- * Text heights, in world units. `label` is 24 §3.8's `0.42` for the word OWED
+ * Text heights, in world units. `label` is the `0.42` for the word OWED
  * beside the backlog pen — the pen carries the fence, the warning glyph and
- * that word, because colour is never the only signal (19 §3.4, AC 8).
+ * that word, because colour is never the only signal (spec §9.7).
  */
 export const SIGN_SIZE = {
   /** The role sign over the order desk. Readable from spawn. */
@@ -724,13 +724,13 @@ export const SIGN_HEIGHT = {
 } as const
 
 /**
- * The week-change lift of 24 §5.5: the front receiving lane rises this far and
- * drops back, inside the 400 ms `19 §3.2` caps deliberately — *"a class of
+ * The week-change lift: the front receiving lane rises this far and
+ * drops back, inside the 400 ms cap deliberately (spec §9.7) — *"a class of
  * four is waiting."*
  */
 export const WEEK_CHANGE_LIFT = 0.15
 
-/* ─── Sign plates (24 §6.1, amended 2026-09-22) ─── */
+/* ─── Sign plates ─── */
 
 /**
  * How wide a sign may run before troika wraps it, in world metres.
@@ -764,7 +764,7 @@ export const SIGN_LINE_HEIGHT = 1.5
  * which is an asynchronous answer arriving one or more frames late; sizing the
  * plates from it would make the plate pool's matrices depend on when a font
  * finished parsing, and would put a geometry decision inside a component where
- * 24 §8.1 says no test can reach it. The plates are therefore measured in
+ * no test can reach it. The plates are therefore measured in
  * `buildSceneModel`, from the string and the font size, by this constant.
  *
  * `0.58` is measured against drei's default Roboto at the mix this hall
@@ -785,7 +785,7 @@ export const SIGN_GLYPH_ADVANCE = 0.58
  * crowds the role sign, and one that frames the role sign swallows the row.
  *
  * A quarter of the font size, not a half. The plates are stacked into columns
- * that have to fit between a desk and a nine-metre wall, and a generous margin
+ * that have to fit between a desk and a ten-metre wall, and a generous margin
  * is paid for twice — once above the words and once below them — on every sign
  * in the column. A quarter still reads as a frame around the words and leaves
  * the desk's four-sign column 1.4 m shorter than a half would.
@@ -866,7 +866,7 @@ export const SIGN_GATE_MAX_WIDTH = 7.2
  *
  * Small and constant: the plates are what a player reads a column by, so the
  * gap wants to be visible as a seam and no larger — a column of four signs
- * pays it three times, and the desk's column has a nine-metre wall above it
+ * pays it three times, and the desk's column has a ten-metre wall above it
  * and a clipboard below it. `sceneModel.ts`'s `stackDown`/`stackAround` are
  * the only things that use it, and between them they lay out every column in
  * the hall, which is why the sweep can now say there are no collisions rather
@@ -875,7 +875,7 @@ export const SIGN_GATE_MAX_WIDTH = 7.2
 export const SIGN_STACK_GAP = 0.12
 
 /**
- * Every sign's backing plate, as **one** `InstancedMesh` (24 §7.1, AC 19).
+ * Every sign's backing plate, as **one** `InstancedMesh`.
  *
  * The same arithmetic that made the placard posts a pool, one order of
  * magnitude louder. A maximal view carries 33 signs; a plate apiece is 33 more
@@ -898,7 +898,7 @@ export const SIGN_PLATE_DRAW_COST = 1
  * as tall as the word it backs.
  *
  * Exported from here, rather than computed in `SignPlates.tsx`, because both
- * the pool and `buildSceneModel` need the same answer and 24 §8.1 puts the
+ * the pool and `buildSceneModel` need the same answer and the 3D rules put the
  * answer on the model.
  */
 export function signPlateSize(

@@ -1,28 +1,22 @@
 /**
- * `20-frontend-host-console.md` — `HostConsole`, the host's live view of the
- * whole chain.
+ * `HostConsole`, the host's live view of the whole chain (spec §9.6).
  *
- * Covers acceptance criteria 1, 2, 3, 4, 5, 13, 14, 18, 19, 20, 21, 22, 23 and
- * 24, and failure modes 5, 6 (the "it renders" half), 7, 10, 11 and 12.
- * Criteria 6–12 and failure modes 3, 4 and 6 (the "what it emits" half) are in
- * `HostControls.test.tsx`; criteria 15–17 and failure modes 1, 2, 8, 9 and 13
- * are in `PresentationMode.test.tsx`.
+ * What the host controls emit is in `HostControls.test.tsx`; presentation mode
+ * is in `PresentationMode.test.tsx`.
  *
  * Harness notes:
  *  - `socket.io-client` is replaced by a recorder, so `src/api/socket.ts`,
  *    `src/api/socketHandlers.ts` and `src/api/games.ts` run as real,
  *    un-mocked code while nothing touches transport. Server → client events
  *    are delivered by calling what registered for them, exactly as the
- *    transport would (`12 §2`); client → server emits are read back as wire
- *    payloads.
- *  - **`chart.js` and `react-chartjs-2` are never mocked** (`§2.1a`, failure
- *    mode 12). The two seams `§2.1a` freezes are used instead: the pure
- *    builder `buildDemandCurveConfig`, and the chart's visually hidden
- *    per-week table. `demandCurveConfig.ts` is *wrapped*, not replaced, so the real
- *    builder runs and its argument and result are recorded — which is what
- *    makes criterion 23's pass-through rule checkable.
+ *    transport would; client → server emits are read back as wire payloads.
+ *  - **`chart.js` and `react-chartjs-2` are never mocked.** Two seams are used
+ *    instead: the pure builder `buildDemandCurveConfig`, and the chart's
+ *    visually hidden per-week table. `demandCurveConfig.ts` is *wrapped*, not
+ *    replaced, so the real builder runs and its argument and result are
+ *    recorded — which is what makes the pass-through rule checkable.
  *  - `HostConsole` takes no props and reads everything from the store and
- *    `useParams` (`§2.0`), so every fixture below is delivered over the wire
+ *    `useParams`, so every fixture below is delivered over the wire
  *    and the component is rendered inside a router at `/host/:roomCode`.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
@@ -151,7 +145,7 @@ vi.mock('firebase/auth', () =>
 vi.mock('../api/health', () => ({ checkHealth: vi.fn(async () => true) }));
 
 // ---------------------------------------------------------------------------
-// Harness — the demandCurveConfig wrapper (§2.1a seam 1)
+// Harness — the demandCurveConfig wrapper (the builder seam)
 // ---------------------------------------------------------------------------
 
 interface ChartLikeConfig {
@@ -169,7 +163,7 @@ vi.mock('../components/host/demandCurveConfig', async (importOriginal) => {
   const build = actual.buildDemandCurveConfig;
   if (typeof build !== 'function') {
     throw new Error(
-      '20 §2.1a: `src/components/host/demandCurveConfig.ts` must export ' +
+      '`src/components/host/demandCurveConfig.ts` must export ' +
         '`buildDemandCurveConfig(demandSeries: number[], currentWeek: number): ' +
         'ChartConfiguration<"line">`.',
     );
@@ -195,7 +189,7 @@ function componentFrom(mod: unknown, name: string): Renderable {
   const found = exported[name] ?? exported.default;
   if (typeof found !== 'function') {
     throw new Error(
-      `20 §2.0: \`src/pages/${name}.tsx\` must export \`${name}\` (and a default), ` +
+      `\`src/pages/${name}.tsx\` must export \`${name}\` (and a default), ` +
         'a component taking no props.',
     );
   }
@@ -207,9 +201,9 @@ const HostConsole = componentFrom(HostConsoleModule, 'HostConsole');
 // ---------------------------------------------------------------------------
 // Fixtures
 //
-// Every number is unique across the whole view, so failure mode 7 ("a number
-// with no source") and failure mode 11 ("in production vs queued") cannot pass
-// on a coincidence. Display names carry no digits, for the same reason.
+// Every number is unique across the whole view, so "a number with no source"
+// and "in production vs queued" cannot pass on a coincidence. Display names
+// carry no digits, for the same reason.
 // ---------------------------------------------------------------------------
 
 const ROOM = 'HST742';
@@ -257,13 +251,13 @@ const ROLE_NUMBERS: Record<Role, Omit<HostRoleView, 'has_submitted' | 'is_bot'>>
   FACTORY: {
     inventory: 241,
     backlog: 242,
-    // `§2.1`: the production line IS the Factory's inbound pipeline.
+    // The production line IS the Factory's inbound pipeline.
     supply_line: 243,
     orders_in_flight: 244,
     last_order: 245,
     incoming_order: 246,
     accumulated_cost: 247,
-    // Deliberately different from `supply_line` (failure mode 11).
+    // Deliberately different from `supply_line`.
     production_queue: 248,
   },
 };
@@ -401,8 +395,8 @@ function dispatch(event: string, payload?: unknown): void {
   const listeners = [...(rec.listeners.get(event) ?? [])];
   if (listeners.length === 0) {
     throw new Error(
-      `Nothing is listening for "${event}". 12 §2 makes it a server → client event and ` +
-        'section 16’s handlers are the only registrar.',
+      `Nothing is listening for "${event}". It is a server → client event and ` +
+        'the socket handlers are the only registrar.',
     );
   }
   act(() => {
@@ -481,7 +475,7 @@ function smallest(predicate: (text: string, el: HTMLElement) => boolean, root: P
 /**
  * Every standalone number in a piece of text. The lookbehind keeps the `1` of
  * an alias like `P1` out of the result: an alias is an identifier, not a
- * figure, and `00-conventions.md §2` makes it the one public id.
+ * figure, and the one public id.
  */
 function numbersIn(text: string): number[] {
   const found = text.match(/(?<![A-Za-z0-9.])-?\d[\d,]*(?:\.\d+)?/g) ?? [];
@@ -493,7 +487,7 @@ function hasNumber(text: string, value: number): boolean {
 }
 
 /**
- * `§2.1`: one card per role, carrying that role's on hand, backlog, last order
+ * One card per role, carrying that role's on hand, backlog, last order
  * and accumulated cost. The chain diagram also names the roles and shows
  * inventory and backlog, so the card is identified as the smallest element
  * carrying all four of those figures — which is what distinguishes it from a
@@ -508,7 +502,7 @@ function roleCard(role: Role): HTMLElement {
   });
   if (!found) {
     throw new Error(
-      `20 §2.1 / criterion 1: no card for ${role} carrying its on hand (${numbers.inventory}), ` +
+      `No card for ${role} carrying its on hand (${numbers.inventory}), ` +
         `backlog (${numbers.backlog}), last order (${numbers.last_order}) and accumulated cost ` +
         `(${numbers.accumulated_cost}). The console rendered: ${bodyText()}`,
     );
@@ -523,7 +517,7 @@ function cardByName(role: Role): HTMLElement {
     (text) => new RegExp(role, 'i').test(text) && hasNumber(text, numbers.inventory) && hasNumber(text, numbers.backlog),
   );
   if (!found) {
-    throw new Error(`20 §2.1: no card naming ${role} and showing its figures. Rendered: ${bodyText()}`);
+    throw new Error(`No card naming ${role} and showing its figures. Rendered: ${bodyText()}`);
   }
   return found;
 }
@@ -533,7 +527,7 @@ const DISCONNECTED_RE = /disconnected|offline|dropped|lost connection|away/i;
 const ANY_CONNECTION_RE = /connect|online|offline|dropped/i;
 
 /**
- * `§2.1` and criterion 4: "a connection dot with a text label". The label is
+ * "A connection dot with a text label". The label is
  * read as text; the dot is whatever non-text mark sits beside it — an svg, an
  * empty element painted by CSS, or a bullet glyph. No private name is read.
  */
@@ -551,7 +545,7 @@ function hasConnectionDot(card: HTMLElement): boolean {
 }
 
 /**
- * `§2.1a` seam 2 and criterion 24: the demand curve's visually hidden table,
+ * The second seam: the demand curve's visually hidden table,
  * one row per week of the FULL series. It is the table whose data-row count
  * matches the series and whose rows carry the series values.
  */
@@ -563,7 +557,7 @@ function demandTable(root: ParentNode = document.body): HTMLElement {
   });
   if (!found) {
     throw new Error(
-      '20 §2.1a / criterion 24: the demand curve must render a visually hidden table, one row ' +
+      'The demand curve must render a visually hidden table, one row ' +
         'per week of the full series, with the week number, the demand value and whether that ' +
         `week is the current one. No such table was rendered. The console rendered: ${bodyText()}`,
     );
@@ -582,7 +576,7 @@ function latestCurveConfig(): ChartLikeConfig {
   const last = curveRec.calls[curveRec.calls.length - 1];
   if (!last) {
     throw new Error(
-      '20 §2.1a and criterion 23: `DemandCurve` must pass `buildDemandCurveConfig`’s result ' +
+      '`DemandCurve` must pass `buildDemandCurveConfig`’s result ' +
         `straight through; the builder was never called. The console rendered: ${bodyText()}`,
     );
   }
@@ -617,10 +611,10 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 1 — four roles, side by side
+// Four roles, side by side
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 1: all four roles, with inventory, backlog, last order, cost and submission status', () => {
+describe('all four roles, with inventory, backlog, last order, cost and submission status', () => {
   it.each(ROLE_ORDER)('%s shows its four figures', (role) => {
     renderRunning();
 
@@ -669,10 +663,10 @@ describe('CRITERION 1: all four roles, with inventory, backlog, last order, cost
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 2 and failure mode 11 — the Factory card
+// The Factory card
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 2: the Factory card shows units in production and the production queue', () => {
+describe('the Factory card shows units in production and the production queue', () => {
   it('shows both figures', () => {
     renderRunning();
 
@@ -682,12 +676,12 @@ describe('CRITERION 2: the Factory card shows units in production and the produc
   });
 });
 
-describe('FAILURE MODE 11: in production is supply_line, queued is production_queue', () => {
+describe('in production is supply_line, queued is production_queue', () => {
   function labelled(card: HTMLElement, re: RegExp, what: string): HTMLElement {
     const found = smallest((text) => re.test(text) && numbersIn(text).length > 0, card);
     if (!found) {
       throw new Error(
-        `20 §2.1: the Factory card must label its "${what}" figure (${re}). ` +
+        `The Factory card must label its "${what}" figure (${re}). ` +
           `The card rendered: ${textOf(card)}`,
       );
     }
@@ -718,13 +712,13 @@ describe('FAILURE MODE 11: in production is supply_line, queued is production_qu
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 3 — the Bot badge
+// The Bot badge
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 3: a bot-played role renders a Bot badge', () => {
+describe('a bot-played role renders a Bot badge', () => {
   /**
    * The card's own text, with its controls' labels removed — every card
-   * carries a *Swap in a bot* control (`§2.2`), so the badge has to be read
+   * carries a *Swap in a bot* control, so the badge has to be read
    * from what is left.
    */
   function badgeText(card: HTMLElement): string {
@@ -751,10 +745,10 @@ describe('CRITERION 3: a bot-played role renders a Bot badge', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 4 — connection state is a dot PLUS a text label
+// Connection state is a dot PLUS a text label
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 4: connection state renders as a dot plus a text label', () => {
+describe('connection state renders as a dot plus a text label', () => {
   it('labels a connected player in words', () => {
     renderRunning();
 
@@ -782,10 +776,10 @@ describe('CRITERION 4: connection state renders as a dot plus a text label', () 
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 5, 23 and 24, and failure mode 12 — the demand curve
+// The demand curve
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 23: buildDemandCurveConfig returns one dataset holding the full series, with the week marked', () => {
+describe('buildDemandCurveConfig returns one dataset holding the full series, with the week marked', () => {
   const { buildDemandCurveConfig } = DemandCurveBuilder;
 
   function datasetsOf(config: ChartLikeConfig): Array<Record<string, unknown>> {
@@ -793,7 +787,7 @@ describe('CRITERION 23: buildDemandCurveConfig returns one dataset holding the f
   }
 
   /**
-   * Is the current week marked anywhere in the configuration? `§2.1a` leaves
+   * Is the current week marked anywhere in the configuration? The rule leaves
    * *how* to the implementer — "in a way the object states" — so every way an
    * object can state it is accepted: a per-point array whose entry for that
    * week differs, a scriptable option that returns something different for
@@ -901,7 +895,7 @@ describe('CRITERION 23: buildDemandCurveConfig returns one dataset holding the f
   });
 });
 
-describe('CRITERION 5: the curve plots the full series, future weeks included, with the current week marked', () => {
+describe('the curve plots the full series, future weeks included, with the current week marked', () => {
   it('plots every week of the series, not just the weeks played', () => {
     renderRunning();
 
@@ -918,7 +912,7 @@ describe('CRITERION 5: the curve plots the full series, future weeks included, w
 
     const rows = dataRows(demandTable());
     /**
-     * `§2.1a`: each row says "whether that week is the current one". How is
+     * Each row says "whether that week is the current one". How is
      * the implementer's — a word, a glyph, `aria-current` — so the mark is
      * read as "the one row that differs from all the others once its numbers
      * are removed". `class` and `style` are excluded: this table is what a
@@ -955,7 +949,7 @@ describe('CRITERION 5: the curve plots the full series, future weeks included, w
   });
 });
 
-describe('CRITERION 24: the hidden table has one row per week of the full series', () => {
+describe('the hidden table has one row per week of the full series', () => {
   it('has a row per week, carrying the week number and the demand value', () => {
     renderRunning();
 
@@ -979,7 +973,7 @@ describe('CRITERION 24: the hidden table has one row per week of the full series
   });
 });
 
-describe('FAILURE MODE 12: the chart is asserted through the builder and the table, never a mock', () => {
+describe('the chart is asserted through the builder and the table, never a mock', () => {
   it('runs the real charting library', async () => {
     const reactChartjs = await import('react-chartjs-2');
     const chartjs = await import('chart.js');
@@ -1001,10 +995,10 @@ describe('FAILURE MODE 12: the chart is asserted through the builder and the tab
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 13 and 14, and failure mode 5 — the pause banner
+// The pause banner
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 13: the pause banner renders the server’s paused_reason verbatim', () => {
+describe('the pause banner renders the server’s paused_reason verbatim', () => {
   const REASON = 'Wholesaler (Ben) disconnected';
 
   it('shows the reason exactly as the server sent it', () => {
@@ -1022,7 +1016,7 @@ describe('CRITERION 13: the pause banner renders the server’s paused_reason ve
   });
 });
 
-describe('CRITERION 14 / FAILURE MODE 5: the game never resumes itself', () => {
+describe('the game never resumes itself', () => {
   const REASON = 'Distributor (Cleo) disconnected';
 
   it('keeps the banner and emits no resume_game across a disconnect, reconnect and resync', () => {
@@ -1062,10 +1056,10 @@ describe('CRITERION 14 / FAILURE MODE 5: the game never resumes itself', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 18 — the host holds no seat
+// The host holds no seat
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 18: nothing implies the host has a seat', () => {
+describe('nothing implies the host has a seat', () => {
   it('renders no decision input', () => {
     renderRunning();
 
@@ -1084,10 +1078,10 @@ describe('CRITERION 18: nothing implies the host has a seat', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 19 — a refresh restores every figure from host_state
+// A refresh restores every figure from host_state
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 19: a refresh restores every figure from host_state alone', () => {
+describe('a refresh restores every figure from host_state alone', () => {
   it('renders the same figures after the store has been emptied and resynced', () => {
     const first = renderRunning();
     const before = ROLE_ORDER.map((role) => numbersIn(textOf(roleCard(role))).sort((a, b) => a - b));
@@ -1111,10 +1105,10 @@ describe('CRITERION 19: a refresh restores every figure from host_state alone', 
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 20 and failure mode 6 (the rendering half) — D18
+// No host_secret, the rendering half — D18
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 20 / FAILURE MODE 6: no host_secret does not lock the host out (D18)', () => {
+describe('no host_secret does not lock the host out (D18)', () => {
   beforeEach(() => {
     window.sessionStorage.clear();
   });
@@ -1130,7 +1124,7 @@ describe('CRITERION 20 / FAILURE MODE 6: no host_secret does not lock the host o
     expect(bodyText()).toMatch(new RegExp(`week\\s*${WEEK}\\s*of\\s*${DURATION}`, 'i'));
   });
 
-  it('shows no recovery screen — that decision is section 17’s, and only after a join_error', () => {
+  it('shows no recovery screen — that decision is the host lobby’s, and only after a join_error', () => {
     renderRunning();
 
     expect(bodyText()).not.toMatch(/not the host|no longer the host|recover|re-?claim/i);
@@ -1146,10 +1140,10 @@ describe('CRITERION 20 / FAILURE MODE 6: no host_secret does not lock the host o
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 21 — the person in the seat comes from participants
+// The person in the seat comes from participants
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 21: display name and connection come from participants via roleToAlias', () => {
+describe('display name and connection come from participants via roleToAlias', () => {
   it('shows each role’s display name', () => {
     renderRunning();
 
@@ -1185,10 +1179,10 @@ describe('CRITERION 21: display name and connection come from participants via r
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 22 — the finished console
+// The finished console
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 22: at FINISHED the console shows the final chain, the weeks played and a results link', () => {
+describe('at FINISHED the console shows the final chain, the weeks played and a results link', () => {
   function renderFinished() {
     seatRoom('RUNNING');
     deliverHostState();
@@ -1243,10 +1237,10 @@ describe('CRITERION 22: at FINISHED the console shows the final chain, the weeks
     expect(links.map((a) => a.getAttribute('href'))).toContain(`/results/g/${'a'.repeat(32)}`);
   });
 
-  it('removes every §2.2 control rather than disabling it', () => {
+  it('removes every host control rather than disabling it', () => {
     renderFinished();
 
-    // `§2.4a`: "Every control in §2.2 is gone, not disabled."
+    // Every host control is gone, not disabled.
     const gone = [/pause/i, /resume/i, /close this week/i, /swap in a bot/i, /end the game now/i, /present/i];
     const controls = Array.from(
       document.querySelectorAll<HTMLElement>('button, [role="button"], input[type="button"], input[type="submit"]'),
@@ -1264,10 +1258,10 @@ describe('CRITERION 22: at FINISHED the console shows the final chain, the weeks
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 7 — every number traces to host_state
+// Every number traces to host_state
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 7: every number on a RoleCard comes from host_state', () => {
+describe('every number on a RoleCard comes from host_state', () => {
   it.each(ROLE_ORDER)('%s shows no figure the server did not send', (role) => {
     renderRunning();
 
@@ -1304,10 +1298,10 @@ describe('FAILURE MODE 7: every number on a RoleCard comes from host_state', () 
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 10 — a stale host_state
+// A stale host_state
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 10: an out-of-order host_state does not rewind the console', () => {
+describe('an out-of-order host_state does not rewind the console', () => {
   it('keeps the newer figures when an older seq arrives afterwards', () => {
     seatRoom('RUNNING');
 
@@ -1340,15 +1334,15 @@ describe('FAILURE MODE 10: an out-of-order host_state does not rewind the consol
 });
 
 // ---------------------------------------------------------------------------
-// §2.0 — what this module exports
+// What this module exports
 // ---------------------------------------------------------------------------
 
-describe('§2.0: the module’s shape', () => {
+describe('the module’s shape', () => {
   it('exports HostConsole and a default, and no route descriptor', () => {
     const exported = HostConsoleModule as Record<string, unknown>;
     expect(typeof exported.HostConsole).toBe('function');
     expect(exported.default).toBe(exported.HostConsole);
-    // `/host/:roomCode` belongs to section 17; a second descriptor would
+    // `/host/:roomCode` belongs to the host lobby; a second descriptor would
     // register a duplicate route.
     expect(exported.route).toBeUndefined();
   });
@@ -1361,8 +1355,7 @@ describe('§2.0: the module’s shape', () => {
 });
 
 // ===========================================================================
-// BE-5 (CHARTS-PLAN.md): the live order streams in the curve's table, and the
-// lane chips (20 §2.1b). Appended; nothing above this line is changed.
+// The live order streams in the curve's table, and the lane chips (spec §9.6).
 //
 // The file's `demandCurveConfig` wrapper forwards only (series, week), so the
 // builder's options are not visible here. Everything below is therefore read
@@ -1401,7 +1394,7 @@ async function be5Label(role: Role): Promise<string> {
   return orderSeriesLabel(role);
 }
 
-describe('BE-5 acceptance 2: with order_history, the curve’s table carries each role’s closed-week orders', () => {
+describe('with order_history, the curve’s table carries each role’s closed-week orders', () => {
   it.each(ROLE_ORDER)('%s: a column headed with its series label, orders for closed weeks, empty for open ones', async (role) => {
     renderRunning(hostView({ order_history: be5OrderHistory() }));
 
@@ -1421,7 +1414,7 @@ describe('BE-5 acceptance 2: with order_history, the curve’s table carries eac
   });
 });
 
-describe('BE-5 failure mode: a missing order_history (older backend) renders as today', () => {
+describe('a missing order_history (older backend) renders as today', () => {
   it('renders the console and the table with no order columns and no error', async () => {
     renderRunning(hostView());
 
@@ -1461,7 +1454,7 @@ function be5LanePairs(root: ParentNode = document.body): Array<[number, number]>
   });
 }
 
-describe('BE-5 acceptance 2: the console’s lanes carry count chips', () => {
+describe('the console’s lanes carry count chips', () => {
   it('has three lanes with chips: none for Customer–Retailer, none for the Factory', () => {
     renderRunning();
 
@@ -1539,7 +1532,7 @@ function laneAfter(role: Role): { beer: string | null; orders: string | null } {
 
 describe('the chain’s order counts sit on the link the orders are travelling along', () => {
   // host_state.roles[R].orders_in_flight is R's OWN order pipeline: orders its
-  // downstream customer placed that are still on their way TO R (07 §3.8). So
+  // downstream customer placed that are still on their way TO R (spec §9.6). So
   // it belongs on the link between R and its customer, one lane below R — not
   // on the lane between R and its supplier, where the diagram used to draw it.
   // Every figure below is distinct, so a count on the wrong lane cannot pass.
@@ -1575,7 +1568,7 @@ describe('the chain’s order counts sit on the link the orders are travelling a
   });
 });
 
-describe('BE-5 acceptance 3 / failure mode: no chips on the player chain', () => {
+describe('no chips on the player chain: FlowLane', () => {
   it('FlowLane without inTransit renders no chip at all', async () => {
     const { FlowLane } = await import('../components/game/ChainFlow');
     const { container } = render(<FlowLane index={1} />);
@@ -1593,7 +1586,7 @@ describe('BE-5 acceptance 3 / failure mode: no chips on the player chain', () =>
   });
 });
 
-describe('BE-5 acceptance 3 / failure mode: the player ChainFlow never renders chips', () => {
+describe('the player ChainFlow never renders chips', () => {
   it.each(ROLE_ORDER)('%s: no [data-chip] and no chip aria-label', async (role) => {
     const mod = (await import('../components/game/ChainFlow')) as unknown as Record<string, unknown>;
     const ChainFlow = (mod.ChainFlow ?? mod.default) as ComponentType<{ role: Role }>;

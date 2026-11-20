@@ -1,8 +1,8 @@
 /**
- * BE-2 (`CHARTS-PLAN.md`), B3: `CumulativeCostChart` and `buildCumulativeCostConfig`.
+ * The cumulative-cost race: `CumulativeCostChart` and `buildCumulativeCostConfig`.
  *
- * Covers acceptance (5) cumulative cost is hidden before Reveal, and (6) the
- * live path renders none of B3. Failure mode: the cost race visible before Reveal.
+ * Covers: cumulative cost is hidden before Reveal, and the live path renders
+ * none of the race.
  */
 import { describe, expect, it } from 'vitest'
 import { render } from '@testing-library/react'
@@ -114,7 +114,7 @@ describe('CumulativeCostChart', () => {
     expect(NamedCumulativeCostChart).toBe(CumulativeCostChart)
   })
 
-  describe('FAILURE MODE / ACCEPTANCE 5: the cost race stays hidden until Reveal', () => {
+  describe('the cost race stays hidden until Reveal', () => {
     it('renders nothing while revealed is false', () => {
       const { container } = render(<CumulativeCostChart view={makeView()} revealed={false} />)
       expect(container).toBeEmptyDOMElement()
@@ -153,7 +153,7 @@ describe('CumulativeCostChart', () => {
     expect(stray).toEqual([])
   })
 
-  describe('ACCEPTANCE 6: the live path, with no series, renders none of it', () => {
+  describe('the live path, with no series, renders none of it', () => {
     it('renders nothing when no role has cumulative_cost, even when revealed', () => {
       const view = makeView()
       const live: ResultsView = {

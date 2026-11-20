@@ -3,22 +3,22 @@ import type { BoardViewChoice } from '../../../utils/storage'
 import useMediaQuery from '../../shared/useMediaQuery'
 
 /**
- * The 2D/3D switch (24 §2.4).
+ * The 2D/3D switch (spec §9.7).
  *
  * It is a SIBLING of the board, never a prop of it. That is the load-bearing
- * decision of 24 §2.1: `Board2D.tsx` is not edited at all, `BoardViewProps`
+ * decision: `Board2D.tsx` is not edited at all, `BoardViewProps`
  * does not grow a field, and both boards get the toggle for free. A toggle
  * threaded through the props would have been a change to the contract **D15**
  * froze, in service of a control that belongs to neither board.
  */
 
-/** The copy, exactly as 24 §2.4 gives it. The label names the destination. */
+/** The copy, exactly as spec §9.7 gives it. The label names the destination. */
 const LABEL: Record<BoardViewChoice, string> = {
   '2D': 'Switch to the 3D warehouse',
   '3D': 'Switch to the 2D board',
 }
 
-/** 24 §7.6.2: 3D is still offered under reduced motion, but not silently. */
+/** 3D is still offered under reduced motion, but not silently (spec §9.7). */
 const REDUCED_MOTION_WARNING =
   'The 3D warehouse moves the camera as you walk. You have asked for reduced motion.'
 
@@ -34,7 +34,7 @@ export interface BoardViewToggleProps {
  * `z-50` is above `PausedOverlay`'s `z-40` **on purpose**: a paused game is
  * exactly when somebody wants to get out of a scene that is making them queasy,
  * and a control the overlay covers is a control they cannot reach at the one
- * moment they most want it (24 §2.4, risk 7). `Board2D` already reserves
+ * moment they most want it. `Board2D` already reserves
  * `pb-24` at the bottom of the page, so nothing below is occluded.
  *
  * No `aria-pressed`. This is a mode switch with a changing label, not an ARIA
@@ -44,7 +44,7 @@ export interface BoardViewToggleProps {
  * It is enabled on every pointer. Until 2026-11-16 a coarse pointer got it
  * `disabled` with *"The 3D warehouse needs a keyboard and a mouse."*; the
  * warehouse now has touch controls — drag to look, an on-screen pad to walk
- * and turn, and an Open button at each station (24 §5.7) — so a phone or a
+ * and turn, and an Open button at each station — so a phone or a
  * tablet is offered 3D like anything else.
  *
  * The bottom and right offsets are `max(1rem, safe-area-inset-<edge>)` rather

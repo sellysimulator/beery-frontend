@@ -4,11 +4,11 @@ import { UPSTREAM_LABEL } from './RoleBanner'
 
 export interface DecisionFormProps {
   view: PlayerView
-  /** Paused, or the game is over: the confirm control is dead (§2.7, FM 10). */
+  /** Paused, or the game is over: the confirm control is dead. */
   disabled: boolean
   /** Pre-fills the input when the player reopens a submitted order. */
   initialOrder: number | null
-  /** True when this is a re-open of an already-submitted order (§2.4). */
+  /** True when this is a re-open of an already-submitted order. */
   isChange: boolean
   /** A server refusal to render beside the form, or null. */
   notice: string | null
@@ -29,15 +29,14 @@ function weeksPhrase(weeks: number): string {
  *
  * The typed value is the only thing on this screen that lives in component
  * state, and losing it on a refresh is the documented behaviour: a player who
- * reloads mid-decision loses their unconfirmed typing and nothing else
- * (§3.3).
+ * reloads mid-decision loses their unconfirmed typing and nothing else.
  *
  * The arrival preview does no arithmetic: the lead time and the arrival week
  * are `your_state.order_arrival_lead_weeks` and `order_arrival_week`, both
  * computed by the server for exactly this sentence (2026-11-03; the form used
  * to add the week itself). The form never assembles a lead time out of
  * individual delays — none are sent, because the Retailer and the Factory
- * each break a different term of that sum (`07-game-engine.md` section 3.8).
+ * each break a different term of that sum (spec §8.8).
  */
 export function DecisionForm({
   view,

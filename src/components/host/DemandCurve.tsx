@@ -14,7 +14,7 @@ export interface DemandCurveProps {
   /** 1-indexed, as every week is. */
   currentWeek: number
   /**
-   * Projector styling: larger type, thicker rules (§2.4, §3.5) — and only the
+   * Projector styling: larger type, thicker rules — and only the
    * weeks the room has already seen, never the future of the series.
    */
   presenting?: boolean
@@ -29,7 +29,7 @@ export interface DemandCurveProps {
 const CURRENT_WEEK_CELL = 'Current week'
 
 /**
- * The same series, read out as a table (§2.1a).
+ * The same series, read out as a table.
  *
  * Visually hidden, and the only place the plotted numbers exist as text: a
  * canvas is opaque to a screen reader and to a test alike. One row per week of
@@ -91,7 +91,7 @@ function DemandTable({
 
 /**
  * True customer demand across the whole game, with the current week marked
- * (§2.1).
+ * (spec §9.6).
  *
  * The host is the only person who gets the future of this series, which is why
  * `host_state` is never broadcast to a room — and it is the host's cue for when
@@ -105,7 +105,7 @@ function DemandTable({
  * them. That is the same reason the order overlay is dropped there.
  *
  * The configuration is `buildDemandCurveConfig(...)` and nothing else: this
- * component passes it straight through and adds nothing to it (§2.1a). The
+ * component passes it straight through and adds nothing to it. The
  * canvas is wrapped in an error boundary because a chart that cannot get a
  * drawing context must not take the console down with it; the same figures are
  * in the table either way.

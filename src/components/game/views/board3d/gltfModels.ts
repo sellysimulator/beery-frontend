@@ -4,9 +4,9 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
- * The four glTF assets of `24 §6.1`, loaded once and normalised once.
+ * The four glTF assets, loaded once and normalised once.
  *
- * **No decoder configuration, deliberately (`24 §7.3`).** All four files are
+ * **No decoder configuration, deliberately.** All four files are
  * single-file binary glTF 2.0 with everything embedded, and `extensionsUsed`
  * and `extensionsRequired` are absent from every one of them: no Draco, no
  * Meshopt, no KTX2, zero animations, zero skins — verified against the files
@@ -24,11 +24,11 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * If a fifth model is ever added, re-verify those three claims against the
  * new file before trusting this comment for it.
  *
- * `road.glb` is absent on purpose (`24 §6.1`): 8.1 MB for 30 triangles. The
+ * `road.glb` is absent on purpose: 8.1 MB for 30 triangles. The
  * roads here are painted quads.
  */
 
-/** Where the assets sit under `public/` (`24 §6.1`). Vite's base is `/`. */
+/** Where the assets sit under `public/`. Vite's base is `/`. */
 export const MODEL_URL = {
   box: '/3dmodels/box.glb',
   truck: '/3dmodels/truck.glb',
@@ -37,7 +37,7 @@ export const MODEL_URL = {
 } as const
 
 /**
- * Target heights in world metres (`24 §7.3`).
+ * Target heights in world metres.
  *
  * The sanity check that produced them is the eye height: the camera sits at
  * 1.7, so a `person` at 1.9 is someone the player looks slightly up at, and a
@@ -52,7 +52,7 @@ export const MODEL_TARGET_HEIGHT = {
 
 /**
  * `box.glb` carries two meshes. This is the one with 96 triangles; the other,
- * `Cube_Mat.3_0`, has 12 and is not used (`24 §7.2`).
+ * `Cube_Mat.3_0`, has 12 and is not used.
  *
  * This is the name **in the file**, which is not the name the loader hands
  * back — see {@link CRATE_MESH_NAME_AS_LOADED}.
@@ -72,8 +72,8 @@ const CRATE_MESH_NAME = 'Cube_10_Mat.3_0'
  * Matching on the file's spelling alone therefore found nothing and threw —
  * and because `CratePile` is the first thing every pool mounts, that threw on
  * the **first frame of every 3D board**, in all four seats, straight into
- * `Board3D`'s error boundary and back to 2D (`24 §7.6.3`). jsdom has no WebGL
- * and `24 §8.1` keeps the suite on the `SceneModel`, so nothing in the tests
+ * `Board3D`'s error boundary and back to 2D. jsdom has no WebGL
+ * and the suite stays on the `SceneModel`, so nothing in the tests
  * ever loaded a `.glb` and nothing said so. The sanitiser is the authority on
  * the runtime name, so it is what the comparison below goes through rather
  * than a second hardcoded spelling that would drift from the file's.
@@ -97,7 +97,7 @@ export interface ModelNormalization {
 }
 
 /**
- * `[HARD-WON]` The pure half of the normalisation of `24 §7.3`.
+ * `[HARD-WON]` The pure half of the normalise-and-ground step.
  *
  * The four models come from four authors. Their pivots are variously centred,
  * cornered and floor-planted and their units are unrelated — dropped in
@@ -108,8 +108,8 @@ export interface ModelNormalization {
  *
  * It is separated from {@link normalizeModel} because a function over a
  * `Box3` can be asserted against synthetic numbers with no renderer, no
- * canvas and no asset fetch, which is what `24 §8.1` asks of everything it
- * can get away with asking it of.
+ * canvas and no asset fetch, which is what the 3D tests ask of everything
+ * they can get away with asking it of.
  *
  * The `0.001` floor on the divisor is not defensive noise: a degenerate axis
  * (a flat plane, an empty group) gives `max === 0`, and an `Infinity` scale
@@ -129,7 +129,7 @@ export function normalizeTransform(bounds: THREE.Box3, targetHeight: number): Mo
 
 /**
  * `[HARD-WON]` The applied half: measure `object`, recentre and ground it,
- * then wrap it in a `Group` carrying the uniform scale (`24 §7.3`).
+ * then wrap it in a `Group` carrying the uniform scale.
  *
  * The wrapper matters. Scaling `object` itself would fight whatever transform
  * the exporter baked into its own root — and all four of these files have one
@@ -192,7 +192,7 @@ function meshesOf(root: THREE.Object3D): THREE.Mesh[] {
  *
  * `CratePile` needs a `BufferGeometry`, not an `Object3D`, because an
  * `InstancedMesh` takes one geometry and draws it N times. So the model's node
- * transforms and the normalisation of `24 §7.3` are baked into the vertices
+ * transforms and the normalise-and-ground step are baked into the vertices
  * here, once per asset load, rather than carried on a parent that instancing
  * has no way to honour.
  *
@@ -234,7 +234,7 @@ function extractCrateGeometry(scene: THREE.Object3D): THREE.BufferGeometry {
 
 /**
  * `[HARD-WON]` The truck's colours, baked into the mesh: **33 primitives
- * across 13 materials become two draw calls** (24 §7.1, AC 19).
+ * across 13 materials become two draw calls**.
  *
  * The previous form of this function merged per material, 33 calls down to 13,
  * and 13 × 2 trucks was 26 of a budget whose whole ceiling is 90 — the largest
@@ -253,7 +253,7 @@ function extractCrateGeometry(scene: THREE.Object3D): THREE.BufferGeometry {
  * triangles between them. They carry no `pbrMetallicRoughness` at all and an
  * `emissiveFactor` instead: white and red. Emission is a material uniform and
  * there is no per-vertex form of it, so folding them in with the rest would
- * put out the truck's lights, and 24 §7.1 is a budget, not a reason to change
+ * put out the truck's lights, and `MAX_DRAW_CALLS` is a budget, not a reason to change
  * what the player sees. They become a second merged mesh in a
  * `MeshBasicMaterial` — unlit flat colour, which is what a fully emissive
  * surface already looked like — for one extra call per truck.
@@ -375,7 +375,7 @@ function bakeTruck(scene: THREE.Object3D): THREE.Group {
  */
 const PERSON_MATERIAL = new THREE.MeshStandardMaterial({
   // The crate grey of `QUANTITY_HEX.inventory`, repeated rather than imported:
-  // 24 §3.8 scopes a quantity hex to crates, and a client is not a quantity.
+  // A quantity hex is for crates only, and a client is not a quantity.
   color: '#8f8b84',
   roughness: 0.75,
   metalness: 0,
@@ -390,7 +390,7 @@ function repaint(root: THREE.Object3D, material: THREE.Material): void {
  * The crate geometry for `CratePile`'s `InstancedMesh`, shared by every pool.
  *
  * Suspends on first call, like every `useGLTF` consumer, so the caller must
- * sit inside the `<Suspense>` boundary `24 §7.4` puts around the scene.
+ * sit inside the `<Suspense>` boundary around the scene.
  */
 export function useCrateGeometry(): THREE.BufferGeometry {
   const { scene } = useGLTF(MODEL_URL.box)
@@ -452,10 +452,10 @@ export function useMoneyModel(): THREE.Group {
 }
 
 /**
- * Starts all four fetches as soon as this module is evaluated (`24 §7.3`).
+ * Starts all four fetches as soon as this module is evaluated.
  *
  * This is safe to do eagerly *because* the module is reachable only through
- * the lazy `Board3D` import of `24 §2.1`: a player who never leaves the 2D
+ * the lazy `Board3D` import: a player who never leaves the 2D
  * board never evaluates it and never fetches the 699 KB. For a player who
  * does, the fetches start with the chunk rather than with the first frame
  * that needs a mesh, which is the difference between one wait and four.

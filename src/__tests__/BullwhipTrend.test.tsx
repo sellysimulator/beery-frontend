@@ -1,11 +1,9 @@
 /**
- * `22-frontend-profile.md` section 2.5 and `CHARTS-PLAN.md` BE-6: the profile's
- * bullwhip trend.
+ * The profile's bullwhip trend (spec §9.9).
  *
- * Covers acceptance criteria 1 (dots follow date order), 2 (null ratios are
- * excluded and counted) and 3 (fewer than two games shows a sentence), and the
- * three failure modes the package adds: dots in list order, a null drawn as 0
- * or 1, and one game's ratio landing in another role's dataset.
+ * Covers: dots follow date order, null ratios are excluded and counted, fewer
+ * than two games shows a sentence; and guards against dots in list order, a
+ * null drawn as 0 or 1, and one game's ratio landing in another role's dataset.
  *
  * `chart.js` and `react-chartjs-2` are not mocked. The builder's output is
  * asserted directly, and the chart's table of plotted values is read through
@@ -55,7 +53,7 @@ describe("buildBullwhipTrendConfig", () => {
     expect(scales.y.type).toBe("logarithmic");
   });
 
-  it("labels the dots in finished_at order, oldest first, whatever order the list arrived in (criterion 1)", () => {
+  it("labels the dots in finished_at order, oldest first, whatever order the list arrived in", () => {
     const config = buildBullwhipTrendConfig(NEWEST_FIRST);
     expect(config.data.labels).toEqual([
       "2026-10-01T10:00:00Z",
@@ -68,14 +66,14 @@ describe("buildBullwhipTrendConfig", () => {
     expect(reversed.data).toEqual(config.data);
   });
 
-  it("does not plot in list order: ratios follow the dates, not the list (failure mode 1)", () => {
+  it("does not plot in list order: ratios follow the dates, not the list", () => {
     const config = buildBullwhipTrendConfig(NEWEST_FIRST);
     const factory = config.data.datasets.find((d) => d.label === "Factory");
     // Oldest first: week-1 wholesaler, then factory 1.5, retailer, factory 4.5.
     expect(factory?.data).toEqual([null, 1.5, null, 4.5]);
   });
 
-  it("puts each ratio in its own role dataset and nowhere else (failure mode 3)", () => {
+  it("puts each ratio in its own role dataset and nowhere else", () => {
     const config = buildBullwhipTrendConfig(NEWEST_FIRST);
     const byRole = Object.fromEntries(
       config.data.datasets.map((d) => [d.label, d.data]),
@@ -112,7 +110,7 @@ describe("buildBullwhipTrendConfig", () => {
     expect(factory.pointStyle).toBe(roleStyle("FACTORY").point);
   });
 
-  it("leaves a null ratio out, never drawing it as 0 or 1 (criterion 2, failure mode 2)", () => {
+  it("leaves a null ratio out, never drawing it as 0 or 1", () => {
     const config = buildBullwhipTrendConfig([
       match(3, "2026-10-03T10:00:00Z", "RETAILER", 2),
       match(2, "2026-10-02T10:00:00Z", "RETAILER", null),
@@ -182,7 +180,7 @@ describe("BullwhipTrend", () => {
     expect(container.textContent).toMatch(/this page/i);
   });
 
-  it("leaves excluded games out of the table and counts each kind in the caption (criterion 2)", () => {
+  it("leaves excluded games out of the table and counts each kind in the caption", () => {
     const matches = [
       match(9, "2026-10-09T10:00:00Z", "RETAILER", 2),
       match(8, "2026-10-08T10:00:00Z", "RETAILER", null),
@@ -226,7 +224,7 @@ describe("BullwhipTrend", () => {
       ],
     ],
   ])(
-    "shows a sentence instead of a chart with %s (criterion 3)",
+    "shows a sentence instead of a chart with %s",
     (_name, matches) => {
       const { container } = render(<BullwhipTrend matches={matches} />);
       expect(

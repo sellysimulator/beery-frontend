@@ -1,16 +1,16 @@
 /**
  * Every geometry, material, texture and dressing dimension the scene draws
- * with, created **once** at module scope (24 §7.4).
+ * with, created **once** at module scope.
  *
  * Tequila's scene recreates materials and geometries inside render, which is
- * the defect 24 §7.4 names: a `new THREE.MeshStandardMaterial()` in a
+ * the defect to avoid: a `new THREE.MeshStandardMaterial()` in a
  * component body is a fresh shader program compiled on the frame a week
  * closes. Everything below is built once per page load and shared by every
  * fixture that wears it, so a re-render of the whole board allocates nothing.
  *
  * ## Why dimensions live here and coordinates do not
  *
- * 24 §8.1 is strict: *a geometry decision made inside `WarehouseScene.tsx`
+ * The rule is strict: *a geometry decision made inside `WarehouseScene.tsx`
  * rather than in `buildSceneModel` is untestable, and is a defect.* Every
  * **position**, **count**, **string** and **hex** the scene draws therefore
  * comes from the `SceneModel`, and none of them are in this file.
@@ -18,7 +18,7 @@
  * What is here is the other half — how wide a pen's rail is, how thick a desk
  * slab is, how tall a roller door stands. The model carries a fixture's
  * centre and kind; it does not carry its dressing, and a pen that is 7 m wide
- * rather than 6 m is not something 24 §9 asserts. Keeping those numbers in one
+ * rather than 6 m is not something the tests assert. Keeping those numbers in one
  * named record rather than scattered through six components is what makes the
  * distinction auditable: if a dimension ever *does* become load-bearing — the
  * way lane spacing and racking height already are — it moves to
@@ -62,7 +62,7 @@ export const UNIT_PLANE = new THREE.PlaneGeometry(1, 1)
 
 /**
  * A unit cylinder, 20 radial segments. The FACTORY's four brewing tanks are
- * four instances of this (24 §3.7): ~800 triangles for the whole brewhouse,
+ * four instances of this: ~800 triangles for the whole brewhouse,
  * zero bytes of download, where a tank model would have been a fifth GLB.
  */
 export const UNIT_CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 20)
@@ -70,8 +70,8 @@ export const UNIT_CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 20)
 /**
  * The backlog pen's warning triangle, flat-extruded.
  *
- * The same glyph the 2D `BacklogIcon` draws, because `19 §3.4` and `19` AC 8
- * are explicit that **colour is never the only signal**: the pen carries the
+ * The same glyph the 2D `BacklogIcon` draws, because spec §9.7
+ * is explicit that **colour is never the only signal**: the pen carries the
  * fence, this mark and the word OWED, and a player who cannot separate
  * `#a8420a` from `#1f6f9c` still reads all three.
  */
@@ -91,7 +91,7 @@ export const WARNING_GLYPH = new THREE.ExtrudeGeometry(WARNING_SHAPE, {
 /**
  * The floor's grid, as **one tiled texture** on one quad.
  *
- * 24 §7.4 names Tequila's 50 drei `<Line>` components for exactly this — 50
+ * Tequila's 50 drei `<Line>` components are the cautionary case here — 50
  * draw calls and 50 objects in the scene graph to draw something a 128 px
  * canvas repeated 30 × 21 times draws for one. Built on first use rather than
  * at module evaluation because it needs a `<canvas>`, and this module is
@@ -138,7 +138,7 @@ function matte(color: string, roughness = 0.9): THREE.MeshStandardMaterial {
 }
 
 /**
- * The four walls (24 §3.1, amended 2026-09-22).
+ * The four walls.
  *
  * This was `ROOM_MATERIAL`, on the **inside** of one box: `BackSide` gave
  * floor, walls and ceiling in one mesh. There is no ceiling any more — the
@@ -162,7 +162,7 @@ export const STRUCTURE_MATERIAL = matte(ARCHITECTURE_HEX.borderStrong, 0.85)
  *  reads against the wall behind it. */
 export const SURFACE_MATERIAL = matte(ARCHITECTURE_HEX.surfaceRaised, 0.8)
 
-/** The RETAILER's south wall, and the only glass in the game (24 §3.4). */
+/** The RETAILER's south wall, and the only glass in the game. */
 export const GLASS_MATERIAL = new THREE.MeshStandardMaterial({
   color: ARCHITECTURE_HEX.surfaceRaised,
   roughness: 0.12,
@@ -174,7 +174,7 @@ export const GLASS_MATERIAL = new THREE.MeshStandardMaterial({
 /**
  * Contact grounding: a dark quad under every pile and every vehicle.
  *
- * 24 §7.4 turns shadows off entirely — Tequila sets `castShadow` on meshes
+ * Shadows are off entirely — Tequila sets `castShadow` on meshes
  * while never enabling `shadows` on its `<Canvas>`, which is dead code that
  * costs nothing and buys nothing. Objects still need to sit *on* the floor
  * rather than hover above it, so the grounding is painted: no shadow map, no
@@ -187,7 +187,7 @@ export const CONTACT_MATERIAL = new THREE.MeshBasicMaterial({
   depthWrite: false,
 })
 
-/** The empty-pallet ghost of 24 §4.2: where the stock goes, when there is
+/** The empty-pallet ghost: where the stock goes, when there is
  *  none. An outline is not nothing, and a bare patch of floor is. */
 export const GHOST_MATERIAL = new THREE.MeshBasicMaterial({
   color: ARCHITECTURE_HEX.borderStrong,
@@ -196,7 +196,7 @@ export const GHOST_MATERIAL = new THREE.MeshBasicMaterial({
 })
 
 /**
- * The prototype every wall-board frame is cloned from (24 §5.5).
+ * The prototype every wall-board frame is cloned from.
  *
  * The ledger wall's frame swaps to `--color-order` for the 400 ms of a week
  * change. That swap is a `.color.set()` on a **clone** taken once per board,
@@ -212,7 +212,7 @@ export const FRAME_MATERIAL = matte(ARCHITECTURE_HEX.borderStrong, 0.8)
  * Memoised because the whole scene uses at most a dozen tints — four accents,
  * four soft accents and six quantity hexes — so the cache holds a dozen
  * materials for the life of the tab rather than one per fixture per render,
- * which is the allocation 24 §7.4 names.
+ * which is the allocation to avoid.
  */
 const tinted = new Map<string, THREE.MeshStandardMaterial>()
 
@@ -228,7 +228,7 @@ function tintedMaterial(hex: string): THREE.MeshStandardMaterial {
  * The role accent, for **architecture**: floor stripe, wall band, desk canopy,
  * sign frame, door leaf, tank band.
  *
- * 24 §3.8's rule is absolute — *an accent hex is only ever applied to
+ * The palette rule is absolute — *an accent hex is only ever applied to
  * architecture; a quantity hex is only ever applied to crates* — and the
  * reason this and `quantityMaterial` are two names over one cache is that the
  * rule should be visible at the call site. `--color-inventory` is the *same*
@@ -241,12 +241,12 @@ export function accentMaterial(hex: string): THREE.MeshStandardMaterial {
 }
 
 /** A quantity hex, for the marks that stand for a number — a pool's crates,
- *  and the warning glyph beside the pile it belongs to (24 §3.8). */
+ *  and the warning glyph beside the pile it belongs to. */
 export function quantityMaterial(hex: string): THREE.MeshStandardMaterial {
   return tintedMaterial(hex)
 }
 
-/* ─── Fog: removed (24 §3.1, amended 2026-09-22) ─── */
+/* ─── Fog: removed ─── */
 
 /**
  * There is no fog any more, and this comment is the reason rather than a
@@ -300,7 +300,7 @@ export const FIXTURE_SIZE = {
   /** The backlog pen: four rails and a gate-less corner, waist high. Wide
    *  enough that a capped 8 × 3 pile stands clear of every rail. */
   pen: { width: 11.6, depth: 5.2, rail: 0.13, height: 1.1 },
-  /** The order desk, its canopy, and the clipboard lying on it (24 §4.3). */
+  /** The order desk, its canopy, and the clipboard lying on it. */
   desk: { width: 4.4, depth: 1.5, height: 1.05, canopyY: 3.1, canopyThickness: 0.22 },
   /** A wall board — the ledger, the team board, the leaderboard on its back. */
   board: { width: 5, height: 4.2, frame: 0.16, thickness: 0.14 },
@@ -310,16 +310,16 @@ export const FIXTURE_SIZE = {
   hatch: { width: 3.6, height: 3.4 },
   /** Racking: uprights, shelf slabs and the footprint of one bay. */
   racking: { width: 5, depth: 1.6, upright: 0.16, shelf: 0.12 },
-  /** A brewing tank (24 §3.7 gives both figures). */
+  /** A brewing tank. */
   tank: { radius: 1.4, height: 4 },
-  /** One of the WHOLESALER's three roller doors (24 §3.5). */
+  /** One of the WHOLESALER's three roller doors. */
   dockDoor: { width: 5.4, height: 5 },
   /** The RETAILER's glass south wall, `y` 0 → 3.5, and its checkout counter. */
   shopfront: { glassHeight: 3.5, counter: { width: 11, depth: 0.9, height: 1.05 } },
-  /** The FACTORY's single dispatch door, which `gameOver` shuts (24 §4.3). */
+  /** The FACTORY's single dispatch door, which `gameOver` shuts. */
   dispatchDoor: { width: 8, height: 5.4 },
   /** The accent spine stripe down the order axis, and the band along the far
-   *  wall — two of the four levers 24 §3.0 gives the role accent. */
+   *  wall — two of the four levers that carry the role accent. */
   spine: { width: 1.6 },
   /**
    * The band rides one metre below the top of the wall, wherever that is.
@@ -330,11 +330,10 @@ export const FIXTURE_SIZE = {
    */
   wallBand: { height: 1, y: HALL.wallHeight - 1 },
   /**
-   * The DISTRIBUTOR's through-aisle, which is now the whole of its south face
-   * (24 §3.6, amended 2026-09-22).
+   * The DISTRIBUTOR's through-aisle, which is now the whole of its south face.
    *
    * Two piers and a lintel made the third of the overhead structures a player
-   * asked to have removed. §3.6's identity — *"the only room you can see all
+   * asked to have removed. The cross-dock's identity — *"the only room you can see all
    * the way through"* — is carried by what is left: a painted aisle the full
    * length of the hall, edged in the accent and arrowed down the middle, and
    * two waist-high kerbs where it leaves the building. A kerb is not a portal:
@@ -356,7 +355,7 @@ export function padSize(gridWidth: number, gridDepth: number): [number, number] 
   return [Math.max(1, gridWidth) * CRATE_PITCH, Math.max(1, gridDepth) * CRATE_PITCH]
 }
 
-/* ─── Merged fixture geometry (24 §7.1, AC 19) ─── */
+/* ─── Merged fixture geometry ─── */
 
 /**
  * One piece of a fixture, as a unit geometry plus the transform that places
@@ -383,12 +382,12 @@ const MERGE_SCALE = new THREE.Vector3()
 
 /**
  * `[HARD-WON]` Several static parts, baked into **one** geometry and therefore
- * one draw call (24 §7.1, AC 19).
+ * one draw call.
  *
  * three.js issues one draw call per mesh whatever geometry and material that
  * mesh shares with its neighbours, so a pen drawn as four rails costs four
- * calls and a hall of nineteen such fixtures costs far more than §7.1's
- * *"fixtures ~14"* ever budgeted. This is the same move `gltfModels.ts` makes
+ * calls and a hall of nineteen such fixtures costs far more than the
+ * *"fixtures ~14"* the budget allows. This is the same move `gltfModels.ts` makes
  * on `truck.glb`'s 33 primitives, applied to the architecture: every part that
  * shares a **material** and never moves is merged, and what is left as a
  * separate mesh is what genuinely differs — a leaf that rolls up, a frame that
@@ -405,7 +404,7 @@ const MERGE_SCALE = new THREE.Vector3()
  * **What this may not do.** Only the *dressing* is merged — the shapes named
  * in `FIXTURE_SIZE` above. A position the `SceneModel` carries stays on the
  * mesh that wears the merged geometry, because baking it here would be exactly
- * the geometry-decision-in-the-renderer 24 §8.1 forbids.
+ * the geometry-decision-in-the-renderer the 3D board forbids.
  */
 export function mergeParts(name: string, parts: readonly MergePart[]): THREE.BufferGeometry {
   const baked = parts.map((part) => {
@@ -436,7 +435,7 @@ export function mergeParts(name: string, parts: readonly MergePart[]): THREE.Buf
 }
 
 /**
- * The hall's four walls, as one geometry (24 §3.1, amended 2026-09-22).
+ * The hall's four walls, as one geometry.
  *
  * The room used to be the inside of a single `BoxGeometry` at `BackSide`,
  * which was one mesh for floor, walls **and ceiling**. A player asked for the
@@ -479,7 +478,7 @@ export const WALLS_GEOMETRY = mergeParts('hall walls', [
 
 /**
  * The shell's two painted accents — the spine stripe down the order axis and
- * the band along the far wall — as one geometry (24 §3.0, §3.1).
+ * the band along the far wall — as one geometry.
  *
  * They wear the same accent material and neither ever moves, so they are one
  * mesh. `SceneShell` places it at the origin: both parts are already in world
@@ -523,12 +522,12 @@ export const SHELL_ACCENT_GEOMETRY = mergeParts('shell accent', [
  * What was structural about them was nothing; what was load-bearing was the
  * **signs they carried**, and those stayed — `gantry-total`, `gantry-receipt`
  * and `gantry-empty` over the bay at `SIGN_HEIGHT.bayTotal`, and the three
- * upstream signs over the gate threshold. They are `PlayerView` figures §4.2
- * requires, not decoration.
+ * upstream signs over the gate threshold. They are `PlayerView` figures,
+ * not decoration.
  */
 
 /**
- * The empty-pallet ghost of 24 §4.2 — four edges of an outline where the stock
+ * The empty-pallet ghost — four edges of an outline where the stock
  * would be — in the flat-on-the-floor frame its group is rotated into.
  */
 export const PALLET_GHOST_GEOMETRY = mergeParts('pallet ghost', [
@@ -555,7 +554,7 @@ export const PALLET_GHOST_GEOMETRY = mergeParts('pallet ghost', [
 ])
 
 /** The four rails of a pen. The warning glyph is **not** here: it takes its
- *  hex from the pool standing inside the pen (24 §3.8). */
+ *  hex from the pool standing inside the pen. */
 export const PEN_RAILS_GEOMETRY = mergeParts('pen rails', [
   {
     geometry: UNIT_BOX,
@@ -580,7 +579,7 @@ export const PEN_RAILS_GEOMETRY = mergeParts('pen rails', [
 ])
 
 /** The desk slab alone — the game-over desk, which has lost the thing you
- *  write an order on (24 §4.3). */
+ *  write an order on. */
 const DESK_SLAB: MergePart = {
   geometry: UNIT_BOX,
   position: [0, FIXTURE_SIZE.desk.height / 2, 0],
@@ -592,7 +591,7 @@ export const DESK_SURFACE_GEOMETRY = mergeParts('desk surface', [DESK_SLAB])
 /**
  * The desk slab **and** the clipboard lying on it, merged — they wear the same
  * surface material, and the clipboard's presence is a two-way switch between
- * two static geometries rather than a mesh that comes and goes (24 §4.3).
+ * two static geometries rather than a mesh that comes and goes.
  */
 export const DESK_SURFACE_WITH_CLIPBOARD_GEOMETRY = mergeParts('desk surface with clipboard', [
   DESK_SLAB,
@@ -626,7 +625,7 @@ export const DESK_POSTS_GEOMETRY = mergeParts('desk posts', [
  * from `RACKING_BAYS` and the heights from `RACKING_HEIGHT`, both frozen in
  * `sceneLayout.ts`, so a tier count names one fixed pair of geometries. The
  * shelves are separate from the uprights because they wear the role's soft
- * accent and the uprights wear structural grey (24 §3.8).
+ * accent and the uprights wear structural grey.
  *
  * These are in **world** coordinates, as `Racking.tsx` has always been: the
  * bays are placed by the layout and not by the fixture's own centre.
@@ -687,7 +686,7 @@ export const BREWHOUSE_TANKS_GEOMETRY = mergeParts(
 )
 
 /** The four accent bands, at eye height, so the row reads as this role's
- *  brewhouse and not as four grey drums (24 §3.7). */
+ *  brewhouse and not as four grey drums. */
 export const BREWHOUSE_BANDS_GEOMETRY = mergeParts(
   'brewhouse bands',
   SUPPLY_LANE_X.map((x: number) => ({
@@ -708,7 +707,7 @@ export const SHOPFRONT_MULLIONS_GEOMETRY = mergeParts(
   })),
 )
 
-/** The WHOLESALER's three roller-door frames (24 §3.5), in the wall's frame. */
+/** The WHOLESALER's three roller-door frames, in the wall's frame. */
 export const DOCK_FRAMES_GEOMETRY = mergeParts(
   'dock frames',
   DOCK_DOOR_X.map((x) => ({
@@ -723,7 +722,7 @@ export const DOCK_FRAMES_GEOMETRY = mergeParts(
  *
  * All three roll up together — `doorClosed` is `gameOver`, which is one state
  * for the whole hall — so the thing that moves is the mesh's own `y`, and
- * three leaves that move as one are one mesh (24 §4.3).
+ * three leaves that move as one are one mesh.
  */
 export const DOCK_LEAVES_GEOMETRY = mergeParts(
   'dock leaves',
@@ -736,14 +735,14 @@ export const DOCK_LEAVES_GEOMETRY = mergeParts(
 
 /**
  * The DISTRIBUTOR's through-aisle: five arrows down `x = 0` and the two edge
- * stripes that make them a lane (24 §3.6, amended 2026-09-22).
+ * stripes that make them a lane.
  *
  * In **world** coordinates and not the south face's, because the aisle runs
  * the length of the hall from the receiving bay to the dispatch bay and
  * straight past the order desk. With the piers and their lintel removed this
- * is what carries §3.6's identity — *"the only room you can see all the way
+ * is what carries the cross-dock's identity — *"the only room you can see all the way
  * through"* — together with the three-tier racking either side of it, which is
- * the other half of what AC 8 asks a player to recognise the seat by.
+ * the other half of what a player recognises the seat by.
  *
  * Merged, so the whole aisle is one draw call. The stripes stand off the
  * spine stripe the shell already paints down `x = 0`: they sit at `±3.5`,

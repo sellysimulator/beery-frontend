@@ -124,7 +124,7 @@ export const LEAD_TIME_HELP =
 
 /**
  * The beta slider's question. The bot's supply line is the beer already
- * shipped to it and still in transit (`08-bot-agent.md`): orders its supplier
+ * shipped to it and still in transit (spec §8.5): orders its supplier
  * has not shipped yet are not in it, so "what it has ordered" would overstate
  * what the knob does.
  */

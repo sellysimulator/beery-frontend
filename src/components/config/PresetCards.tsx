@@ -18,7 +18,7 @@ export interface PresetCardsProps {
  * The three presets, plus *Custom*.
  *
  * Selecting a preset replaces the whole form and sets `preset_name`; editing
- * anything afterwards clears it (`18 section 2`, AC 2 and AC 3). That pairing
+ * anything afterwards clears it. That pairing
  * is the point of the section: a host must not believe they are running Classic
  * MIT when they are not, because "we ran the standard scenario" is the claim
  * the whole debrief rests on.

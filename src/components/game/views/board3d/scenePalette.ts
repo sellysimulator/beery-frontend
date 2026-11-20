@@ -6,12 +6,12 @@
  * a string three.js cannot parse, and the mesh renders black or white
  * depending on the material. `OwnHistoryChart.tsx` already documents exactly
  * this for Chart.js and hardcodes its three series colours for the same
- * reason. `scenePalette.ts` is 24 §3.8's equivalent for WebGL, with the same
+ * reason. `scenePalette.ts` is the equivalent for WebGL, with the same
  * discipline: **every value below names the `index.css` token it mirrors**, so
  * when the palette moves the two files can be diffed by eye rather than by
  * memory.
  *
- * ## The architecture/crates rule (24 §3.8)
+ * ## The architecture/crates rule
  *
  * Two of these hexes collide with role accents. `--color-inventory` is the
  * *same* hex as `--color-role-retailer`, and `--color-backlog` `#a8420a` is one
@@ -30,7 +30,7 @@
  * reaches for `ARCHITECTURE_HEX`, a crate pool reaches for `QUANTITY_HEX`, and
  * a module that reaches into the wrong group is visible in the diff.
  *
- * And, per `19 §3.4` and `19` AC 8, **colour is never the only signal.** The
+ * And, per spec §9.7, **colour is never the only signal.** The
  * backlog pen additionally carries its fence, the warning glyph the 2D
  * `BacklogIcon` draws, and the word OWED in text.
  */
@@ -57,12 +57,12 @@ export const ARCHITECTURE_HEX = {
    *  the hall's one hemisphere light. */
   surfaceSunken: '#f2ede1',
   /**
-   * The open sky over the hall (24 §3.1, amended 2026-09-22).
+   * The open sky over the hall.
    *
    * **The one hex in this file with no `index.css` token behind it**, and the
    * exception is deliberate rather than an oversight: the 2D board has no sky,
    * so the theme has no token to mirror. It is named here, with this comment,
-   * because 24 §6.2 forbids inventing a hex at the call site — a cyan typed
+   * because no hex may be invented at the call site — a cyan typed
    * into `<color attach="background">` would be exactly that.
    *
    * A mid cyan, not a saturated one: the hall's walls are `--color-border`
@@ -76,7 +76,7 @@ export const ARCHITECTURE_HEX = {
   border: '#e2dac8',
   /** `--color-border-strong` — fences, racking uprights, door frames. */
   borderStrong: '#c9bda3',
-  /** `--color-success` — the SUBMITTED stamp on the desk (24 §4.3). */
+  /** `--color-success` — the SUBMITTED stamp on the desk. */
   success: '#04705a',
 } as const
 
@@ -101,7 +101,7 @@ export const QUANTITY_HEX = {
   backlog: '#a8420a',
   /** `--color-supply-line` — receiving-lane crates. */
   supplyLine: '#8a6d00',
-  /** `--color-order` — order-road markers, and the week-change flash on the ledger frame (24 §5.5). */
+  /** `--color-order` — order-road markers, and the week-change flash on the ledger frame. */
   order: '#c98a00',
   /** `--color-warning` — production-queue crates, FACTORY only. */
   warning: '#9a6800',

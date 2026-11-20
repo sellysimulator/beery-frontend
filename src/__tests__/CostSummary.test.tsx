@@ -1,5 +1,5 @@
 /**
- * The "Final cost per role and for the chain" cards (`21 §2.1`).
+ * The "Final cost per role and for the chain" cards (spec §9.8).
  *
  * A bot's card used to come out a different shape from a player's: the live
  * results had no participant entry for a bot seat, so its card had no name

@@ -74,7 +74,7 @@ function reconnectSocket(): void {
 /**
  * Fire-and-forget profile refresh. The backend derives `firebase_uid` from the
  * verified ID token attached by the http interceptor; the body carries only
- * display fields (`02-identity-and-auth.md`). The result is ignored on purpose
+ * display fields. The result is ignored on purpose
  * — a failed upsert must not block sign-in.
  */
 function syncUserWithBackend(user: User): void {

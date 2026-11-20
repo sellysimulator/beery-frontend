@@ -2,28 +2,27 @@ import { MOVEMENT_BOUNDS } from './sceneLayout'
 import type { InteractTarget, InteractTargetId } from './sceneModel'
 
 /**
- * The first-person controller's decisions, with the renderer taken out of them
- * (24 §5.1, §8.1).
+ * The first-person controller's decisions, with the renderer taken out of them.
  *
  * `PlayerController.tsx` drives a three.js camera and `WarehouseScene.tsx`
  * drives a lane lift; neither can be imported by a test, because jsdom has no
- * WebGL and 24 §8.1 draws the line there — *assert the object, not the
+ * WebGL and the tests draw the line there — *assert the object, not the
  * renderer*. Everything those two files decided **before** touching the camera
- * lives here instead, so 24 §10's failure modes 6, 9 and 10 are assertable
+ * lives here instead, so these three rules are assertable
  * against plain values:
  *
- * - **FM 6** — `isTypingTarget`, in **one** copy. It had two, one private to
+ * - **The typing guard** — `isTypingTarget`, in **one** copy. It had two, one private to
  *   `PlayerController.tsx` and one private to `Board3D.tsx`, each guarding the
  *   keys its own file bound. Two copies of a guard are two guards that drift,
- *   and the cost of this one drifting is the `[HARD-WON]` bug 24 §5.1 names by
- *   name: typing `8` then `W` into the order input walks the player across the
+ *   and the cost of this one drifting is the 3D board's `[HARD-WON]` bug:
+ *   typing `8` then `W` into the order input walks the player across the
  *   hall mid-decision. One copy, imported twice.
- * - **FM 9** — `shouldReportNearest`, the comparison behind the controller's
+ * - **Change-detected proximity** — `shouldReportNearest`, the comparison behind the controller's
  *   `reported` ref. The ref stays in the component, because a ref is state and
  *   state belongs to the thing that renders; the *decision* is here, so a test
  *   can prove an unchanged id produces no call. **Never call `setState`
  *   unconditionally from `useFrame`** (Tequila defect 8).
- * - **FM 10** — `shouldAnimateIdle`, so the rule itself is assertable rather
+ * - **Reduced motion** — `shouldAnimateIdle`, so the rule itself is assertable rather
  *   than the toggle's warning copy, which is a different sentence in a
  *   different file.
  *
@@ -32,7 +31,7 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  * out. A clamp that only ever runs inside `useFrame` is a clamp no test has
  * ever seen hold.
  *
- * The touch controls of 24 §5.7 add three more decisions here and no second
+ * The touch controls add three more decisions here and no second
  * walk: `mergeHeldKeys` folds the on-screen pad's walking buttons into the
  * keyboard's set so `stepPlayer` stays the one walk authority, and
  * `turnAxis` / `stepYaw` turn the camera while a turn button is held.
@@ -44,11 +43,11 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  * shape.
  */
 
-/** 24 §5.1. Metres per second, scaled by `delta` so the walk is the same on a
+/** Metres per second, scaled by `delta` so the walk is the same on a
  *  144 Hz panel as on a throttled tab. */
 export const MOVE_SPEED = 7
 
-/** 24 §5.1: yaw is unclamped, pitch is not. Looking further up than this in a
+/** Yaw is unclamped, pitch is not. Looking further up than this in a
  *  room with a ceiling shows the player nothing and loses them the floor. */
 export const PITCH_MIN = -Math.PI / 3
 export const PITCH_MAX = Math.PI / 3.2
@@ -70,14 +69,14 @@ export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * The media query 24 §7.6.2 names, exported so the test asserting FM 10 can
+ * The reduced-motion media query, exported so the test asserting the rule can
  * match on the same string the scene subscribes to rather than on a second
  * copy of it.
  */
 export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 /**
- * The media query that puts the on-screen movement pad on screen (24 §5.7).
+ * The media query that puts the on-screen movement pad on screen.
  *
  * `any-pointer`, not `pointer`: `pointer` reports only the *primary* input, so
  * a tablet with a keyboard cover or a touch laptop with a trackpad would be
@@ -88,12 +87,12 @@ export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
  */
 export const COARSE_POINTER_QUERY = '(any-pointer: coarse)'
 
-/** 24 §5.7. Radians per second while a turn button is held — Samby's 1.7, a
+/** Radians per second while a turn button is held — Samby's 1.7, a
  *  full turn in under four seconds, slow enough to stop on a sign. */
 export const TURN_SPEED = 1.7
 
 /**
- * The six buttons of the on-screen pad (24 §5.7), in the order they render:
+ * The six buttons of the on-screen pad, in the order they render:
  * turn, walk, turn on the top row; strafe, walk back, strafe on the bottom.
  *
  * These are **not** keyboard keys and are kept in a set of their own, owned by
@@ -113,7 +112,7 @@ export type PadControl =
 
 /**
  * Which keyboard key each walking button stands for, so `stepPlayer` stays the
- * one walk authority (24 §5.1). The pad does not get a second integration with
+ * one walk authority. The pad does not get a second integration with
  * its own speed and its own diagonal; it presses `W` on the player's behalf.
  * The two turn buttons have no keyboard twin — the arrows walk, and that
  * mapping is unchanged — so they are `turnAxis`'s, not this table's.
@@ -157,7 +156,7 @@ export function turnAxis(pad: ReadonlySet<PadControl>): number {
  *
  * Positive yaw turns left, matching the camera's `YXZ` composition and the
  * drag-look's own sign (dragging right lowers yaw and turns right). Yaw stays
- * unclamped, as 24 §5.1 has it. Turning is **look**, not movement, so the
+ * unclamped. Turning is **look**, not movement, so the
  * controller applies it while paused or after the game ends too — the same
  * rule that keeps drag-look alive then.
  */
@@ -173,10 +172,10 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Is this event coming out of something the player is typing into?
  *
- * The `[HARD-WON]` guard of 24 §5.1 (FM 6), extended to `SELECT` as that
- * section requires and to `contentEditable` because the cost of being wrong is
- * a player walking away from a half-typed decision. A superset of what §5.1
- * names, and never less.
+ * The `[HARD-WON]` typing guard: INPUT, TEXTAREA and `SELECT`, and also
+ * `contentEditable` because the cost of being wrong is
+ * a player walking away from a half-typed decision. A superset of what the
+ * rule names, and never less.
  *
  * The `instanceof` is the guard's own guard: a `keydown` dispatched at
  * `window` has a `Window` as its target, and `document` has no `tagName` at
@@ -202,7 +201,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   )
 }
 
-/** 24 §5.1's pitch clamp, on its own so the numbers are readable from a test
+/** The pitch clamp, on its own so the numbers are readable from a test
  *  instead of inferred from a camera's rotation after a drag. */
 export function clampPitch(pitch: number): number {
   return clamp(pitch, PITCH_MIN, PITCH_MAX)
@@ -243,7 +242,7 @@ export function movementAxes(held: ReadonlySet<string>): MovementAxes {
  *
  * `yaw` is the heading in radians about the world's up axis, matching the
  * camera's `YXZ` composition — `yaw = 0` faces `−z`, straight down the order
- * axis from the spawn point (24 §3.1).
+ * axis from the spawn point.
  *
  * Two things this does that a naive integration does not:
  *
@@ -291,7 +290,7 @@ export function stepPlayer(
  * Flat distance, on each target's own `radius`: a target's prompt should not
  * depend on the player's eye height, which is pinned anyway, and the radius
  * arrives on the model so the controller never reaches for `INTERACT_DISTANCE`
- * itself (24 §8.1).
+ * itself.
  */
 export function nearestTargetId(
   position: PlayerPosition,
@@ -312,7 +311,7 @@ export function nearestTargetId(
 }
 
 /**
- * **The whole of the FM 9 fix, in one comparison.**
+ * **The whole of the proximity fix, in one comparison.**
  *
  * `PlayerController` keeps the last reported id in a `useRef` and calls
  * `onNearObject` only when this returns true, so React hears from the render
@@ -332,13 +331,13 @@ export function shouldReportNearest(
 }
 
 /**
- * Whether any non-essential motion runs (24 §7.6.2, FM 10).
+ * Whether any non-essential motion runs (spec §9.7).
  *
- * This board has **no** idle animation and no head-bob, and 24 §5.1 says never
+ * This board has **no** idle animation and no head-bob, and the rule is never
  * to introduce one at all — a cheaper promise to keep than to break. The only
- * motion the rule has to gate today is the week-change lane lift of §5.5,
+ * motion the rule has to gate today is the week-change lane lift,
  * which under `prefers-reduced-motion: reduce` is dropped and the colour flash
- * carries §5.5 alone. The predicate is named for the rule rather than for its
+ * carries the signal alone. The predicate is named for the rule rather than for its
  * single caller so that the day someone adds a second animation, the place to
  * ask the question is already here.
  */

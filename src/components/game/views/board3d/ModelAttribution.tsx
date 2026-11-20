@@ -15,7 +15,7 @@ interface ModelCredit {
  *
  * Re-typing a licence record is how a licence record gets quietly wrong, so
  * these strings are the file's strings — title, author, author page and source
- * page, character for character. If a model is ever re-exported (24 §6.1), the
+ * page, character for character. If a model is ever re-exported, the
  * `asset.extras` must survive the round trip and this list must be re-copied
  * from it, not edited by hand.
  */
@@ -63,7 +63,7 @@ const LINK_REL = 'noopener noreferrer'
 const LINK_CLASS = 'underline underline-offset-2 hover:text-brand'
 
 /**
- * The model credits, reachable in-app (24 §6.1, AC 20).
+ * The model credits, reachable in-app (spec §9.7).
  *
  * CC-BY is an attribution licence: shipping these four meshes without visible
  * credit is a licence breach, not a polish item. It is a `<details>` rather

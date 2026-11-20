@@ -159,8 +159,8 @@ export interface DemandEditorProps {
  *
  * Changing the generator sends the new kind alone, carrying nothing across:
  * the server replaces the demand object and fills every parameter with that
- * kind's declared defaults (`18 section 3.1a`), and a `step_week` surviving
- * into a `SEASONAL` config is a scenario nobody described (AC 7, FM 2). Until
+ * kind's declared defaults, and a `step_week` surviving
+ * into a `SEASONAL` config is a scenario nobody described. Until
  * the stored config comes back with them, the parameter block says it is
  * waiting; this panel keeps no copy of the defaults (2026-11-03).
  *
@@ -170,7 +170,7 @@ export interface DemandEditorProps {
  *
  * `CUSTOM` has one more client-side block: a series shorter than
  * `duration_weeks` is refused by the server, and a host should not have to
- * submit to find that out (`18 section 3.2`). Every other range here is the
+ * submit to find that out. Every other range here is the
  * server's own (`useLimits`), checked beside the field before anything is sent.
  */
 export function DemandEditor({

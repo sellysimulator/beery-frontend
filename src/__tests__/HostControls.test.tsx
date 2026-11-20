@@ -1,22 +1,19 @@
 /**
- * `20-frontend-host-console.md §2.2` — `HostControls`, the five privileged
- * actions and their confirmation dialogs.
+ * `HostControls`, the five privileged actions and their confirmation dialogs
+ * (spec §9.6).
  *
- * Covers acceptance criteria 6, 7, 8, 9, 10, 11 and 12, and failure modes 3, 4
- * and 6 (the "what it emits" half; the "it renders" half is in
- * `HostConsole.test.tsx`).
+ * This file covers what the controls emit; how the console renders is in
+ * `HostConsole.test.tsx`.
  *
  * Harness notes:
- *  - The controls are reached through `HostConsole`, which is what `§2.0`
- *    freezes: it takes no props, and `HostControls`' own props are not
- *    declared anywhere, so a test that constructed it directly would be
- *    guessing at a surface the section never froze.
+ *  - The controls are reached through `HostConsole`, which takes no props;
+ *    `HostControls`' own props are not declared anywhere, so a test that
+ *    constructed it directly would be guessing at a surface nothing fixes.
  *  - `socket.io-client` is replaced by a recorder, so `src/api/socket.ts`,
  *    `src/api/socketHandlers.ts` and `src/api/games.ts` run as real,
- *    un-mocked code. Emits are read back as the wire payloads `12 §2`
- *    declares.
+ *    un-mocked code. Emits are read back as wire payloads (spec §11.2).
  *  - `window.confirm` is deliberately left alone and asserted never to be
- *    called: `§2.2` makes the confirmation rendered DOM.
+ *    called: the confirmation is rendered DOM.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
@@ -143,7 +140,7 @@ function componentFrom(mod: unknown, name: string): Renderable {
   const exported = mod as Record<string, unknown>;
   const found = exported[name] ?? exported.default;
   if (typeof found !== 'function') {
-    throw new Error(`20 §2.0: \`src/pages/${name}.tsx\` must export \`${name}\`, taking no props.`);
+    throw new Error(`\`src/pages/${name}.tsx\` must export \`${name}\`, taking no props.`);
   }
   return found as Renderable;
 }
@@ -292,7 +289,7 @@ function nextSeq(): number {
 function dispatch(event: string, payload?: unknown): void {
   const listeners = [...(rec.listeners.get(event) ?? [])];
   if (listeners.length === 0) {
-    throw new Error(`Nothing is listening for "${event}" (12 §2, registered by section 16).`);
+    throw new Error(`Nothing is listening for "${event}" (the socket handlers register it).`);
   }
   act(() => {
     for (const cb of listeners) cb(payload);
@@ -372,7 +369,7 @@ function controlsIn(root: ParentNode, re: RegExp): HTMLElement[] {
 function control(re: RegExp, what: string, root: ParentNode = document.body): HTMLElement {
   const matches = controlsIn(root, re).sort((a, b) => nameOf(a).length - nameOf(b).length);
   if (matches.length === 0) {
-    throw new Error(`20 §2.2: no control named "${what}" (${re}). The console rendered: ${bodyText()}`);
+    throw new Error(`No control named "${what}" (${re}). The console rendered: ${bodyText()}`);
   }
   return matches[0];
 }
@@ -399,17 +396,17 @@ function roleCard(role: Role): HTMLElement {
     })
     .sort((a, b) => textOf(a).length - textOf(b).length)[0];
   if (!found) {
-    throw new Error(`20 §2.1: no card for ${role}. The console rendered: ${bodyText()}`);
+    throw new Error(`No card for ${role}. The console rendered: ${bodyText()}`);
   }
   return found;
 }
 
-/** `§2.2`: a modal with `role="dialog"` and `aria-modal="true"`. */
+/** A modal with `role="dialog"` and `aria-modal="true"`. */
 function dialog(): HTMLElement {
   const found = document.querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]');
   if (!found) {
     throw new Error(
-      '20 §2.2: the confirmation must be rendered DOM — "a modal with role=\\"dialog\\", ' +
+      'The confirmation must be rendered DOM — "a modal with role=\\"dialog\\", ' +
         'aria-modal=\\"true\\", an accessible name, a confirm and a cancel" — never ' +
         `window.confirm. Nothing with role="dialog" was rendered. Body: ${bodyText()}`,
     );
@@ -433,7 +430,7 @@ function confirmButton(): HTMLElement {
     (el) => nameOf(el) !== '' && !CANCEL_RE.test(nameOf(el)) && !/^(close|×|x)$/i.test(nameOf(el)),
   );
   if (candidates.length === 0) {
-    throw new Error(`20 §2.2: the confirmation dialog must offer a confirm. It rendered: ${textOf(dialog())}`);
+    throw new Error(`The confirmation dialog must offer a confirm. It rendered: ${textOf(dialog())}`);
   }
   return candidates[candidates.length - 1];
 }
@@ -446,7 +443,7 @@ function emitsOf(event: string): Array<Record<string, unknown>> {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-/** `§2.2`: "The confirmation is rendered DOM, never `window.confirm`." */
+/** "The confirmation is rendered DOM, never `window.confirm`." */
 let nativeConfirmCalls = 0;
 
 beforeAll(async () => {
@@ -476,10 +473,10 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 7 — Pause when running, Resume when paused
+// Pause when running, Resume when paused
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 7: Pause is enabled only when running, Resume only when paused', () => {
+describe('Pause is enabled only when running, Resume only when paused', () => {
   it('offers an enabled Pause and no enabled Resume while RUNNING', () => {
     renderAt('RUNNING');
 
@@ -496,10 +493,10 @@ describe('CRITERION 7: Pause is enabled only when running, Resume only when paus
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 6 — every control emits its event with the stored host_secret
+// Every control emits its event with the stored host_secret
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 6: every control emits its event carrying the stored host_secret', () => {
+describe('every control emits its event carrying the stored host_secret', () => {
   it('Pause emits pause_game', async () => {
     const user = userEvent.setup();
     renderAt('RUNNING');
@@ -563,10 +560,10 @@ describe('CRITERION 6: every control emits its event carrying the stored host_se
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 8 — Close this week now, when everyone has decided
+// Close this week now, when everyone has decided
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 8: Close this week now is disabled once all four roles have submitted', () => {
+describe('Close this week now is disabled once all four roles have submitted', () => {
   it('is enabled while at least one role is awaited', () => {
     renderAt('RUNNING');
 
@@ -593,10 +590,10 @@ describe('CRITERION 8: Close this week now is disabled once all four roles have 
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 9 and 12, and failure mode 4 — what the confirmations say
+// What the confirmations say
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 9 / FAILURE MODE 4: the force-close confirmation names the awaited roles', () => {
+describe('the force-close confirmation names the awaited roles', () => {
   it('names Distributor and Factory, and not the two who have decided', async () => {
     const user = userEvent.setup();
     renderAt('RUNNING');
@@ -646,7 +643,7 @@ describe('CRITERION 9 / FAILURE MODE 4: the force-close confirmation names the a
   });
 });
 
-describe('CRITERION 12: the end-the-game confirmation names the current week', () => {
+describe('the end-the-game confirmation names the current week', () => {
   it('states the week the game would end at', async () => {
     const user = userEvent.setup();
     renderAt('RUNNING');
@@ -684,10 +681,10 @@ describe('CRITERION 12: the end-the-game confirmation names the current week', (
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 10 and 11 — Swap in a bot
+// Swap in a bot
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 10: the swap confirmation names the player and says it cannot be undone', () => {
+describe('the swap confirmation names the player and says it cannot be undone', () => {
   it('names the player in that seat', async () => {
     const user = userEvent.setup();
     renderAt('RUNNING');
@@ -711,7 +708,7 @@ describe('CRITERION 10: the swap confirmation names the player and says it canno
   });
 });
 
-describe('CRITERION 11: Swap in a bot is disabled for a role that is already a bot', () => {
+describe('Swap in a bot is disabled for a role that is already a bot', () => {
   it('is disabled on the Factory card when host_state says it is a bot', () => {
     renderAt(
       'RUNNING',
@@ -734,7 +731,7 @@ describe('CRITERION 11: Swap in a bot is disabled for a role that is already a b
     }
   });
 
-  it('is available while paused, per §2.2', () => {
+  it('is available while paused', () => {
     renderAt('PAUSED');
 
     expect(isEnabled(control(/swap in a bot|swap.*bot/i, 'Swap in a bot', roleCard('DISTRIBUTOR')))).toBe(true);
@@ -742,10 +739,10 @@ describe('CRITERION 11: Swap in a bot is disabled for a role that is already a b
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 3 — nothing destructive happens without a confirmation
+// Nothing destructive happens without a confirmation
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 3: force_close_week, substitute_bot and end_game_early emit only after the confirmation is accepted', () => {
+describe('force_close_week, substitute_bot and end_game_early emit only after the confirmation is accepted', () => {
   const destructive: Array<[string, string, (root: ParentNode) => HTMLElement]> = [
     ['force_close_week', 'Close this week now', () => control(/close this week/i, 'Close this week now')],
     [
@@ -787,7 +784,7 @@ describe('FAILURE MODE 3: force_close_week, substitute_bot and end_game_early em
     expect(noDialog()).toBe(true);
   });
 
-  it('never uses window.confirm — the warning is rendered DOM (§2.2)', async () => {
+  it('never uses window.confirm — the warning is rendered DOM', async () => {
     const user = userEvent.setup();
     renderAt('RUNNING');
 
@@ -821,10 +818,10 @@ describe('FAILURE MODE 3: force_close_week, substitute_bot and end_game_early em
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 6 — authority, not a local host guess (D18)
+// Authority, not a local host guess (D18)
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 6: the controls are present without a secret, but never emit without authority', () => {
+describe('the controls are present without a secret, but never emit without authority', () => {
   it('renders the controls with no host_secret in storage', () => {
     window.sessionStorage.clear();
     renderAt('RUNNING');
@@ -840,7 +837,7 @@ describe('FAILURE MODE 6: the controls are present without a secret, but never e
 
     await user.click(control(/^pause$|pause the game|pause/i, 'Pause'));
 
-    // `§2.2`: every control carries the stored `host_secret`. There is none
+    // Every control carries the stored `host_secret`. There is none
     // yet, and "an emit with no authority at all" is what must not happen.
     expect(rec.emits.filter((e) => e.event === 'pause_game')).toHaveLength(0);
   });

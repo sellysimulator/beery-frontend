@@ -4,16 +4,16 @@ import { ROLE_LABEL } from '../lobby/roleCopy'
 import { FlowLane, FlowLegend } from '../game/ChainFlow'
 
 export interface ChainDiagramProps {
-  /** `host_state.roles` — every figure here is one of its fields (§3.1). */
+  /** `host_state.roles` — every figure here is one of its fields. */
   roles: Record<Role, HostRoleView>
-  /** Projector styling: larger type, thicker rules (§2.4, §3.5). */
+  /** Projector styling: larger type, thicker rules. */
   presenting?: boolean
 }
 
 /**
  * The warning mark that rides with every backlog figure.
  *
- * Backlog must never be signalled by colour alone (§3.5, FM 9): on a projector
+ * Backlog must never be signalled by colour alone: on a projector
  * washed out by daylight, and for a colour-blind viewer, the shape and the word
  * *Backlog* are the signal and the red is decoration.
  */
@@ -48,7 +48,7 @@ function BacklogIcon({ large }: { large: boolean }): ReactElement {
  * How full a link's bar is drawn, as a percentage of the fullest link.
  *
  * Geometry, not a game figure: no number derived here is ever rendered as
- * text or sent anywhere (`00-conventions.md §4`). Every quantity on the
+ * text or sent anywhere. Every quantity on the
  * diagram is printed straight out of `host_state`.
  */
 function barWidth(value: number, peak: number): string {
@@ -58,7 +58,7 @@ function barWidth(value: number, peak: number): string {
 
 /**
  * The chain, end to end: Customer → Retailer → Wholesaler → Distributor →
- * Factory, with live inventory and backlog on each link (§2.1).
+ * Factory, with live inventory and backlog on each link (spec §9.6).
  *
  * Between the cards run the same animated links as the player's banner
  * (`game/ChainFlow.tsx`): sticky-note orders travel upstream towards the
@@ -68,14 +68,14 @@ function barWidth(value: number, peak: number): string {
  * afterwards.
  *
  * It shows no cost and no order quantity, in either mode, so that the same
- * component can face a room full of players (§2.4, FM 1 and 2).
+ * component can face a room full of players.
  *
  * Off the projector each lane between two roles carries two counts, both for
- * what is moving along *that* link (§2.1b). Beer on the way is the downstream
+ * what is moving along *that* link. Beer on the way is the downstream
  * role's `supply_line`: its supplier's shipments travelling to it. Orders in
  * flight is the upstream role's `orders_in_flight`, which on the host view is
  * that role's own order pipeline — the orders its downstream customer placed
- * that are still travelling to it (`07 §3.8`). Reading the downstream role's
+ * that are still travelling to it (spec §9.6). Reading the downstream role's
  * `orders_in_flight` there instead would print every order count one link too
  * high. The Customer–Retailer lane carries no counts: the Retailer takes
  * customer demand directly and has no order pipeline.

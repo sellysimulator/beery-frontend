@@ -7,28 +7,28 @@ import SettlementRecap from '../../SettlementRecap'
 import WaitingForOthers from '../../WaitingForOthers'
 import type { BoardViewProps } from '../Board2D'
 
-/** The three interact targets of 24 §3.2 that open a DOM panel. */
+/** The three interact targets that open a DOM panel. */
 export type Board3DPanelId = 'order-desk' | 'ledger-wall' | 'team-board'
 
 export interface Board3DPanelsProps extends BoardViewProps {
   /**
    * The open panels, oldest first. A stack rather than a single id because
-   * 24 §5.3 says `Escape` closes *the most recently opened* panel, which is
+   * `Escape` closes *the most recently opened* panel, which is
    * only a meaningful sentence if more than one can be open.
    */
   open: readonly Board3DPanelId[]
   onClose(panel: Board3DPanelId): void
   /**
    * The canvas wrapper, so closing can hand focus back to the thing that was
-   * driving the camera (24 §5.3). It is the scene's keyboard host, not the
-   * `<canvas>` itself, which is `aria-hidden` (§5.4).
+   * driving the camera. It is the scene's keyboard host, not the
+   * `<canvas>` itself, which is `aria-hidden`.
    */
   canvasRef: RefObject<HTMLElement | null>
 }
 
 /**
  * Each panel's heading. Exported because the HUD's Open button names the panel
- * it opens by this same title (24 §5.7) — one copy, so the button and the
+ * it opens by this same title — one copy, so the button and the
  * heading it opens onto cannot disagree.
  */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -43,7 +43,7 @@ export const PANEL_TITLE: Record<Board3DPanelId, string> = {
  *
  * Three fixed, non-overlapping berths rather than one modal slot: a player who
  * walked to the ledger wall and then to the desk should be able to read the
- * settlement while typing the order, which is the whole argument of §5.3 for
+ * settlement while typing the order, which is the whole argument for
  * reusing the 2D components instead of summarising them in-scene. They sit at
  * `z-30`, under `PausedOverlay`'s `z-40`, because a paused game is not a game
  * you can act in.
@@ -53,7 +53,7 @@ export const PANEL_TITLE: Record<Board3DPanelId, string> = {
  * most recently opened (`TOP_PANEL_LAYER`), which is also the one `Escape`
  * closes. Heights use `dvh`, not `vh`: on a phone `100vh` counts the space
  * behind the browser's own toolbar, and a panel sized to it hides its last
- * row — the Submit button — under that toolbar (24 §5.7). The order desk sits
+ * row — the Submit button — under that toolbar. The order desk sits
  * one toggle-height up below `lg`, because there it spans the corner the
  * 2D/3D toggle (`z-50`) occupies, and the toggle would cover its button.
  */
@@ -70,12 +70,12 @@ const PANEL_POSITION: Record<Board3DPanelId, string> = {
 }
 
 /** The layer of an open panel: the most recently opened one above the rest,
- *  all of them under `PausedOverlay`'s `z-40` (§5.3, §5.7). */
+ *  all of them under `PausedOverlay`'s `z-40`. */
 const TOP_PANEL_LAYER = 'z-[35]'
 const PANEL_LAYER = 'z-30'
 
 /**
- * What the focus move of §5.3 counts as "the panel's first focusable element".
+ * What the panel's focus move counts as "the panel's first focusable element".
  * Deliberately literal: the first thing a `Tab` would reach inside the wrapper,
  * which is the panel's own Close button.
  */
@@ -83,7 +83,7 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
- * The one-DOM-copy layer (24 §5.4) — the most load-bearing idea in this board.
+ * The one-DOM-copy layer (spec §9.7) — the most load-bearing idea in this board.
  *
  * A WebGL scene is opaque to a screen reader and first-person WASD is not an
  * accessible interaction model, and this file does not pretend otherwise. The
@@ -96,15 +96,15 @@ const FOCUSABLE =
  * That is not a saving, it is a correctness property. Rendering the panels
  * twice — once hidden for the reader, once visible for the player — would put
  * two `aria-label="What you have"` landmarks and two copies of the history
- * table in the document, and §9 AC 17 asserts the reader reaches each of them
+ * table in the document, and the reader must reach each of them
  * *exactly once*. It would also give the week two `DecisionForm`s with the same
  * remount key and two `<input>`s with the same label.
  *
  * Nothing here is a 3D re-implementation of a form. The order desk renders the
  * same `GameOverPanel` / `WaitingForOthers` / `DecisionForm` that `Board2D`
  * renders, with the same `${week}-${change|new}` remount key, because a
- * re-implementation is a second place for section 19's acceptance criteria to
- * be wrong (§5.3, AC 14).
+ * re-implementation is a second place for the 2D board's behaviour to
+ * be wrong.
  */
 export function Board3DPanels({
   view,

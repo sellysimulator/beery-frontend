@@ -4,12 +4,11 @@
  * The wire shape is a **partial** `GameConfig.to_payload()` — the fields the
  * host changed, and nothing else. The server merges it over the stored config,
  * deeply for `roles`, `visibility`, `bot` and `demand`, so changing one
- * Retailer field must not carry the other three roles along and blank them
- * (`18 section 3.1a`, FM 4).
+ * Retailer field must not carry the other three roles along and blank them.
  *
  * `preset_name` is the one key every edit carries: touching any field means the
  * host is no longer running the preset they picked, and a host must not believe
- * they are running Classic MIT when they are not (`18 section 2`, FM 3).
+ * they are running Classic MIT when they are not.
  */
 import type { GameConfig } from '../../types/game'
 

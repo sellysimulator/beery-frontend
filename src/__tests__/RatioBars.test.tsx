@@ -1,12 +1,12 @@
 /**
- * BE-2 (`CHARTS-PLAN.md`), B2 ratio bars and B7 inline bars:
+ * The results bullwhip ratio bars and the inline bars in the role table:
  * `BullwhipRatioBars`, `buildBullwhipRatioConfig` and `RoleStatsTable`.
  *
- * Covers acceptance (4) a `null` ratio renders the dash, (8) the ratio cell text
- * is unchanged and a positive ratio has one `aria-hidden` inline bar while a
- * `null` or `0` ratio has none, and (9) a ratio of `0` gets no bar in
- * `BullwhipRatioBars` and keeps its `0.00` in the table. Acceptance (3), a bar
- * absent until its stage, is in `BullwhipStepper.test.tsx`.
+ * Covers: a `null` ratio renders the dash; the ratio cell text is unchanged and
+ * a positive ratio has one `aria-hidden` inline bar while a `null` or `0` ratio
+ * has none; a ratio of `0` gets no bar in `BullwhipRatioBars` and keeps its
+ * `0.00` in the table. A bar shown only with its series is in
+ * `BullwhipSeriesToggles.test.tsx`.
  *
  * The bars' dataset layout is not specified, so bars are read as "every finite
  * number across the datasets, in order".
@@ -143,7 +143,7 @@ describe('buildBullwhipRatioConfig', () => {
     expect(bars(build(view, ROLE_ORDER)).map((b) => b.value)).toEqual([1.75, 6.25, 9.75])
   })
 
-  it('ACCEPTANCE 9: gives a ratio of exactly 0 no bar', () => {
+  it('gives a ratio of exactly 0 no bar', () => {
     const view = makeView({ ...RATIOS, DISTRIBUTOR: 0 })
     expect(bars(build(view, ROLE_ORDER)).map((b) => b.value)).toEqual([1.75, 3.5, 9.75])
   })
@@ -200,7 +200,7 @@ describe('BullwhipRatioBars', () => {
     for (const peak of [23, 34, 45, 56, 9, 13, 17, 21]) expect(cells).not.toContain(String(peak))
   })
 
-  describe('ACCEPTANCE 4: a null ratio renders the dash', () => {
+  describe('a null ratio renders the dash', () => {
     it('shows the D12 dash with the explanation as its aria-label, and no bar', () => {
       const view = makeView({ ...RATIOS, WHOLESALER: null })
       const { container } = render(<BullwhipRatioBars view={view} shown={ROLE_ORDER} />)
@@ -217,7 +217,7 @@ describe('BullwhipRatioBars', () => {
     })
   })
 
-  describe('ACCEPTANCE 9: a ratio of 0 gets no bar and keeps 0.00 in the table', () => {
+  describe('a ratio of 0 gets no bar and keeps 0.00 in the table', () => {
     it('keeps the figure, draws no bar for it, and says so in words', () => {
       const view = makeView({ ...RATIOS, RETAILER: 0 })
       const { container } = render(<BullwhipRatioBars view={view} shown={ROLE_ORDER} />)
@@ -239,7 +239,7 @@ describe('BullwhipRatioBars', () => {
   })
 })
 
-/* --- B7: inline bars in RoleStatsTable ------------------------------- */
+/* --- Inline bars in RoleStatsTable ----------------------------------- */
 
 const mod = RoleStatsTableModule as unknown as Record<string, unknown>
 const RoleStatsTable = (mod.default ?? mod.RoleStatsTable) as (props: { view: ResultsView }) => React.ReactElement | null
@@ -266,7 +266,7 @@ describe('RoleStatsTable inline ratio bars', () => {
     expect(NULL_RATIO_EXPLANATION.length).toBeGreaterThan(0)
   })
 
-  it('ACCEPTANCE 8: leaves the ratio figure as plain text, two decimals, nothing added', () => {
+  it('leaves the ratio figure as plain text, two decimals, nothing added', () => {
     const { container } = render(<RoleStatsTable view={makeView()} />)
     const visible = (cell: HTMLElement) => {
       const copy = cell.cloneNode(true) as HTMLElement
@@ -280,7 +280,7 @@ describe('RoleStatsTable inline ratio bars', () => {
     }
   })
 
-  it('ACCEPTANCE 8: gives each positive ratio one aria-hidden bar', () => {
+  it('gives each positive ratio one aria-hidden bar', () => {
     expect(decorFor(RATIOS) - decorFor(NONE)).toBe(4)
   })
 
@@ -288,11 +288,11 @@ describe('RoleStatsTable inline ratio bars', () => {
     expect(decorFor({ ...NONE, [role]: 2.5 }) - decorFor(NONE)).toBe(1)
   })
 
-  it('ACCEPTANCE 8: gives a null ratio no bar', () => {
+  it('gives a null ratio no bar', () => {
     expect(decorFor({ ...RATIOS, WHOLESALER: null }) - decorFor(NONE)).toBe(3)
   })
 
-  it('ACCEPTANCE 8: gives a ratio of 0 no bar, and keeps its 0.00 figure', () => {
+  it('gives a ratio of 0 no bar, and keeps its 0.00 figure', () => {
     expect(decorFor({ ...RATIOS, WHOLESALER: 0 }) - decorFor(NONE)).toBe(3)
     const { container } = render(<RoleStatsTable view={makeView({ ...RATIOS, WHOLESALER: 0 })} />)
     expect(container.textContent).toContain('0.00')

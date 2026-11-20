@@ -1,13 +1,13 @@
 /**
  * The scene as a plain object: every fixture, pile count, sign string, model
- * placement, light and prompt the 3D board draws (24 §4, §5.2, §5.4).
+ * placement, light and prompt the 3D board draws (spec §9.7).
  *
  * jsdom has no WebGL, so nothing inside the canvas renders in a test. The
  * answer is the one `chartSetup.ts` established for Chart.js:
  * **`buildSceneModel` returns exactly what `WarehouseScene` draws — the
- * component adds nothing to it — which is what lets 24's acceptance criteria
- * be checked against an object instead of against a mocked renderer**
- * (24 §8.1). The consequence for whoever edits the renderer is strict: a
+ * component adds nothing to it — which is what lets the board's behaviour
+ * be checked against an object instead of against a mocked renderer**.
+ * The consequence for whoever edits the renderer is strict: a
  * geometry decision made in `WarehouseScene.tsx` rather than here is
  * untestable, and is a defect.
  *
@@ -15,22 +15,22 @@
  *
  * **Absent means absent.** A fixture gated on a visibility flag is not in the
  * returned `fixtures` array when its field is missing. Not hidden, not
- * `visible={false}` — absent. `19` AC 23 wants the six optional blocks
- * independently omitted, and a `visible` flag satisfies a screenshot while
- * violating it (24 §4.1 rule 3, §10 FM 3).
+ * `visible={false}` — absent. The optional blocks must be
+ * independently omitted (spec §9.7), and a `visible` flag satisfies a
+ * screenshot while violating that.
  *
  * **Every pile carries the server's true, uncapped figure.** `crateCount`
  * below is the only place in this board where a quantity becomes a mesh count,
  * and the sign beside a capped pile still reads the field verbatim. The crates
- * are a texture on the number, never a substitute for it (24 §4.1, AC 7,
- * FM 1). `SettlementRecap.tsx`'s `[HARD-WON]` note is the same boundary from
+ * are a texture on the number, never a substitute for it.
+ * `SettlementRecap.tsx`'s `[HARD-WON]` note is the same boundary from
  * the other side: *a component that multiplied the two would be right until
  * the day the server rounded differently, and then wrong in a way nobody could
  * explain.*
  *
  * This module is pure and synchronous, and **imports no three.js and no
  * `@react-three/*`** — that is what keeps it loadable in a test file that
- * never touches a renderer (24 §8.2).
+ * never touches a renderer.
  */
 import { ROLE_ORDER, type PlayerView, type Role } from '../../../../types/game'
 import { ROLE_LABEL } from '../../../lobby/roleCopy'
@@ -77,7 +77,7 @@ import {
   type Vec3,
 } from './sceneLayout'
 
-/* ─── The display-scaling rule (24 §4.1, normative) ─── */
+/* ─── The display-scaling rule (normative) ─── */
 
 /**
  * How many crates stand for `quantity`.
@@ -94,9 +94,9 @@ import {
  * > from the field. A capped pile therefore never misstates anything: the
  * > crates are a texture on the number, not a substitute for it.
  * >
- * > This is not a third permitted computation under `19 §3.1`. `19 §3.1`
- * > governs *figures a player reads*. A mesh count is not read; it is looked
- * > at.
+ * > This is not a computation of a figure under spec §12's server authority,
+ * > which governs *figures a player reads*. A mesh count is not read; it is
+ * > looked at.
  */
 export function crateCount(quantity: number, divisor: number, cap: number): number {
   return Math.min(Math.max(Math.floor(quantity / divisor), 0), cap)
@@ -107,7 +107,7 @@ export function crateCount(quantity: number, divisor: number, cap: number): numb
 /**
  * Every fixture the hall can contain.
  *
- * The id is the contract 24 §8.2 asserts against — *"a Factory model contains
+ * The id is the contract the tests assert against — *"a Factory model contains
  * no `'upstream-gate'`, `'order-road'` or `'order-courier'` fixture, and does
  * contain `'brewhouse'`"* — so these strings are as load-bearing as the copy
  * on the signs.
@@ -170,10 +170,10 @@ export type FixtureKind =
   | 'figures'
   | 'vehicle'
 
-/** The GLB assets of 24 §6.1, by the keys `gltfModels.ts` loads them under. */
+/** The GLB assets, by the keys `gltfModels.ts` loads them under. */
 export type SceneAsset = 'box' | 'truck' | 'person' | 'money'
 
-/** A mark that carries meaning without colour (19 §3.4, AC 8). Today the
+/** A mark that carries meaning without colour (spec §9.7). Today the
  *  backlog pen's warning triangle — the same glyph the 2D `BacklogIcon`
  *  draws — is the only one. */
 export type SceneGlyph = 'warning'
@@ -193,11 +193,10 @@ export interface SceneSign {
    */
   readonly rotationY: number
   /**
-   * The white rectangle behind the words, in world metres (24 §6.1, amended
-   * 2026-09-22).
+   * The white rectangle behind the words, in world metres.
    *
    * Measured here rather than in the renderer, by `signPlateSize`, because
-   * 24 §8.1 puts every geometry decision on the model: a plate sized inside
+   * every geometry decision belongs on the model: a plate sized inside
    * `SignPlates.tsx` is a plate no test can measure, and the overlap sweep
    * that found the collisions of 2026-09-22 needs the same rectangle the
    * player sees.
@@ -241,11 +240,11 @@ export interface PileStack {
   readonly position: Vec3
   /** Already divided and capped by {@link crateCount}. */
   readonly count: number
-  /** The front supply-line lane renders at `1.15` (24 §4.2). */
+  /** The front supply-line lane renders at `1.15`. */
   readonly scale?: number
 }
 
-/** The pools of 24 §7.2: one `InstancedMesh` each, so a pile of any size is
+/** The instanced pools: one `InstancedMesh` each, so a pile of any size is
  *  one draw call. Six are budgeted and eight is the ceiling. */
 export type PoolId =
   | 'inventory'
@@ -259,7 +258,7 @@ export type PoolId =
 export interface InstancePool {
   readonly id: PoolId
   readonly asset: SceneAsset
-  /** A **quantity** hex, never an accent (24 §3.8). */
+  /** A **quantity** hex, never an accent. */
   readonly color: string
   readonly gridWidth: number
   readonly gridDepth: number
@@ -280,7 +279,7 @@ export interface SceneFixture {
   readonly kind: FixtureKind
   readonly position: Vec3
   readonly rotationY: number
-  /** The role accent, on the fixtures 24 §3.0 lets carry one. Architecture
+  /** The role accent, on the fixtures allowed to carry one. Architecture
    *  only: no crate is ever accent-coloured. */
   readonly accent?: string
   readonly signs: readonly SceneSign[]
@@ -292,7 +291,7 @@ export interface SceneFixture {
 }
 
 /**
- * **One kind, and that is the point** (24 §7.1, amended 2026-09-22).
+ * **One kind, and that is the point**.
  *
  * This was `'hemisphere' | 'directional' | 'point'`, and the hall ran one of
  * each plus a second point light. A player asked for the lighting to be
@@ -319,7 +318,7 @@ export interface SceneLight {
   readonly groundColor?: string
 }
 
-/** The three things E opens (24 §5.3). */
+/** The three things E opens. */
 export type InteractTargetId = 'order-desk' | 'ledger-wall' | 'team-board'
 
 export interface InteractTarget {
@@ -329,11 +328,11 @@ export interface InteractTarget {
    *  against the model rather than reaching for a constant of its own. */
   readonly radius: number
   readonly prompt: string
-  /** False while paused: the prompt still reads, E is inert (24 §5.2). */
+  /** False while paused: the prompt still reads, E is inert. */
   readonly enabled: boolean
 }
 
-/** What the clipboard on the desk is doing (24 §4.3). */
+/** What the clipboard on the desk is doing. */
 export type ClipboardState = 'open' | 'closed' | 'absent'
 
 /** The order desk's state, which is the game's state as the desk shows it. */
@@ -348,7 +347,7 @@ export interface DeskState {
 
 /**
  * The server's figures, kept beside the model so `describeScene` can name them
- * without re-deriving anything from a mesh count (24 §4.1).
+ * without re-deriving anything from a mesh count.
  */
 export interface SceneFigures {
   readonly inventory: number
@@ -364,8 +363,7 @@ export interface SceneModel {
   readonly role: Role
   readonly roleSet: RoleSet
   /**
-   * The sky over the open hall — `scenePalette.ts`'s `skyCyan`, and no fog
-   * (24 §3.1, amended 2026-09-22).
+   * The sky over the open hall — `scenePalette.ts`'s `skyCyan`, and no fog.
    *
    * It was `--color-surface-sunken`, matching a sealed room's walls, with a
    * `<fog>` in the same hex so the far end softened into the hall rather than
@@ -377,7 +375,7 @@ export interface SceneModel {
   /** Every pool in the scene, gathered from the fixtures that own them. */
   readonly pools: readonly InstancePool[]
   /** Every GLB placement, likewise gathered. Trucks are capped at two by the
-   *  draw-call budget of 24 §7.1. */
+   *  draw-call budget. */
   readonly models: readonly ModelPlacement[]
   /** Every sign, gathered, so a test can scan the whole scene's copy. */
   readonly signs: readonly SceneSign[]
@@ -385,7 +383,7 @@ export interface SceneModel {
   readonly desk: DeskState
   /** `gameOver` shuts the dispatch door — one mesh translated to `y = 0`. */
   readonly dispatchDoorClosed: boolean
-  /** True for the 400 ms after a week turned over (24 §5.5). */
+  /** True for the 400 ms after a week turned over. */
   readonly weekChanged: boolean
   readonly figures: SceneFigures
 }
@@ -427,7 +425,7 @@ function sign(
   }
 }
 
-/* ─── Columns (24 §6.1, amended 2026-09-22) ─── */
+/* ─── Columns ─── */
 
 /**
  * Put `below` directly under `above`, plates clear by `SIGN_STACK_GAP`.
@@ -521,12 +519,11 @@ function midpoint(rows: readonly SignRow[]): Vec3 {
 }
 
 /**
- * Fold a stacked block of rows into as few signs as its typography allows
- * (24 §7.1).
+ * Fold a stacked block of rows into as few signs as its typography allows.
  *
  * **A drei `<Text>` is one draw call whatever it says**, and troika renders
  * multi-line content in that one mesh. A ledger wall of nine rows built as
- * nine `<Text>`s therefore spends nine of the ninety §7.1 allows the whole
+ * nine `<Text>`s therefore spends nine of the ninety the budget allows the whole
  * hall on one board — which is how a budget that reads *"signs ~16"* came to
  * be carrying thirty and more. Rows that share a size and a colour are one
  * mesh with newlines between them; `SceneSign`'s line pitch is what spaces
@@ -536,7 +533,7 @@ function midpoint(rows: readonly SignRow[]): Vec3 {
  * count, never of copy: the rows are joined in order, verbatim, and a row
  * whose colour flips on a condition — the team board's own-seat plaque, the
  * chain table's own row — breaks the run and keeps its own mesh, because that
- * colour is the signal (`19 §3.4`). A run is broken by a change of size for
+ * colour is the signal. A run is broken by a change of size for
  * the same reason: the ledger's heading is a heading.
  */
 function foldRows(
@@ -577,12 +574,12 @@ function foldRows(
 /**
  * When a slot lands, in words, upper-cased for a warehouse sign.
  *
- * 24 §4.2 says the lane placards reuse `SupplyLine.tsx`'s own wording, and
+ * The lane placards reuse `SupplyLine.tsx`'s own wording, and
  * these are those words: *next week*, *the week after*, *in N weeks*. `weeks`
  * is the server's figure for that slot (`supply_line_slot_weeks` /
  * `orders_in_flight_slot_weeks`); the scene used to count it from the slot's
  * position, a copy of how a pipeline moves (2026-11-03). Never a week number —
- * the arrival week appears only inside `DecisionForm` (24 §4.2, `19 §3.1`).
+ * the arrival week appears only inside `DecisionForm`.
  */
 function whenLabel(weeks: number): string {
   if (weeks === 1) return 'NEXT WEEK'
@@ -590,25 +587,25 @@ function whenLabel(weeks: number): string {
   return `IN ${weeks} WEEKS`
 }
 
-/* ─── The prompts of 24 §5.2 ─── */
+/* ─── The prompts ─── */
 
-/** The prompts that do not vary with the game's state. 24 §5.2 fixes only the
- *  desk's; the other two targets say what they open, in the same shape. */
+/** The prompts that do not vary with the game's state. The spec fixes only the
+ *  desk's (spec §9.7); the other two targets say what they open, in the same shape. */
 const LEDGER_PROMPT = "Press E — read this week's settlement"
 const TEAM_BOARD_PROMPT = 'Press E — see who has decided'
 
-/** The paused prompt reads the server's words, and E is inert (24 §4.3). */
+/** The paused prompt reads the server's words, and E is inert. */
 function pausedPrompt(pausedReason: string | null): string {
   return pausedReason === null ? 'Paused.' : `Paused. ${pausedReason}`
 }
 
 /**
- * The desk prompt, as a pure function of the props (24 §5.2).
+ * The desk prompt, as a pure function of the props (spec §9.7).
  *
  * The order of the branches is the precedence the props carry, not the order
  * of the table: `paused` outranks everything because E is inert while paused,
  * then `gameOver`, then the three order states. The Factory wording is not
- * decoration — it is `19` AC 11, and `DecisionForm.tsx` already branches
+ * decoration — the Factory starts production, and `DecisionForm.tsx` already branches
  * exactly this way.
  */
 export function deskPrompt(props: BoardViewProps): string {
@@ -630,10 +627,10 @@ export function interactPrompt(target: InteractTargetId, props: BoardViewProps):
   return target === 'ledger-wall' ? LEDGER_PROMPT : TEAM_BOARD_PROMPT
 }
 
-/* ─── Lights (24 §7.1) ─── */
+/* ─── Lights ─── */
 
 /**
- * **One light**, and it is a hemisphere (24 §7.1, amended 2026-09-22).
+ * **One light**, and it is a hemisphere (`MAX_LIGHTS`).
  *
  * There were four — a hemisphere, a directional key and two point lights over
  * the desk and the receiving bay — until a player walked the hall and asked
@@ -708,7 +705,7 @@ const CHAIN_TABLE_TOP = 3.2
  *  a metre short of the south wall at `HALL.halfDepth`. */
 const SOUTH_FACE_Z = 20
 
-/* ─── The fixture builders, one per row of 24 §4.2 ─── */
+/* ─── The fixture builders, one per fixture kind ─── */
 
 /**
  * The receiving bay: four painted lanes, the two totals over them, and — only
@@ -718,7 +715,7 @@ const SOUTH_FACE_Z = 20
  * The totals used to hang from a gantry, a beam on two posts across the bay,
  * and the beam is gone with the other two overhead structures (amended
  * 2026-09-22). **The signs are not**: `gantry-total` is `view.supply_line`,
- * which §4.2 requires and 24 §1.1 calls the whole bet of this board, and
+ * which is the whole bet of this board, and
  * `gantry-receipt` is the role's own word for what lands here. They keep
  * their ids — a test asserts against them — and now stand free over the bay
  * at `BAY_SIGN_HEIGHT`, which clears the tallest lane stack by more than a
@@ -726,7 +723,7 @@ const SOUTH_FACE_Z = 20
  *
  * `show_supply_line_prominently === false` means the lane crates and placards
  * are **absent from the model**, not hidden. The host made the game harder on
- * purpose (`19 §2.2`) and helpfully compensating defeats that (AC 10, FM 3).
+ * purpose (spec §6.5) and helpfully compensating defeats that.
  * The total still renders, over bare paint.
  */
 function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
@@ -735,13 +732,13 @@ function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
   const slots = view.supply_line_slots
   const lanesShown = prominent ? Math.min(slots.length, MAX_SUPPLY_LANES) : 0
 
-  // Label over figure, the figure anchored at the height §3.2 gives it and the
+  // Label over figure, the figure anchored at its fixed height and the
   // label pushed up by however tall its own plate turns out to be. The two
   // were 0.7 m apart, which is less than the height of either plate: the sweep
   // of 2026-09-22 measured 82 cm of the receipt sitting on the total.
   const signs: SceneSign[] = stackAround(1, [
     // What lands in this bay, in the role's own words. For the FACTORY that is
-    // "FINISHED PRODUCTION" and the bay is a production line (24 §3.7).
+    // "FINISHED PRODUCTION" and the bay is a production line.
     sign(
       'gantry-receipt',
       roleSet.receiptSign.toUpperCase(),
@@ -785,7 +782,7 @@ function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
       position: [spreadX(index, lanesShown, LANE_SPAN.from, LANE_SPAN.to), 0, base[2]],
       count: crateCount(slots[index], PILE_SCALE.supplyLane.divisor, PILE_SCALE.supplyLane.cap),
       // The front lane is nearest the player and largest: the beer arriving
-      // next week is what a player most often fails to count (24 §4.2).
+      // next week is what a player most often fails to count.
       scale: index === 0 ? FRONT_LANE_SCALE : 1,
     })
   }
@@ -887,9 +884,9 @@ function buildReceivingBay(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
  *
  * For the FACTORY the **entire** upstream gate, road, courier truck, road
  * markers and their signs are absent, replaced by four tanks and a wall that
- * says why (`19` AC 7, FM 13). The absence is made explicit rather than
+ * says why. The absence is made explicit rather than
  * silent: a player who cannot find the order road should be told there is not
- * one, not left hunting for a door that was never built (24 §3.7).
+ * one, not left hunting for a door that was never built.
  */
 function buildNorthEnd(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
   if (!roleSet.hasOrderRoad) {
@@ -909,7 +906,7 @@ function buildNorthEnd(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
         position: ZONES.blankWall,
         rotationY: 0,
         // Two lines of one statement, in one mesh: the wall says the same
-        // words it always said (24 §7.1, §3.7).
+        // words it always said.
         signs: foldRows(
           [
             {
@@ -1103,7 +1100,7 @@ function buildStockFloor(view: PlayerView): SceneFixture[] {
       sign(
         'stock-floor-sign',
         // The server's figure, uncapped, always. `inventory: 81` reads 81
-        // beside forty crates (AC 7, FM 1).
+        // beside forty crates.
         empty ? 'ON HAND 0 — nothing in stock' : `ON HAND ${view.inventory}`,
         at(base, 0, SIGN_HEIGHT.pile, 0),
         SIGN_SIZE.statement,
@@ -1155,7 +1152,7 @@ function buildStockFloor(view: PlayerView): SceneFixture[] {
 /**
  * The backlog pen: always present, empty or not.
  *
- * Colour is never the only signal (`19 §3.4`, AC 8), so the pen carries the
+ * Colour is never the only signal (spec §9.7), so the pen carries the
  * fence, the warning glyph the 2D `BacklogIcon` draws, and the word OWED at
  * `0.42` units — three signals for one quantity.
  */
@@ -1237,7 +1234,7 @@ function buildBacklogPen(view: PlayerView): SceneFixture {
  * one role.
  *
  * FACTORY only, and only when `production_queue > 0` — mirroring 2D's
- * `!== null && > 0` (AC 12). `null` or `0` and the whole fixture is absent:
+ * `!== null && > 0`. `null` or `0` and the whole fixture is absent:
  * no pen, no sign, nothing about a queue that is not there.
  */
 function buildProductionQueue(view: PlayerView, roleSet: RoleSet): SceneFixture[] {
@@ -1291,7 +1288,7 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
   const view = props.view
 
   // **The canopy column**, stacked around `canopy-week` at `SIGN_HEIGHT.canopy`
-  // so that the week a player reads stays where §3.2 puts it and the rest
+  // so that the week a player reads stays where it is and the rest
   // moves. Four signs at fixed 0.6-0.7 m steps used to overlap in five pairs
   // at once: the role sign is a 1.1 m face and its plate is 1.65 m tall on its
   // own. All four wrap at the open-floor width — the desk stands in the middle
@@ -1327,7 +1324,7 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
     sign(
       'canopy-lead',
       // The role's verb, and never the arrival week: the server's
-      // `order_arrival_week` appears only inside `DecisionForm` (24 §4.2).
+      // `order_arrival_week` appears only inside `DecisionForm`.
       roleSet.hasProductionBay
         ? `ANYTHING YOU START NOW FINISHES IN ${view.order_arrival_lead_weeks} WEEKS`
         : `ANYTHING YOU ORDER NOW REACHES YOU IN ${view.order_arrival_lead_weeks} WEEKS`,
@@ -1361,7 +1358,7 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
   }
 
   if (props.gameOver) {
-    // The clipboard is gone; the desk says so in its own words (24 §4.3).
+    // The clipboard is gone; the desk says so in its own words.
     plate.push(
       sign(
         'desk-over',
@@ -1407,7 +1404,7 @@ function buildOrderDesk(props: BoardViewProps, roleSet: RoleSet, desk: DeskState
  *
  * Money goes through that file's `formatMoney`, and the rate lines are text
  * beside the server's money figure — the multiplication is never performed
- * here (`19` FM 4, AC 6). The stock after receiving is the server's
+ * here. The stock after receiving is the server's
  * `inventory_after_arrival`, exactly as 2D prints it: this function does no
  * arithmetic at all (2026-11-03; it used to add `opening_inventory + arrived`).
  */
@@ -1478,11 +1475,11 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
     position: base,
     rotationY: Math.PI / 2,
     // The frame swaps to `--color-order` for the 400 ms of a week change
-    // (24 §5.5) — a colour on the frame, which is architecture, never a crate.
+    // — a colour on the frame, which is architecture, never a crate.
     accent: weekChanged ? QUANTITY_HEX.order : ARCHITECTURE_HEX.borderStrong,
     // One heading mesh and one mesh for the rows under it, not one per row:
     // the rows below the heading share a size and a colour, so they are a
-    // single `<Text>` with newlines (24 §7.1).
+    // single `<Text>` with newlines.
     // The heading is the anchor at 5.0, near the top of the 5.4 m board, and
     // the folded block of rows hangs under it. The rows were stepped by a
     // fixed 0.52 and the block's own plate is as tall as the copy makes it, so
@@ -1511,7 +1508,7 @@ function buildLedgerWall(view: PlayerView, weekChanged: boolean): SceneFixture {
  *
  * All three of `week_holding_backlog_cost`, `balance` and `accumulated_cost` missing means no
  * plinth, no plate, no bills and nothing about running cost anywhere in the
- * scene (`19` AC 6). The precedence between `balance` and `accumulated_cost`
+ * scene. The precedence between `balance` and `accumulated_cost`
  * is `DecisionPanel`'s, unchanged.
  */
 function buildCostCorner(view: PlayerView): SceneFixture[] {
@@ -1576,7 +1573,7 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
   signs.push(...plates)
 
   // The bills stand for the figure beside them and are scaled like any other
-  // pile: `÷10` currency units, capped at 20 (24 §4.2).
+  // pile: `÷10` currency units, capped at 20 (spec §9.7).
   const billed = view.balance ?? view.accumulated_cost ?? view.week_holding_backlog_cost ?? 0
   return [
     {
@@ -1605,7 +1602,7 @@ function buildCostCorner(view: PlayerView): SceneFixture[] {
 
 /**
  * The team board: four plaques in `ROLE_ORDER`, names only, never a quantity
- * (`19` AC 15). Plus the leaderboard beside it, when the host sends one.
+ * (spec §9.7). Plus the leaderboard beside it, when the host sends one.
  *
  * **Flat against the east wall** (amended 2026-09-22). It stood free in open
  * floor at `[15, 0, 9]` — a pane of nothing hanging in the middle of the
@@ -1628,8 +1625,7 @@ function buildTeamBoard(view: PlayerView, awaitingRoles: Role[]): SceneFixture[]
   // The four plaques are one mesh per *run of the same colour*, not one per
   // seat: a board where everyone is still deciding, or everyone has, is a
   // single `<Text>` of four lines, and a board part-way through the week
-  // breaks only where the ink changes — which is the signal (24 §7.1,
-  // `19 §3.4`).
+  // breaks only where the ink changes — which is the signal.
   const plaques: SceneSign[] = foldRows(
     ROLE_ORDER.map((role) => ({
       id: `team-plaque-${role}`,
@@ -1683,7 +1679,7 @@ function buildTeamBoard(view: PlayerView, awaitingRoles: Role[]): SceneFixture[]
       position: at(base, 0, 0, -LEADERBOARD_OFFSET),
       rotationY: EAST_WALL_FACING,
       // Every entry is the same size in the same ink, so the whole table is
-      // one mesh of N lines (24 §7.1).
+      // one mesh of N lines.
       signs: stackDown(
         TEAM_BOARD_TOP,
         foldRows(
@@ -1712,7 +1708,7 @@ function buildTeamBoard(view: PlayerView, awaitingRoles: Role[]): SceneFixture[]
  * The south end: the dispatch bay, the demand placard, the role's own south
  * face, and whatever stands in front of it.
  *
- * This is the wall that identifies the seat from spawn (AC 8): glass and
+ * This is the wall that identifies the seat from spawn (spec §9.7): glass and
  * people for the Retailer, three roller doors and a truck tail for the
  * Wholesaler, an open bay for the Distributor, one door and a yard for the
  * Factory.
@@ -1787,7 +1783,7 @@ function buildSouthEnd(props: BoardViewProps, roleSet: RoleSet): SceneFixture[] 
     },
   ]
 
-  // The end customer, and the only people in the game (24 §3.4).
+  // The end customer, and the only people in the game.
   if (roleSet.customerFigures > 0) {
     fixtures.push({
       id: 'customer-figures',
@@ -1807,7 +1803,7 @@ function buildSouthEnd(props: BoardViewProps, roleSet: RoleSet): SceneFixture[] 
   }
 
   // The south truck, where the role has one. Never more than one, so with the
-  // upstream courier the hall holds at most two (24 §7.1).
+  // upstream courier the hall holds at most two.
   const truckId: FixtureId | null =
     roleSet.south === 'shopfront'
       ? 'rear-door-truck'
@@ -1888,7 +1884,7 @@ function buildSouthEnd(props: BoardViewProps, roleSet: RoleSet): SceneFixture[] 
 
 /**
  * The neighbour hatch and the chain table: two independent visibility gates,
- * each a fixture that is simply not built when its key is absent (AC 23).
+ * each a fixture that is simply not built when its key is absent.
  *
  * Both were checked over on 2026-09-22 against the complaint that made the
  * team board move, and neither is a floating pane: the hatch is recessed into
@@ -1910,7 +1906,7 @@ function buildNeighbourFixtures(view: PlayerView, roleSet: RoleSet): SceneFixtur
         position: ZONES.neighbourHatch,
         rotationY: -Math.PI / 2,
         // One mesh for the whole hatch: the plates differ in nothing but
-        // their words (24 §7.1).
+        // their words.
         signs: stackDown(
           HATCH_SIGN_TOP,
           foldRows(
@@ -1945,8 +1941,7 @@ function buildNeighbourFixtures(view: PlayerView, roleSet: RoleSet): SceneFixtur
       // accent on architecture, as always.
       accent: roleSet.accent,
       // The player's own row is the one the ink picks out, so it is the one
-      // that keeps its own mesh; the muted rows above and below it fold
-      // (24 §7.1).
+      // that keeps its own mesh; the muted rows above and below it fold.
       // Down from a top that clears the plinth, for the same reason as the
       // team board: the player's own row breaks the fold wherever it sits, so
       // the column is one, two or three meshes depending on the seat.
@@ -1972,8 +1967,7 @@ function buildNeighbourFixtures(view: PlayerView, roleSet: RoleSet): SceneFixtur
 /* ─── The model ─── */
 
 /**
- * The fixture kinds whose signs are painted on a surface (24 §6.1, amended
- * 2026-09-22).
+ * The fixture kinds whose signs are painted on a surface.
  *
  * A sign on one of these does **not** billboard. The rule lives on the kind
  * rather than on the call site so that it is one sentence in one place: a
@@ -1992,7 +1986,7 @@ const WALL_MOUNTED_KINDS: ReadonlySet<FixtureKind> = new Set<FixtureKind>([
  * Build the whole scene from the props the 2D board takes and nothing else.
  *
  * Pure, synchronous, and the single source of truth for what the canvas shows:
- * `WarehouseScene` walks this object and adds nothing to it (24 §8.1).
+ * `WarehouseScene` walks this object and adds nothing to it.
  */
 export function buildSceneModel(props: BoardViewProps): SceneModel {
   const view = props.view
@@ -2001,7 +1995,7 @@ export function buildSceneModel(props: BoardViewProps): SceneModel {
   const desk: DeskState = {
     prompt: deskPrompt(props),
     // Paused freezes the desk but not the room: the prompt still reads and E
-    // does nothing (24 §4.3, AC 18).
+    // does nothing.
     enabled: !props.paused,
     stamped: props.locked && !props.isChangingOrder && !props.gameOver,
     clipboard: props.gameOver ? 'absent' : props.locked && !props.isChangingOrder ? 'closed' : 'open',
@@ -2022,7 +2016,7 @@ export function buildSceneModel(props: BoardViewProps): SceneModel {
     ...buildNeighbourFixtures(view, roleSet),
   ]
 
-  // One pass, and the only place `billboard` is decided (24 §6.1). A fixture
+  // One pass, and the only place `billboard` is decided. A fixture
   // whose kind is flat against something keeps its lettering where it was
   // painted; everything else turns to face the player.
   const fixtures: SceneFixture[] = built.map((fixture) =>
@@ -2081,7 +2075,7 @@ export function buildSceneModel(props: BoardViewProps): SceneModel {
   }
 }
 
-/* ─── The draw-call budget (24 §7.1, AC 19) ─── */
+/* ─── The draw-call budget ─── */
 
 /**
  * What one fixture costs the renderer in meshes, dressing only.
@@ -2108,18 +2102,18 @@ function dressingDrawCalls(fixture: SceneFixture): number {
 }
 
 /**
- * A conservative estimate of the scene's steady-state draw calls (24 §7.1).
+ * A conservative estimate of the scene's steady-state draw calls.
  *
- * This is to AC 19 what `MAX_LIGHTS` is to the light count: the number the
+ * This is to the draw-call budget what `MAX_LIGHTS` is to the light count: the number the
  * budget is *asserted* against, in `Board3D.test.tsx`, so that a board which
  * grows one more sign, one more placard or another truck fails a test rather
  * than a laptop. Before it existed the scene had drifted to three times
- * 24 §7.1's ~16 signs — every one of them doubled by an outline pass — and
+ * the budget's ~16 signs — every one of them doubled by an outline pass — and
  * nothing anywhere said so. It is asserted against `MAX_DRAW_CALLS` itself;
  * the ratchet that stood in for that ceiling while the architecture was drawn
  * unmerged is gone, and `sceneLayout.ts` records what closed the gap.
  *
- * What it counts, item for item against §7.1's own arithmetic:
+ * What it counts, item for item against the budget's own arithmetic:
  *
  *  - the shell — `SHELL_DRAW_COST`, three;
  *  - each fixture's dressing — `FIXTURE_DRAW_COST` plus its conditional
@@ -2127,11 +2121,11 @@ function dressingDrawCalls(fixture: SceneFixture): number {
  *  - the placard posts at **one** call for the whole hall, since they are one
  *    `InstancedMesh` (`PlacardPosts.tsx`), and none at all when the hall has
  *    no placards — `show_supply_line_prominently === false` strips them;
- *  - each instanced pool at **one** call however many crates it holds
- *    (24 §7.2), plus the painted contact quad under each stack that stands on
+ *  - each instanced pool at **one** call however many crates it holds,
+ *    plus the painted contact quad under each stack that stands on
  *    bare floor rather than on paint (`FixtureMesh.tsx`'s `PoolContact`);
  *  - each placed GLB — `MODEL_DRAW_COST`, the truck at 2 after its colours are
- *    baked into vertices (§7.3) and a contact quad under both;
+ *    baked into vertices and a contact quad under both;
  *  - each sign at one call, because a drei `<Text>` is one draw call whatever
  *    it says — which is the whole reason the model folds a block of rows into
  *    one mesh instead of one per row;
@@ -2152,7 +2146,7 @@ export function estimateDrawCalls(model: SceneModel): number {
     total += dressingDrawCalls(fixture)
     const pool = fixture.pool
     if (pool === undefined) continue
-    // One `InstancedMesh` per pool, whatever the pile's size (24 §7.2).
+    // One `InstancedMesh` per pool, whatever the pile's size.
     total += 1
     // A pile on paint is grounded by the paint; only the floor-standing pools
     // pay for a contact quad, one per stack.
@@ -2170,13 +2164,13 @@ export function estimateDrawCalls(model: SceneModel): number {
 }
 
 /**
- * The canvas wrapper's `aria-label` (24 §5.4).
+ * The canvas wrapper's `aria-label` (spec §9.7).
  *
  * This is **not** the accessible fallback — that is `Board3DPanels`, which
  * mounts the real 2D components exactly once so a screen reader reaches every
  * figure. This sentence only says what the sighted player is looking at, and
  * it says it with the server's own figures: the crate counts are display
- * scaling and are never read back out as a quantity (24 §4.1).
+ * scaling and are never read back out as a quantity.
  */
 export function describeScene(model: SceneModel): string {
   const { inventory, backlog, supplyLine, lanesShown, supplyLineProminent } = model.figures

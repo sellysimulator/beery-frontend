@@ -12,7 +12,7 @@ interface HandshakeAuth {
 /**
  * The server derives `identity` from this handshake payload: a verified
  * Firebase ID token when signed in, else a `guest_<uuid4>`
- * (`02-identity-and-auth.md`, `resolve_identity`).
+ * (`resolve_identity`).
  *
  * It is a CALLBACK, not an object, so socket.io-client re-invokes it on every
  * reconnection attempt and a freshly refreshed ID token is used instead of

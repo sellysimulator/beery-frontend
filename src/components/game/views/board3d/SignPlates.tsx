@@ -9,7 +9,7 @@ import type { SceneSign } from './sceneModel'
 /**
  * The white rectangle behind every sign in the hall, as **one**
  * `InstancedMesh` — and the one `useFrame` that turns every sign and every
- * plate to face the player (24 §6.1, §7.1, AC 19; amended 2026-09-22).
+ * plate to face the player.
  *
  * ## Why the plates exist
  *
@@ -17,7 +17,7 @@ import type { SceneSign } from './sceneModel'
  * text and the background is not correct"* and asked for *"a white rectangle
  * as a background"*. They were right, and the cause is on record: an earlier
  * round removed troika's `outlineWidth` because it renders as a second pass
- * over a second mesh, which doubled the largest line item in §7.1's budget.
+ * over a second mesh, which doubled the largest line item in the draw-call budget.
  * That left `#23201a` ink floating over whatever happened to be behind it — a
  * crate pile, a truck, and since the roof came off, open cyan sky.
  *
@@ -25,8 +25,8 @@ import type { SceneSign } from './sceneModel'
  *
  * A maximal view carries 33 signs. One plate mesh apiece is +33 draw calls
  * against `MAX_DRAW_CALLS` 90, on a scene whose worst view already stands at
- * 79 — it would fail AC 19 outright. Pooled, the whole hall's plates are a
- * single call, which is the same answer 24 §7.2 gives for crates and
+ * 79 — it would fail the budget test outright. Pooled, the whole hall's plates
+ * are a single call, which is the same answer `CratePile.tsx` gives for crates and
  * `PlacardPosts.tsx` gives for posts, and here it is not an optimisation but
  * the difference between the plates existing and not.
  *
@@ -40,18 +40,18 @@ import type { SceneSign } from './sceneModel'
  * writes `BILLBOARD_YAW`, turns every registered `SceneSign` group, and
  * composes the plate matrices from that same angle in the same pass.
  *
- * **Yaw only, never a full `lookAt`** (24 §5.1). A sign that also pitched
+ * **Yaw only, never a full `lookAt`**. A sign that also pitched
  * would tip as the player looked up and down, which in a walkable room reads
  * as broken geometry rather than as a label; upright is what a sign is. The
  * plates and the words share the angle exactly, so the plate can never slip
  * out from behind its own text.
  *
- * **Nothing here calls `setState`.** 24 §5.1's `[HARD-WON]` note is explicit
- * about it: this callback runs sixty times a second and mutates matrices and
+ * **Nothing here calls `setState`.** That is a `[HARD-WON]` rule of the 3D
+ * board: this callback runs sixty times a second and mutates matrices and
  * an `Object3D.rotation` in place. The only React state in the whole path is
  * the `SceneModel` itself.
  *
- * This component decides nothing a test cannot see (24 §8.1): every plate's
+ * This component decides nothing a test cannot see: every plate's
  * size and every sign's `billboard` flag arrive on the model, measured by
  * `signPlateSize` in `buildSceneModel`.
  */
@@ -69,8 +69,8 @@ const PLATE_GEOMETRY = new THREE.PlaneGeometry(1, 1)
  * **Unlit, deliberately**, and this is the whole reason the plate reads as
  * white at all.
  *
- * The hall is now lit by a single `hemisphereLight` (24 §7.1, amended
- * 2026-09-22), which multiplies a lit surface by a blend of its sky and
+ * The hall is lit by a single `hemisphereLight` (`MAX_LIGHTS`), which
+ * multiplies a lit surface by a blend of its sky and
  * ground colours that depends on which way the surface points. A
  * `meshStandardMaterial` plate would therefore be a *slightly different*
  * off-white on every sign, and a sign that billboards would change colour as

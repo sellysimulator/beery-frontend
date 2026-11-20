@@ -1,6 +1,6 @@
 /**
  * What a draft config will play: the customer demand series and each role's
- * lead time, worked out by the server (`POST /rooms/preview`, `10 §3.5b`).
+ * lead time, worked out by the server (`POST /rooms/preview`).
  *
  * This replaced the panel's own copy of the demand generators (2026-11-03).
  * That copy had to reproduce the server's half-up rounding, the ramp's `+ 1`

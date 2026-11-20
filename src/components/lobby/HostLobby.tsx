@@ -25,9 +25,9 @@ const ConfigPanel = configPanelScreen()
 /**
  * What a host sees while the room is filling up.
  *
- * The configuration panel's fields belong to section 18; this screen owns the
+ * The configuration panel's fields live in `ConfigPanel`; this screen owns the
  * slot they go in and resolves the panel through the same discovery seam the
- * shells use (**D19**), so neither section has to edit the other's file.
+ * shells use.
  *
  * Every privileged emit carries `host_secret` and nothing else. A client-side
  * "I am the host" boolean is a UI hint and is never sent (**D3**).
@@ -44,7 +44,7 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
   const hostSecret = getHostSecret(roomCode)
 
   /**
-   * Eligibility arrives from the server (`00-conventions.md` section 4).
+   * Eligibility arrives from the server.
    * `RoomService.can_start` already knows about empty seats, bot fill, a person
    * left without a role and a config that will not build; a second
    * implementation here would be a second
@@ -75,8 +75,8 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
 
   const seated = ROLE_ORDER.filter((role) => roleToAlias[role] !== null).length
   // The host can seat people in both modes the server accepts `assign_role` in
-  // (`11 §3.5`). In PLAYER_CHOOSES that is how a host gets past a person who has
-  // not picked a seat: nobody may start without one (`11 §2.2`).
+  // (spec §5). In PLAYER_CHOOSES that is how a host gets past a person who has
+  // not picked a seat: nobody may start without one (spec §4.3).
   const canAssign = roleAssignmentMode === 'HOST_ASSIGNS' || roleAssignmentMode === 'PLAYER_CHOOSES'
 
   return (

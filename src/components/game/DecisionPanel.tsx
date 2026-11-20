@@ -4,7 +4,7 @@ import { ROLE_LABEL } from '../lobby/roleCopy'
 import { formatMoney } from './SettlementRecap'
 import SupplyLine from './SupplyLine'
 
-/** The warning mark that rides with every backlog figure (§3.4, AC 8). */
+/** The warning mark that rides with every backlog figure. */
 function BacklogIcon(): ReactElement {
   return (
     <svg
@@ -55,7 +55,7 @@ export interface DecisionPanelProps {
 
 /**
  * "What you have" — always visible, always in the same order
- * (`beer-game-spec.md` section 9.1, §2.2).
+ * (`beer-game-spec.md` section 9.1).
  *
  * Every figure is a `your_state` field rendered as it arrived. The panel
  * computes nothing, not even a total: `supply_line` and `orders_in_flight` are
@@ -64,7 +64,7 @@ export interface DecisionPanelProps {
  * The conditional blocks below the core each appear only when the server sent
  * their field, which is exactly when the host's visibility flag is on — the
  * redaction happened server-side, before the payload was built
- * (`07-game-engine.md` section 3.8).
+ * (spec §8.8).
  */
 export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
   const money = (value: number): string => formatMoney(view.currency_symbol, value)
@@ -123,7 +123,7 @@ export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
           are by construction this role's own orders. The Factory has no
           supplier, and its production order is already counted in the supply
           line, so the block is absent for that role and only that role
-          (AC 7, `07-game-engine.md` section 3.8). It is never the role's own
+          (spec §8.8). It is never the role's own
           order pipeline, which would show next week's demand. */}
       {view.role === 'FACTORY' ? null : (
         <SupplyLine
@@ -139,7 +139,7 @@ export function DecisionPanel({ view }: DecisionPanelProps): ReactElement {
           requires the queue to be visible to that player: without it a
           capacity-limited Factory that ordered 14 and saw 10 enter the line
           cannot tell whether the other 4 are waiting or were thrown away
-          (`beer-game-spec.md` section 7 Phase C, AC 7b). The other three roles
+          (`beer-game-spec.md` section 7 Phase C). The other three roles
           have no production and the server sends `null`. */}
       {view.production_queue !== null && view.production_queue > 0 ? (
         <Figure

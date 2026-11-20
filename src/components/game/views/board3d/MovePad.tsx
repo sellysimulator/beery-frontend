@@ -8,7 +8,7 @@ import {
 import type { PadControl } from './playerMotion'
 
 /**
- * The on-screen movement pad (24 §5.7) — what makes the warehouse walkable
+ * The on-screen movement pad — what makes the warehouse walkable
  * with a thumb. A port of Samby's `.warehouse-movement` pad, button for button.
  *
  * Six buttons in two rows of three:
@@ -44,7 +44,7 @@ interface PadButton {
   readonly symbol: string
 }
 
-/** The order is the grid's: three across, top row first (24 §5.7). */
+/** The order is the grid's: three across, top row first. */
 const PAD_BUTTONS: readonly PadButton[] = [
   { control: 'turn-left', label: 'Turn left', symbol: '↶' },
   { control: 'forward', label: 'Move forward', symbol: '↑' },

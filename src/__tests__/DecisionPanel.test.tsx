@@ -1,20 +1,16 @@
 /**
- * `19-frontend-game-room.md §2.2` — `DecisionPanel`, "what you have".
- *
- * Covers acceptance criteria 3, 4, 5, 6 (the panel half), 7, 7b, 8 and 23,
- * and failure modes 3, 8 and 13.
+ * `DecisionPanel`, "what you have" (spec §9.1).
  *
  * Harness notes:
  *  - The panel is driven through `GameRoomPlaying`, not rendered directly.
- *    `17 §2.0` freezes the playing screen as taking **no props** and reading
- *    the store, and `§2.4` says every value on it comes from
- *    `useGameStore().myState`; no document freezes a prop shape for the
- *    components inside it, so addressing them directly would mean inventing
- *    one. Assertions are scoped to the panel's own region, located by the
- *    elements `§2.2` names.
+ *    The playing screen takes **no props** and reads the store, and every
+ *    value on it comes from `useGameStore().myState`; nothing fixes a prop
+ *    shape for the components inside it, so addressing them directly would
+ *    mean inventing one. Assertions are scoped to the panel's own region,
+ *    located by the elements spec §9.1 names.
  *  - `socket.io-client` is replaced by a recorder so nothing touches
- *    transport. The charting library is **not** mocked: `§2.6a` makes the
- *    chart's visually hidden table the section's surface for it.
+ *    transport. The charting library is **not** mocked: the chart's visually
+ *    hidden table is the test surface for it.
  *  - Every fixture number is deliberately distinctive, so an assertion that a
  *    figure is present or absent cannot be satisfied by an unrelated digit.
  */
@@ -167,7 +163,7 @@ function settlementFor(role: Role): WeekSettlement {
 /**
  * The gated keys — `accumulated_cost`, `week_holding_backlog_cost`, `balance`, `neighbours`,
  * `chain`, `leaderboard`, `customer_demand_series` — are all absent by
- * default, because their absence is exactly what criteria 6 and 23 turn on.
+ * default, because their absence is exactly what the gating tests turn on.
  */
 function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
   return {
@@ -193,7 +189,7 @@ function viewFor(role: Role, over: Partial<PlayerView> = {}): PlayerView {
     min_order_quantity: 0,
     max_order_quantity: 9999,
     show_supply_line_prominently: true,
-    // `07 §3.8`: the Factory's unstarted production, `null` for the others.
+    // The Factory's unstarted production, `null` for the others (spec §8.6).
     production_queue: role === 'FACTORY' ? 34 : null,
     order_arrival_lead_weeks: 4,
     order_arrival_week: 6 + 4,
@@ -278,12 +274,12 @@ function smallestMatching(res: RegExp[]): HTMLElement | null {
 
 const ORDERS_PLACED = /orders\s+you[’'a-z ]{0,8}placed/i;
 
-/** The panel's own region: the tightest block holding the §2.2 elements. */
+/** The panel's own region: the tightest block holding the spec §9.1 elements. */
 function panelRegion(): HTMLElement {
   const found = smallestMatching([/on hand/i, /incoming shipment/i, /incoming order/i]);
   if (!found) {
     throw new Error(
-      '§2.2 requires On hand, Incoming shipments and This week’s incoming order in one ' +
+      'Expected On hand, Incoming shipments and This week’s incoming order in one ' +
         `panel; the screen rendered: ${bodyText()}`,
     );
   }
@@ -297,7 +293,7 @@ function panelText(): string {
 /** Where a label first appears inside the panel, for document-order checks. */
 function positionOf(label: RegExp, what: string): number {
   const at = panelText().search(label);
-  if (at < 0) throw new Error(`§2.2 requires "${what}" on the panel; ${label} matched nothing.`);
+  if (at < 0) throw new Error(`Expected "${what}" on the panel; ${label} matched nothing.`);
   return at;
 }
 
@@ -325,14 +321,14 @@ function classTokens(el: HTMLElement): Set<string> {
 /** The backlog block: the one that carries both the label and the word "owed". */
 function backlogBlock(): HTMLElement {
   const found = smallestMatching([/backlog/i, /owed/i]);
-  if (!found) throw new Error('§2.2 requires the backlog element to say "owed" when backlog > 0.');
+  if (!found) throw new Error('Expected the backlog element to say "owed" when backlog > 0.');
   return found;
 }
 
 /** The neutral block beside it, for comparison. */
 function onHandBlock(): HTMLElement {
   const found = smallestMatching([/on hand/i, /\b27\b/]);
-  if (!found) throw new Error('§2.2 requires an On hand element carrying the inventory.');
+  if (!found) throw new Error('Expected an On hand element carrying the inventory.');
   return found;
 }
 
@@ -344,10 +340,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 3 — the six elements, in the §2.2 order
+// The six elements, in the spec §9.1 order
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 3: the panel renders the §2.2 elements in the §2.2 order', () => {
+describe('the panel renders the spec §9.1 elements in the spec §9.1 order', () => {
   function fullPanel() {
     return renderPanel(viewFor('WHOLESALER', { accumulated_cost: 88.75, week_holding_backlog_cost: 9.25, week_order_cost: null }));
   }
@@ -366,7 +362,7 @@ describe('CRITERION 3: the panel renders the §2.2 elements in the §2.2 order',
     expect(text).toMatch(/cost/i);
   });
 
-  it('places them in the order §2.2 fixes, which is "always the same order"', () => {
+  it('places them in the order spec §9.1 fixes, which is "always the same order"', () => {
     fullPanel();
 
     const order = [
@@ -383,10 +379,10 @@ describe('CRITERION 3: the panel renders the §2.2 elements in the §2.2 order',
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 4 and 5, failure mode 3 — the supply line
+// The supply line
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 4: the supply line renders slot by slot, plus the total', () => {
+describe('the supply line renders slot by slot, plus the total', () => {
   it('renders every slot quantity', () => {
     renderPanel(viewFor('WHOLESALER'));
 
@@ -399,7 +395,7 @@ describe('CRITERION 4: the supply line renders slot by slot, plus the total', ()
     renderPanel(viewFor('WHOLESALER'));
 
     // Week 6 is open, so the front slot is "next week" (week 7) and the one
-    // behind it "the week after" (week 8) — §2.2's own wording.
+    // behind it "the week after" (week 8) — the panel's own wording.
     const text = panelText();
     expect(text).toMatch(/next week|week\s*7\b/i);
     expect(text).toMatch(/the week after|week\s*8\b/i);
@@ -437,7 +433,7 @@ describe('CRITERION 4: the supply line renders slot by slot, plus the total', ()
   });
 });
 
-describe('CRITERION 5 / FAILURE MODE 3: show_supply_line_prominently false collapses it', () => {
+describe('show_supply_line_prominently false collapses it', () => {
   function collapsed() {
     return renderPanel(viewFor('WHOLESALER', { show_supply_line_prominently: false }));
   }
@@ -468,10 +464,10 @@ describe('CRITERION 5 / FAILURE MODE 3: show_supply_line_prominently false colla
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 7 and failure mode 13 — whose order pipeline this is
+// Whose order pipeline this is
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 7: "Orders you’ve placed" is absent for the Factory', () => {
+describe('"Orders you’ve placed" is absent for the Factory', () => {
   it('omits the block for the FACTORY, which has no supplier to reach', () => {
     renderPanel(viewFor('FACTORY'));
 
@@ -490,7 +486,7 @@ describe('CRITERION 7: "Orders you’ve placed" is absent for the Factory', () =
   });
 
   it('counts the Factory’s production order in the supply line instead', () => {
-    // `07 §3.8`: the production order enters the Factory's own production
+    // The production order enters the Factory's own production
     // pipeline, where the supply line already counts it, so there is no
     // second place for it to appear.
     renderPanel(viewFor('FACTORY'));
@@ -502,12 +498,12 @@ describe('CRITERION 7: "Orders you’ve placed" is absent for the Factory', () =
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 7b — "Waiting to be produced"
+// "Waiting to be produced"
 // ---------------------------------------------------------------------------
 
 const QUEUE_BLOCK = /waiting to be produced/i;
 
-describe('CRITERION 7b: the Factory sees its unstarted production, and only then', () => {
+describe('the Factory sees its unstarted production, and only then', () => {
   it('renders the block with production_queue when it is above zero', () => {
     // `beer-game-spec.md §7` Phase C: "excess is queued, not lost, and the
     // queue is visible to the Factory player".
@@ -535,7 +531,7 @@ describe('CRITERION 7b: the Factory sees its unstarted production, and only then
     expect(panelText()).not.toMatch(QUEUE_BLOCK);
   });
 
-  it('places the block where §2.2 puts it, before this week’s incoming order', () => {
+  it('places the block where spec §9.1 puts it, before this week’s incoming order', () => {
     renderPanel(viewFor('FACTORY', { production_queue: 34 }));
 
     const text = panelText();
@@ -552,8 +548,8 @@ describe('CRITERION 7b: the Factory sees its unstarted production, and only then
   });
 });
 
-describe('FAILURE MODE 13: the block follows orders_in_flight_slots, not the role', () => {
-  // `07 §3.8` warns that the naive wiring sends the role's *own* order
+describe('the block follows orders_in_flight_slots, not the role', () => {
+  // The naive wiring (spec §8.6) sends the role's *own* order
   // pipeline — the downstream neighbour's orders travelling towards it, which
   // is next week's demand. A screen that decides by role rather than by the
   // field it was sent renders exactly that. The payloads here are inverted
@@ -584,10 +580,10 @@ describe('FAILURE MODE 13: the block follows orders_in_flight_slots, not the rol
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 8 and failure mode 8 — backlog is never colour alone
+// Backlog is never colour alone
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 8 / FAILURE MODE 8: backlog > 0 is colour AND icon AND "owed"', () => {
+describe('backlog > 0 is colour AND icon AND "owed"', () => {
   function withBacklog() {
     return renderPanel(viewFor('WHOLESALER', { backlog: 19 }));
   }
@@ -625,10 +621,10 @@ describe('CRITERION 8 / FAILURE MODE 8: backlog > 0 is colour AND icon AND "owed
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 23 — the six conditional blocks, asserted independently
+// The six conditional blocks, asserted independently
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 23: each conditional block renders only when its flag is set', () => {
+describe('each conditional block renders only when its flag is set', () => {
   it('1/6 supply-line prominence: the breakdown appears only with the flag on', () => {
     const on = freshRender(viewFor('WHOLESALER', { show_supply_line_prominently: true }));
     expect(panelText()).toMatch(/\b41\b/);
@@ -713,10 +709,10 @@ describe('CRITERION 23: each conditional block renders only when its flag is set
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 6 — the panel half: no running total anywhere on the screen
+// The panel half: no running total anywhere on the screen
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 6: with show_running_cost_to_players off, no running total appears', () => {
+describe('with show_running_cost_to_players off, no running total appears', () => {
   it('renders neither an accumulated cost, a week cost nor a balance', () => {
     renderPanel(viewFor('WHOLESALER'));
 

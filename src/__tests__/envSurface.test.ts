@@ -1,23 +1,23 @@
 /**
- * Section 23 -- deployment and CI, the frontend half
- * (`docs/plan/23-deployment-and-ci.md`).
+ * Deployment and CI, the frontend half (`DEPLOY.md`).
  *
- * Covers `§8` acceptance criteria 9, 10, 11, 12 (the frontend half; the
+ * Covers: CI can build the frontend, `firebase.ts` is tracked at the
+ * repository root, the SPA rewrite, `DEPLOY.md`'s ship-together rule (the
  * backend half lives in `Beery_Backend/tests/test_deploy/test_config_surface.py`),
- * 16 and 17, and `§9` failure modes 1 and 7.
+ * the deploy build's backend-URL guard, and the shipped 3D model files.
  *
- * This section is configuration, not code: every test here reads a committed
+ * Deployment is configuration, not code: every test here reads a committed
  * file -- `firebase.json`, the two `.github/workflows/firebase-hosting-*.yml`
  * files, `DEPLOY.md`, `.env.example`, `.gitignore`, `firebase.ts` -- rather
  * than importing an application module. Real toolchain execution (`tsc -b`,
  * `eslint .`, `npm run build`) is already exercised for real in
- * `routes.test.tsx`'s "toolchain gates" describe block (section 16); this
+ * `routes.test.tsx`'s "toolchain gates" describe block; this
  * file does not repeat that, it asserts the CI *wiring* that makes those
- * checks run automatically on a clean checkout, which is this section's job.
+ * checks run automatically on a clean checkout.
  *
  * There are deliberately no `VITE_FIREBASE_*` assertions here beyond proving
  * they do not exist: the Firebase web config is literals in `firebase.ts` at
- * the repository root (00-decisions.md, 23-deployment-and-ci.md §4.2), and an
+ * the repository root (`DEPLOY.md`), and an
  * `envSurface` test asserting those six keys would assert the opposite of
  * the truth.
  */
@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-// The only three.js this suite loads. `24 §8.1` keeps `Board3D.test.tsx` off
+// The only three.js this suite loads. `Board3D.test.tsx` stays off
 // the renderer because jsdom has no WebGL; a GLB container needs neither a
 // canvas nor a GL context to parse, and the asset contracts below are exactly
 // the ones no `SceneModel` assertion can reach.
@@ -77,10 +77,10 @@ function assertOrdered(text: string, markers: string[]): void {
 }
 
 // ---------------------------------------------------------------------------
-// AC 9, AC 16, failure mode 1: the owner's workflows can actually build
+// The owner's workflows can actually build
 // ---------------------------------------------------------------------------
 
-describe('AC 9 / AC 16 / failure mode 1: CI can build the frontend', () => {
+describe('CI can build the frontend', () => {
   it('the merge workflow installs deps with setup-node + npm ci, then lints/types/tests before building', () => {
     const text = MERGE_WORKFLOW()
     assertOrdered(text, [
@@ -119,7 +119,7 @@ describe('AC 9 / AC 16 / failure mode 1: CI can build the frontend', () => {
     }
   })
 
-  it('failure mode 1: a clean checkout still finds firebase.ts (nothing imported from src/ is gitignored)', () => {
+  it('a clean checkout still finds firebase.ts (nothing imported from src/ is gitignored)', () => {
     // The exact Tequila failure this guards: firebase.ts gitignored while
     // src/ imports it means `npm ci && npm run build` in CI has no
     // node_modules problem at all -- it fails because the import target does
@@ -147,10 +147,10 @@ describe('AC 9 / AC 16 / failure mode 1: CI can build the frontend', () => {
 })
 
 // ---------------------------------------------------------------------------
-// AC 10: firebase.ts is tracked, at the repository root
+// firebase.ts is tracked, at the repository root
 // ---------------------------------------------------------------------------
 
-describe('AC 10: firebase.ts is present in a clean checkout, at the repository root', () => {
+describe('firebase.ts is present in a clean checkout, at the repository root', () => {
   it('git ls-files includes exactly "firebase.ts" (not src/firebase.ts)', () => {
     const output = execFileSync('git', ['ls-files', 'firebase.ts'], {
       cwd: ROOT,
@@ -167,7 +167,7 @@ describe('AC 10: firebase.ts is present in a clean checkout, at the repository r
     expect(output).toBe('')
   })
 
-  it('the three importers reach it as "../../firebase", per §4.2', () => {
+  it('the three importers reach it as "../../firebase"', () => {
     for (const file of ['src/auth/AuthContext.tsx', 'src/api/socket.ts', 'src/api/http.ts']) {
       const source = readRoot(file)
       expect(source).toMatch(/from ['"]\.\.\/\.\.\/firebase['"]/)
@@ -191,7 +191,7 @@ describe('AC 10: firebase.ts is present in a clean checkout, at the repository r
 })
 
 // ---------------------------------------------------------------------------
-// AC 11, AC 17: the SPA rewrite
+// The SPA rewrite
 // ---------------------------------------------------------------------------
 
 interface FirebaseHostingConfig {
@@ -220,10 +220,10 @@ function matchesRewriteSource(source: string, path: string): boolean {
   return new RegExp(`^${pattern}$`).test(path)
 }
 
-describe('AC 11 / AC 17: firebase.json declares the SPA rewrite', () => {
+describe('firebase.json declares the SPA rewrite', () => {
   const config = readFirebaseJson()
 
-  it('AC 11: public is still "dist", and a rewrite to index.html exists', () => {
+  it('public is still "dist", and a rewrite to index.html exists', () => {
     expect(config.hosting.public).toBe('dist')
     expect(Array.isArray(config.hosting.rewrites)).toBe(true)
     const catchAll = config.hosting.rewrites?.find((r) => r.source === '**')
@@ -237,7 +237,7 @@ describe('AC 11 / AC 17: firebase.json declares the SPA rewrite', () => {
     )
   })
 
-  it('AC 17: a deep path such as /results/ABC123 resolves to index.html, not a 404', () => {
+  it('a deep path such as /results/ABC123 resolves to index.html, not a 404', () => {
     const rewrites = config.hosting.rewrites ?? []
     const match = rewrites.find((r) => matchesRewriteSource(r.source, '/results/ABC123'))
     expect(match, 'no rewrite in firebase.json matches a deep link').toBeDefined()
@@ -267,10 +267,10 @@ describe('the owner-created .firebaserc is not touched', () => {
 })
 
 // ---------------------------------------------------------------------------
-// AC 12 (frontend half), failure mode 7: DEPLOY.md
+// DEPLOY.md (frontend half)
 // ---------------------------------------------------------------------------
 
-describe('AC 12: DEPLOY.md states the ship-together rule', () => {
+describe('DEPLOY.md states the ship-together rule', () => {
   const deploy = readRoot('DEPLOY.md')
 
   it('names the socket handler module and the same-window, backend-first rule', () => {
@@ -279,7 +279,7 @@ describe('AC 12: DEPLOY.md states the ship-together rule', () => {
     expect(deploy.toLowerCase()).toMatch(/backend first/)
   })
 
-  it('failure mode 7: documents that VITE_SOCKET_URL in production is the Render host, never the Hosting origin', () => {
+  it('documents that VITE_SOCKET_URL in production is the Render host, never the Hosting origin', () => {
     expect(deploy).toMatch(/VITE_SOCKET_URL/)
     const match = deploy.match(/VITE_SOCKET_URL\s*[=:]\s*(\S+)/)
     expect(match, 'DEPLOY.md does not give an example VITE_SOCKET_URL value').not.toBeNull()
@@ -290,10 +290,10 @@ describe('AC 12: DEPLOY.md states the ship-together rule', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Failure mode 7, enforced: the deploy build refuses an unconfigured backend
+// Enforced: the deploy build refuses an unconfigured backend
 // ---------------------------------------------------------------------------
 
-describe('failure mode 7: a deploy build cannot ship without the backend URLs', () => {
+describe('a deploy build cannot ship without the backend URLs', () => {
   it('both workflows pass the repository variables AND arm the guard', () => {
     for (const text of [MERGE_WORKFLOW(), PR_WORKFLOW()]) {
       expect(text).toContain('vars.VITE_API_BASE_URL')
@@ -322,15 +322,15 @@ describe('failure mode 7: a deploy build cannot ship without the backend URLs', 
 })
 
 // ---------------------------------------------------------------------------
-// `24-frontend-3d-board.md` §6.1, §8.3, AC 20: the shipped GLB payload
+// The shipped GLB payload
 // ---------------------------------------------------------------------------
 
 /**
- * Section 24's four meshes are configuration in exactly this file's sense:
+ * The 3D board's four meshes are configuration in exactly this file's sense:
  * they are committed files that nothing imports, so no application test can
  * notice them going missing. A `.glb` that is gitignored, or excluded by
  * Firebase Hosting's `ignore` list, is a file that builds green locally and
- * 404s in the classroom -- the same shape as failure mode 1 above, where
+ * 404s in the classroom -- the same shape as the clean-checkout test above, where
  * `firebase.ts` was gitignored while `src/` imported it.
  *
  * The filesystem, not `git ls-files`: these five arrive as new files in the
@@ -338,8 +338,8 @@ describe('failure mode 7: a deploy build cannot ship without the backend URLs', 
  * matters -- by proving `.gitignore` does not match them -- rather than by
  * asking the index about files the index has not been told about yet.
  */
-describe('24 §6.1 / AC 20: public/3dmodels ships four meshes, their credits, and no road', () => {
-  /** §6.1's table, exactly. `road.glb` is deliberately not among them. */
+describe('public/3dmodels ships four meshes, their credits, and no road', () => {
+  /** The shipped set, exactly. `road.glb` is deliberately not among them. */
   const SHIPPED = ['ATTRIBUTION.txt', 'box.glb', 'money.glb', 'person.glb', 'truck.glb']
 
   it('contains exactly the four .glb files and ATTRIBUTION.txt', () => {
@@ -349,14 +349,14 @@ describe('24 §6.1 / AC 20: public/3dmodels ships four meshes, their credits, an
   })
 
   it('road.glb is not shipped: 8.1 MB for 30 triangles, 97.5% of it textures', () => {
-    // §6.1 states the decision and the replacement: the floor is a procedural
+    // The decision and the replacement: the floor is a procedural
     // plane and the roads are painted quads -- smaller, sharper and
     // role-tintable. A `road.glb` appearing here means somebody copied the
     // whole of Samby's asset folder.
     expect(existsSync(join(ROOT, 'public', '3dmodels', 'road.glb'))).toBe(false)
   })
 
-  it('AC 20: ATTRIBUTION.txt carries the four CC-BY-4.0 credits, verbatim', () => {
+  it('ATTRIBUTION.txt carries the four CC-BY-4.0 credits, verbatim', () => {
     // CC-BY is an attribution licence; shipping the meshes without visible
     // credit is a licence breach, not a polish item. `ModelAttribution.tsx`
     // re-renders these same strings in the app, and `Board3D.test.tsx`
@@ -408,14 +408,14 @@ describe('24 §6.1 / AC 20: public/3dmodels ships four meshes, their credits, an
 })
 
 /**
- * `24 §7.3` -- the claims `gltfModels.ts` is written against, asserted against
+ * The claims `gltfModels.ts` is written against, asserted against
  * the shipped files.
  *
  * That module's header says its three decisions -- no decoder, no
  * `useAnimations`, plain `clone()` -- are *"verified against the files in
  * `public/3dmodels/`, not assumed"*, and its truck bake says the same of the
  * thirteen flat materials it folds into two meshes. Nothing was re-verifying
- * either: `24 §8.1` keeps `Board3D.test.tsx` on the `SceneModel` because jsdom
+ * either: `Board3D.test.tsx` stays on the `SceneModel` because jsdom
  * has no WebGL, so no test anywhere opened a `.glb`. A re-export that added a
  * texture, a Draco extension or a third emissive material would have been a
  * black truck, a blank scene or a silent decoder failure in a classroom.
@@ -425,7 +425,7 @@ describe('24 §6.1 / AC 20: public/3dmodels ships four meshes, their credits, an
  * loader is the crate mesh's name, and it needs it precisely because the
  * loader is what changes the name.
  */
-describe('24 §7.3: the shipped meshes still match what gltfModels.ts assumes', () => {
+describe('the shipped meshes still match what gltfModels.ts assumes', () => {
   /** The JSON chunk of a binary glTF 2.0 file. */
   function readGlb(name: string): {
     meshes: { name?: string; primitives: { attributes: Record<string, number>; material?: number; indices?: number }[] }[]
@@ -448,7 +448,7 @@ describe('24 §7.3: the shipped meshes still match what gltfModels.ts assumes', 
   const ASSETS = ['box.glb', 'truck.glb', 'person.glb', 'money.glb']
 
   it.each(ASSETS)(
-    '%s uses no extension, carries no animation and no skin (§7.3: no decoder is wired up)',
+    '%s uses no extension, carries no animation and no skin (no decoder is wired up)',
     (name) => {
       const gltf = readGlb(name)
       // `useGLTF(url)` is called with no second argument and `public/draco/` is
@@ -463,9 +463,9 @@ describe('24 §7.3: the shipped meshes still match what gltfModels.ts assumes', 
     },
   )
 
-  it.each(ASSETS)('%s keeps its asset.extras credit intact (AC 20)', (name) => {
-    // CC-BY is an attribution licence, and `24 §6.1` forbids running these
-    // files through any tool that strips `asset.extras`. `ATTRIBUTION.txt`
+  it.each(ASSETS)('%s keeps its asset.extras credit intact', (name) => {
+    // CC-BY is an attribution licence, so these files must never go through
+    // any tool that strips `asset.extras`. `ATTRIBUTION.txt`
     // and `ModelAttribution.tsx` are the visible half of the same obligation;
     // this is the half inside the file, which is where a re-export loses it.
     const extras = readGlb(name).asset?.extras ?? {}
@@ -474,7 +474,7 @@ describe('24 §7.3: the shipped meshes still match what gltfModels.ts assumes', 
     expect(extras.source, `${name} lost its source URL`).toBeTruthy()
   })
 
-  it('truck.glb is still 33 flat-coloured primitives that merge into two meshes (§7.3)', () => {
+  it('truck.glb is still 33 flat-coloured primitives that merge into two meshes', () => {
     const gltf = readGlb('truck.glb')
     const primitives = gltf.meshes.flatMap((mesh) => mesh.primitives)
     const materials = gltf.materials ?? []
@@ -487,7 +487,7 @@ describe('24 §7.3: the shipped meshes still match what gltfModels.ts assumes', 
     // `mergeGeometries` refuses parts whose attribute sets or indexed-ness
     // differ, and `addMerged` falls back to one mesh per part when it does --
     // silently turning two draw calls per truck into thirty-three, which is
-    // the whole budget of AC 19 spent on two vehicles.
+    // the whole draw-call budget spent on two vehicles.
     const shapes = new Set(
       primitives.map(
         (primitive) =>
@@ -557,15 +557,15 @@ describe('24 §7.3: the shipped meshes still match what gltfModels.ts assumes', 
       declared,
     )
     expect(crate, `box.glb has no mesh named ${sanitized}; found ${names.join(', ')}`).toBeDefined()
-    // 24 §7.2: the 96-triangle box, not the 12-triangle one beside it.
+    // The 96-triangle box, not the 12-triangle one beside it.
     expect((crate?.geometry.index?.count ?? 0) / 3).toBe(96)
 
     // And the module looks the mesh up through the sanitiser rather than
     // through a second hardcoded spelling. Read, not imported: `gltfModels.ts`
-    // starts all four fetches at module scope (§7.3), which is right in a
+    // starts all four fetches at module scope, which is right in a
     // browser behind the lazy chunk and wrong in a test runner. This is the
     // wiring-read `Board3D.test.tsx` already uses for claims about a module
-    // §8.1 forbids it to load.
+    // it must not load.
     const source = readRoot('src', 'components', 'game', 'views', 'board3d', 'gltfModels.ts')
     expect(source, 'gltfModels.ts no longer sanitises the crate mesh name').toMatch(
       /sanitizeNodeName/,

@@ -19,7 +19,7 @@ export interface PlayerLobbyProps {
  * `beer-game-spec.md` section 4.1 is explicit that players MUST NOT see game
  * parameters while the host configures, and this screen honours that by never
  * reading `store.config` at all. The server should never send a player a
- * config (`11-socket-lobby.md` section 3.4); if it ever did, there is nothing
+ * config; if it ever did, there is nothing
  * here that would render it.
  *
  * Everything on the screen comes from the store, which the socket handlers
@@ -34,7 +34,7 @@ export function PlayerLobby({ roomCode }: PlayerLobbyProps): ReactElement {
   const myRole = useGameStore((state) => state.myRole)
   const roomState = useGameStore((state) => state.roomState)
   // `join_error` is read from the store, not from a listener of this screen's
-  // own: the store is the single reader of the wire (`16 §3`).
+  // own: the store is the single reader of the wire.
   const joinError = useGameStore((state) => state.joinError)
   const clearJoinError = useGameStore((state) => state.clearJoinError)
 
@@ -92,7 +92,7 @@ export function PlayerLobby({ roomCode }: PlayerLobbyProps): ReactElement {
                   : `You have no seat yet. ${host} decides who plays which link in the chain.`}
           </p>
           {/* The server will not start while anyone in the room has no role
-              (`11 §2.2`): bots fill only the seats nobody holds. Static copy,
+              (spec §4.3): bots fill only the seats nobody holds. Static copy,
               not an eligibility check — RANDOM deals everyone a seat at start. */}
           {myRole === null &&
           (roleAssignmentMode === 'HOST_ASSIGNS' || roleAssignmentMode === 'PLAYER_CHOOSES') ? (

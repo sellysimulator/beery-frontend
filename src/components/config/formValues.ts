@@ -2,10 +2,10 @@
  * Turning the stored config into React Hook Form's values, and back again.
  *
  * `useForm({ values })` re-syncs the whole form whenever this object changes,
- * which is exactly the arrangement `18 section 3.0` describes: the store holds
+ * which is exactly the arrangement the panel is built on: the store holds
  * the truth, React Hook Form holds only the keystrokes of the field being
  * edited, and what the server stored reappears in the input the moment the
- * response lands (AC 12, FM 1).
+ * response lands.
  *
  * There is no placeholder config here and no table of defaults (2026-11-03).
  * The panel renders nothing until the stored config arrives, so `useForm` is

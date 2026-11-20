@@ -12,10 +12,10 @@ import {
 
 /**
  * The hall itself: floor and four walls, **open to the sky** — and the two
- * pieces of architecture that carry the role accent (24 §3.1, §3.0).
+ * pieces of architecture that carry the role accent.
  *
- * Every figure here is `HALL`'s: 60 × 42 at `y = 0`, walls at `x = ±30` and
- * `z = ±21`, nine metres tall, and nothing above them.
+ * Every figure here is `HALL`'s: 30 × 42 at `y = 0`, walls at `x = ±15` and
+ * `z = ±21`, ten metres tall, and nothing above them.
  *
  * **There is no ceiling** (amended 2026-09-22). A player walked the hall and
  * asked for it: *"take the ceiling away and replace it with a cyan sky."* The
@@ -25,18 +25,16 @@ import {
  * textured quad carries the floor by itself. Same three draw calls, same
  * `SHELL_DRAW_COST`, one surface fewer.
  *
- * There is still no drei `<Sky>`, and 24 §7.4 keeps that line for a **new**
- * reason. It used to be that a sky inside a sealed warehouse is visible only
- * when the camera clips through a wall; the hall is not sealed any more, so
- * the reason is now that the player asked for uniform light and a flat
- * `<color attach="background">` is uniform by construction, cheaper, and the
- * cyan they asked for. `WarehouseScene` sets it, from `model.background`.
+ * There is no drei `<Sky>`. The hall is open to the sky, but the player asked
+ * for uniform light, and a flat `<color attach="background">` is uniform by
+ * construction, cheaper, and the cyan they asked for. `WarehouseScene` sets it,
+ * from `model.background`.
  *
  * **Three draw calls**, and `SHELL_DRAW_COST` is that number: the four merged
  * walls, one quad for the floor grid, and one merged geometry carrying both
  * painted accents. The stripe and the band drawn apart would have spent one
  * more — they wear the same accent material and neither moves, so they are one
- * mesh (24 §7.1).
+ * mesh.
  */
 
 /**
@@ -59,7 +57,7 @@ function sharedFloorMaterial(): THREE.MeshStandardMaterial {
 }
 
 export interface SceneShellProps {
-  /** `SceneModel.roleSet.accent` — architecture only, never a crate (§3.8). */
+  /** `SceneModel.roleSet.accent` — architecture only, never a crate. */
   readonly accent: string
 }
 
@@ -69,7 +67,7 @@ export function SceneShell({ accent }: SceneShellProps): ReactElement {
   return (
     <group>
       {/* The four walls, merged and already in world coordinates — there is
-          nothing above them (24 §3.1, amended 2026-09-22). */}
+          nothing above them. */}
       <mesh geometry={WALLS_GEOMETRY} material={WALL_MATERIAL} />
 
       <mesh
@@ -81,11 +79,11 @@ export function SceneShell({ accent }: SceneShellProps): ReactElement {
       />
 
       {/* The two painted accents, merged (`SHELL_ACCENT_GEOMETRY`): the spine
-          stripe down the order axis — 24 §1.1's whole bet is that orders go
+          stripe down the order axis — the hall's whole bet is that orders go
           north and beer comes south along one line, and this is that line on
           the floor under the player's feet — and the band along the far wall,
           the accent a player sees from spawn without turning round. Two of
-          24 §3.0's four levers, one draw call. */}
+          the four role-identity levers, one draw call. */}
       <mesh geometry={SHELL_ACCENT_GEOMETRY} material={paint} />
     </group>
   )

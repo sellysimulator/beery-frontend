@@ -15,7 +15,7 @@ import { ROLE_LABEL } from '../components/lobby/roleCopy'
 import { formatMoney } from '../components/game/SettlementRecap'
 import { ROLE_ORDER, type Participant, type Role, type RoleToAlias } from '../types/game'
 
-/** The person in a seat: `participants`, matched through `roleToAlias` (§2.1). */
+/** The person in a seat: `participants`, matched through `roleToAlias`. */
 function seatFor(
   role: Role,
   roleToAlias: RoleToAlias,
@@ -28,22 +28,22 @@ function seatFor(
 
 /**
  * The host's live view of the whole chain, and the controls that run a session
- * (section 20).
+ * (spec §9.6).
  *
- * Section 17's `HostRoom.tsx` shell resolves this by name and renders it with
- * no arguments once the room is `RUNNING`, `PAUSED` **or** `FINISHED`
- * (**D19**, §2.0). It takes no props, reads everything from the store and
- * `useParams`, and exports no `route`: `/host/:roomCode` belongs to section
- * 17, and a second descriptor for the same path would register a duplicate.
+ * The `HostRoom.tsx` shell resolves this by name and renders it with
+ * no arguments once the room is `RUNNING`, `PAUSED` **or** `FINISHED`.
+ * It takes no props, reads everything from the store and
+ * `useParams`, and exports no `route`: `/host/:roomCode` belongs to the
+ * shell, and a second descriptor for the same path would register a duplicate.
  *
  * **It computes nothing.** Every number is a field of `store.hostState`,
  * refreshed on every `host_state` event, which the server sends unredacted to
  * the host's sid alone. The host's view is authoritative precisely because it
  * is the server's — and it is what makes a refresh indistinguishable from
- * never having left (§3.1, AC 19).
+ * never having left.
  *
  * **Authority is the server's answer, never the presence of a secret**
- * (§3.3, **D18**). A host whose tab was closed has no `host_secret`, because
+ * (**D18**). A host whose tab was closed has no `host_secret`, because
  * it lives in `sessionStorage`; the server re-authorises them against the
  * verified identity the handshake already carries. So nothing here refuses to
  * render, or hides a control, because storage is empty: deciding that locally
@@ -52,7 +52,7 @@ function seatFor(
  * `HostRoom` has already handled it by the time this renders.
  *
  * The host holds no seat: no decision form, no inventory of their own, no cost
- * of their own. The host does not play (§3.2).
+ * of their own. The host does not play.
  */
 export function HostConsole(): ReactElement {
   const params = useParams<{ roomCode: string }>()
@@ -67,7 +67,7 @@ export function HostConsole(): ReactElement {
   const gamePublicId = useGameStore((state) => state.gamePublicId)
 
   // Presentation mode is local state, and full screen is a side effect of
-  // entering it (§3.4a). The console keeps running underneath, so exiting is
+  // entering it. The console keeps running underneath, so exiting is
   // instant and no second copy of state exists.
   const [presenting, setPresenting] = useState(false)
   const present = useCallback(() => setPresenting(true), [])
@@ -101,7 +101,7 @@ export function HostConsole(): ReactElement {
   function handleResume(): void {
     // Read at the moment it is pressed, because under **D18** the secret can
     // arrive after this console first rendered. No secret means no emit at
-    // all: an empty one is not authority (§5, FM 6).
+    // all: an empty one is not authority.
     const hostSecret = getHostSecret(roomCode)
     if (hostSecret === null) return
     resumeGame({ room_id: roomCode, host_secret: hostSecret })
@@ -147,9 +147,9 @@ export function HostConsole(): ReactElement {
             </p>
           </div>
 
-          {/* Every control in §2.2 is GONE at FINISHED, not disabled: there is
+          {/* Every host control is GONE at FINISHED, not disabled: there is
               nothing left to pause, force or end, and a greyed-out "End the
-              game now" invites the host to wonder whether it worked (§2.4a). */}
+              game now" invites the host to wonder whether it worked. */}
           {isFinished ? (
             <Link
               to={resultsPath(roomCode, gamePublicId)}
@@ -170,7 +170,7 @@ export function HostConsole(): ReactElement {
         </header>
 
         {/* **D7**: the game never resumes itself, so this banner is the only
-            exit from a pause and must be impossible to miss (§2.3). The reason
+            exit from a pause and must be impossible to miss. The reason
             is the server's, verbatim. */}
         {isPaused ? (
           <div

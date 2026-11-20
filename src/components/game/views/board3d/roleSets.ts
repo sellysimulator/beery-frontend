@@ -1,9 +1,9 @@
 /**
- * The four dressings of the one hall (24 §3.3).
+ * The four dressings of the one hall (spec §9.7).
  *
  * Every coordinate in `sceneLayout.ts` is identical for all four roles. This
- * file holds the **only** role branching in the scene, and 24 §3.0 closes the
- * list at four levers: the accent hex, the role sign, the north fixture and
+ * file holds the **only** role branching in the scene, and the list is closed
+ * at four levers: the accent hex, the role sign, the north fixture and
  * the south fixture. Everything that follows — racking, figures, the desk's
  * verb — dresses one of those four; nothing else in `board3d/` is allowed to
  * ask what role the player is sitting in.
@@ -11,10 +11,10 @@
  * **Every label is imported, never re-typed.** `RoleBanner.tsx` owns the chain
  * vocabulary and says why in its own `eslint-disable` comment — *"a second
  * copy of 'who the Distributor buys from' in three files is a copy that
- * drifts"* — and a fourth file is not an improvement on a third. 24 §8.2
+ * drifts"* — and a fourth file is not an improvement on a third. A test
  * asserts these fields **by identity against the source records**, so the day
  * somebody edits `RECEIPT_LABEL` and forgets this file is a red test rather
- * than a sign in a warehouse quietly saying last month's words (FM 5).
+ * than a sign in a warehouse quietly saying last month's words.
  */
 import type { Role } from '../../../../types/game'
 import { ROLE_DESCRIPTION, ROLE_LABEL } from '../../../lobby/roleCopy'
@@ -39,9 +39,9 @@ export type RackingTiers = 1 | 2 | 3
 /** `person.glb` count at the south end. Only the Retailer sees real people. */
 export type CustomerFigureCount = 0 | 2
 
-/** Exactly what varies between the four seats (24 §3.3). */
+/** Exactly what varies between the four seats. */
 export interface RoleSet {
-  accent: string // hex, 24 §3.8
+  accent: string // hex, architecture only
   accentSoft: string // hex
   /** `ROLE_LABEL[role]` */ label: string
   /** `ROLE_DESCRIPTION[role]` */ strapline: string
@@ -63,7 +63,7 @@ export interface RoleSet {
 /**
  * The FACTORY's desk verb, spelled once.
  *
- * `19` AC 11: the Factory does not order, it starts production, and
+ * The Factory does not order, it starts production, and
  * `DecisionForm.tsx` already branches exactly this way. A Factory desk reading
  * "order from …" would be telling a player the game works in a way it does
  * not.
@@ -78,13 +78,13 @@ function orderingVerb(role: Exclude<Role, 'FACTORY'>): string {
 /**
  * `Record<Role, RoleSet>` — the one place role branching lives in the scene.
  *
- * Read the four dressings against 24 §3.4–§3.7: people and glass identify the
+ * Read the four dressings against spec §9.7: people and glass identify the
  * Retailer, three roller doors and a truck tail the Wholesaler, a through-aisle
  * under three-tier racking the Distributor, and four brewing tanks the Factory,
- * each from the spawn point alone (AC 8).
+ * each from the spawn point alone.
  */
 export const ROLE_SETS: Record<Role, RoleSet> = {
-  /** The shop (24 §3.4): the only room with people in it, and the only one
+  /** The shop: the only room with people in it, and the only one
    *  whose south wall is glass. One-tier shelving keeps it open and shallow. */
   RETAILER: {
     accent: ARCHITECTURE_HEX.roleRetailer,
@@ -104,7 +104,7 @@ export const ROLE_SETS: Record<Role, RoleSet> = {
     deskVerb: orderingVerb('RETAILER'),
   },
 
-  /** The loading dock (24 §3.5): three roller doors and the blunt rear of a
+  /** The loading dock: three roller doors and the blunt rear of a
    *  truck filling the south wall. No glass, no people. */
   WHOLESALER: {
     accent: ARCHITECTURE_HEX.roleWholesaler,
@@ -124,7 +124,7 @@ export const ROLE_SETS: Record<Role, RoleSet> = {
     deskVerb: orderingVerb('WHOLESALER'),
   },
 
-  /** The cross-dock (24 §3.6): the only room you can see all the way through,
+  /** The cross-dock: the only room you can see all the way through,
    *  and the only racking that reaches the ceiling. */
   DISTRIBUTOR: {
     accent: ARCHITECTURE_HEX.roleDistributor,
@@ -145,11 +145,11 @@ export const ROLE_SETS: Record<Role, RoleSet> = {
   },
 
   /**
-   * The brewery (24 §3.7). `UPSTREAM_LABEL.FACTORY === null` is the single most
+   * The brewery. `UPSTREAM_LABEL.FACTORY === null` is the single most
    * important structural fact about this seat, and the room says so: no road,
    * no courier, no gate, and a north-west wall carrying the sign that explains
    * the absence rather than leaving a player hunting for a door that was never
-   * built (`19` AC 7, FM 13).
+   * built.
    */
   FACTORY: {
     accent: ARCHITECTURE_HEX.roleFactory,

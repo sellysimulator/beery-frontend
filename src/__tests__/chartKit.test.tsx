@@ -1,13 +1,13 @@
 /**
- * BE-1 (`CHARTS-PLAN.md`), the component half of the chart kit: `Legend`,
- * `ChartBox` and the `crosshairSync` plugin with its React context.
+ * The component half of the chart kit: `Legend`, `ChartBox` and the
+ * `crosshairSync` plugin with its React context.
  *
- * Covers acceptance (4) the crosshair group syncs two charts by index, (5) the
- * `ChartBox` table toggle works, and the failure mode "a legend switch whose
- * name lacks the series label". Acceptance (3) is the unchanged
- * `BullwhipChart.test.tsx`, run beside this file.
+ * Asserts that a crosshair group syncs two charts by index, that the
+ * `ChartBox` table toggle works, and that every legend switch is named after
+ * its series label. `BullwhipChart.test.tsx`, run beside this file, covers the
+ * bullwhip chart on the kit.
  *
- * `chart.js` and `react-chartjs-2` are never mocked (`21 §2.2a`). jsdom cannot
+ * `chart.js` and `react-chartjs-2` are never mocked. jsdom cannot
  * create a chart, so the plugin is driven through its Chart.js hooks with
  * chart stand-ins: plain objects that carry exactly the members a plugin may
  * read from a chart and record what it asks of them.
@@ -41,7 +41,7 @@ describe('Legend', () => {
     expect(NamedLegend).toBe(Legend)
   })
 
-  describe('FAILURE MODE: a legend switch whose name lacks the series label', () => {
+  describe('a legend switch whose name lacks the series label', () => {
     it('names every switch exactly after its label', () => {
       render(<Legend items={ITEMS} hidden={new Set()} onToggle={() => {}} />)
       for (const item of ITEMS) {
@@ -224,7 +224,7 @@ describe('ChartBox', () => {
     expect(screen.getByRole('img', { name: 'Orders by week' })).not.toHaveAttribute('tabindex')
   })
 
-  describe('ACCEPTANCE 5: the table toggle', () => {
+  describe('the table toggle', () => {
     function srOnlyAncestor(el: HTMLElement): HTMLElement | null {
       return el.closest('.sr-only')
     }
@@ -463,7 +463,7 @@ describe('crosshairSync registration', () => {
   })
 })
 
-describe('ACCEPTANCE 4: a crosshair group syncs two charts by index', () => {
+describe('a crosshair group syncs two charts by index', () => {
   it('draws the rule at index n on every chart in the group when one chart is hovered', () => {
     const a = mount(standIn({ group: 'g-hover', labels: 8, left: 0, step: 10 }))
     const b = mount(standIn({ group: 'g-hover', labels: 8, left: 5, step: 20 }))

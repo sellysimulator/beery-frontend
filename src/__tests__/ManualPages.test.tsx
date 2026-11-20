@@ -1,17 +1,15 @@
 /**
- * `17-frontend-lobby.md §2.5` — `/player-manual` and `/host-manual`.
+ * `/player-manual` and `/host-manual`.
  *
- * Covers acceptance criterion 23 and failure mode 11.
- *
- * Both pages are declared `public` (§3.0) and "public and backend-independent"
- * (§2.5), so they are rendered here with **no** auth provider, no backend status
+ * Both pages are declared `public` and are "public and backend-independent",
+ * so they are rendered here with **no** auth provider, no backend status
  * provider and a recorder in place of `src/api/http.ts`: a page that needs any
  * of the three fails this file rather than passing it quietly.
  *
- * §2.5 requires the manual to be amended in two places, because it predates two
- * frozen decisions, and both amendments are asserted here.
+ * The manual is amended in two places, because it predates two decisions, and
+ * both amendments are asserted here.
  *
- *  1. Failure mode 11. D6 removes `round_timer_seconds` and `timeout_policy`
+ *  1. D6 removes `round_timer_seconds` and `timeout_policy`
  *     from v1, and `beer-game-manual.md` promises both — Part 1 Step 3
  *     ("Seconds per decision") and Part 2 Step 3 ("If there's a timer and it
  *     runs out…"). A manual that still promises a timer teaches a player to
@@ -131,7 +129,7 @@ vi.mock('../api/health', () => healthRec);
 
 function descriptorsOf(mod: unknown, label: string): RouteDescriptor[] {
   const route = (mod as { route?: RouteDescriptor | RouteDescriptor[] }).route;
-  if (!route) throw new Error(`${label} exports no \`route\` descriptor (17 §3.0).`);
+  if (!route) throw new Error(`${label} exports no \`route\` descriptor.`);
   return Array.isArray(route) ? route : [route];
 }
 
@@ -142,11 +140,11 @@ const MANUALS = [
 
 function descriptorFor(manual: (typeof MANUALS)[number]): RouteDescriptor {
   const found = descriptorsOf(manual.mod, manual.label).find((d) => d.path === manual.path);
-  if (!found) throw new Error(`${manual.label} declares no descriptor for \`${manual.path}\` (17 §3.0).`);
+  if (!found) throw new Error(`${manual.label} declares no descriptor for \`${manual.path}\`.`);
   return found;
 }
 
-/** Renders a manual with no provider of any kind — that is the point (§2.5). */
+/** Renders a manual with no provider of any kind — that is the point. */
 function renderManual(manual: (typeof MANUALS)[number]) {
   const descriptor = descriptorFor(manual);
   return render(
@@ -170,12 +168,12 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 23 — public, backend-free, and substantial
+// Public, backend-free, and substantial
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 23: both manuals render without auth and without the backend', () => {
+describe('both manuals render without auth and without the backend', () => {
   for (const manual of MANUALS) {
-    it(`${manual.path} is declared public (17 §3.0)`, () => {
+    it(`${manual.path} is declared public`, () => {
       expect(descriptorFor(manual).guard).toBe('public');
     });
 
@@ -218,10 +216,10 @@ describe('CRITERION 23: both manuals render without auth and without the backend
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 11 — the manual must not promise a timer
+// The manual must not promise a timer
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 11 / D6: neither manual promises a decision timer', () => {
+describe('D6: neither manual promises a decision timer', () => {
   for (const manual of MANUALS) {
     it(`${manual.path} contains none of "timer", "seconds per decision" or "runs out"`, () => {
       renderManual(manual);
@@ -248,7 +246,7 @@ describe('FAILURE MODE 11 / D6: neither manual promises a decision timer', () =>
     it(`${manual.path} says instead how a week actually closes`, () => {
       renderManual(manual);
 
-      // §2.5: replace those passages with "There is no time limit — the week
+      // Those passages read "There is no time limit — the week
       // closes when everyone has decided, or when the host closes it."
       const text = bodyText();
       expect(text).toMatch(/no time limit/i);
@@ -259,7 +257,7 @@ describe('FAILURE MODE 11 / D6: neither manual promises a decision timer', () =>
 });
 
 // ---------------------------------------------------------------------------
-// §2.5 amendment 2 / D3 — hosting is a capability, not an account
+// Amendment 2 / D3 — hosting is a capability, not an account
 // ---------------------------------------------------------------------------
 
 describe('D3: the host manual does not require an account to host', () => {
@@ -274,7 +272,7 @@ describe('D3: the host manual does not require an account to host', () => {
   it('offers signing in as a way to keep results, not as a precondition', () => {
     renderManual(MANUALS[1]);
 
-    // §2.5: "Create a game — you can sign in first to keep your results, or
+    // "Create a game — you can sign in first to keep your results, or
     // just start one."
     const text = bodyText();
     expect(text).toMatch(/you can sign in first to keep your results/i);

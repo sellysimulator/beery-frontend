@@ -6,8 +6,8 @@ import { CONTACT_MATERIAL, PAD_Y, toTriple, UNIT_PLANE } from './sceneMaterials'
 /**
  * One whole GLB standing where the model put it.
  *
- * The placement — asset, position, rotation — is entirely the `SceneModel`'s
- * (24 §8.1). This component decides nothing except which prototype to clone
+ * The placement — asset, position, rotation — is entirely the `SceneModel`'s.
+ * This component decides nothing except which prototype to clone
  * and that the thing needs grounding underneath it.
  *
  * **Why the clone.** `gltfModels.ts` returns shared, normalised prototypes,
@@ -19,13 +19,13 @@ import { CONTACT_MATERIAL, PAD_Y, toTriple, UNIT_PLANE } from './sceneMaterials'
  *
  * **Why only two assets.** `buildSceneModel` emits `ModelPlacement`s for
  * `truck` and `person` only — crates and bills are instanced pools, never
- * individual placements, because 24 §7.2 budgets a pile of any size at one
+ * individual placements, because a pile of any size is budgeted at one
  * draw call. The two remaining cases return `null` rather than throw: a model
  * that grows a third asset should render nothing until this file is taught
  * about it, not take the canvas down mid-week.
  */
 
-/** The dark quad that keeps a 3.8 m truck from hovering (24 §7.4: shadows are
+/** The dark quad that keeps a 3.8 m truck from hovering (shadows are
  *  off, so contact is painted). Sized to the asset, not to the pile grid. */
 function ContactPatch({ radius }: { radius: number }): ReactElement {
   return (

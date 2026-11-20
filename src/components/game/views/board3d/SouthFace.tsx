@@ -19,10 +19,10 @@ import {
 
 /**
  * The south wall — the one surface that names the seat from the spawn point
- * (24 §3.4–§3.7, AC 8).
+ * (spec §9.7).
  *
  * Four variants, one component, because they are four dressings of the same
- * wall and not four scenes (24 §3.0). Which one to draw is the `SceneModel`'s
+ * wall and not four scenes. Which one to draw is the `SceneModel`'s
  * decision, taken from `RoleSet.south`; everything here is how it is built.
  *
  * - **shopfront** — glass `y` 0 → 3.5 and a checkout counter. The only room
@@ -35,9 +35,9 @@ import {
  *
  * `doorClosed` is `SceneModel.dispatchDoorClosed`, which is `gameOver`: the
  * door drops to the floor and the week cannot leave the building. One mesh
- * translated, per 24 §4.3 — not a second scene, not an overlay.
+ * translated — not a second scene, not an overlay.
  *
- * **Every repeated part here is merged** (24 §7.1, AC 19): five mullions are
+ * **Every repeated part here is merged** (`MAX_DRAW_CALLS`): five mullions are
  * one mesh, three door frames are one and their three leaves are another —
  * they roll up together, because `gameOver` is one state for the whole hall —
  * and the cross-dock's two kerbs are one. What stays separate is what differs:
@@ -52,7 +52,7 @@ export interface SouthFaceProps {
   /** The fixture's centre on the south wall. */
   readonly position: Vec3
   readonly accent: string
-  /** True when the game is over (24 §4.3). */
+  /** True when the game is over. */
   readonly doorClosed: boolean
 }
 
@@ -77,7 +77,7 @@ export function SouthFace({ variant, position, accent, doorClosed }: SouthFacePr
           material={STRUCTURE_MATERIAL}
           position={[0, 0, z - 0.1]}
         />
-        {/* The checkout the two customers stand at (24 §3.4). */}
+        {/* The checkout the two customers stand at. */}
         <mesh
           geometry={UNIT_BOX}
           material={SURFACE_MATERIAL}
@@ -109,7 +109,7 @@ export function SouthFace({ variant, position, accent, doorClosed }: SouthFacePr
   if (variant === 'cross-dock') {
     return (
       <group>
-        {/* The through-aisle of 24 §3.6, painted down `x = 0` from the
+        {/* The through-aisle, painted down `x = 0` from the
             receiving bay to the dispatch bay and straight past the order desk:
             five arrows and the two edge stripes that make them a lane, in one
             merged geometry. In world coordinates, not the wall's — the aisle
@@ -117,12 +117,12 @@ export function SouthFace({ variant, position, accent, doorClosed }: SouthFacePr
 
             This is now the *whole* of the Distributor's identity at the south
             end. Two piers and the lintel across them were the third of the
-            three overhead structures a player asked to have removed on
-            2026-09-22, and §3.6's "the only room you can see all the way
+            three overhead structures a player asked to have removed, and the
+            cross-dock as "the only room you can see all the way
             through" survives them: with nothing built across the bay, the
             aisle runs out of the building, and the three-tier racking either
-            side of it is the other half of what AC 8 asks a player to
-            recognise the seat by. */}
+            side of it is the other half of what a player recognises the
+            seat by. */}
         <mesh geometry={CROSS_DOCK_AISLE_GEOMETRY} material={paint} />
         {/* Two waist-high kerbs where the aisle leaves the hall. They say
             "through here" at 0.9 m; nothing at all is over the player's head. */}

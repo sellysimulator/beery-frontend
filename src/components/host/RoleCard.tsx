@@ -10,7 +10,7 @@ export interface RoleCardProps {
   view: HostRoleView
   /**
    * The *person* in the seat: `participants` matched through
-   * `roleToAlias[role]`, or `null` when nobody holds it (§2.1).
+   * `roleToAlias[role]`, or `null` when nobody holds it.
    */
   participant: Participant | null
   /** `host_state.currency_symbol`. */
@@ -18,7 +18,7 @@ export interface RoleCardProps {
   roomCode: string
   /** False at `FINISHED`, where every control is gone rather than disabled. */
   showSubstitute: boolean
-  /** `RUNNING` or `PAUSED` (§2.2). */
+  /** `RUNNING` or `PAUSED`. */
   canSubstitute: boolean
 }
 
@@ -49,7 +49,7 @@ function Figure({
 }
 
 /**
- * One role's live position, as the host sees it (§2.1).
+ * One role's live position, as the host sees it (spec §9.6).
  *
  * **Two sources, and only two.** Every number is a field of
  * `host_state.roles[role]`; the person in the seat comes from
@@ -79,7 +79,7 @@ export function RoleCard({
   // The name for the *Swap in a bot* warning, which is about a person.
   const seatName = participant?.display_name ?? ROLE_LABEL[role]
   // Never a blank cell: a seat nobody holds still says whose seat it is, and
-  // only a real participant gets a connection dot (§2.1, AC 21).
+  // only a real participant gets a connection dot.
   const emptySeatLabel = `${ROLE_LABEL[role]} — ${
     view.is_bot ? 'played by a bot' : 'empty seat'
   }`

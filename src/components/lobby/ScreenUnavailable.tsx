@@ -2,11 +2,11 @@ import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
 /**
- * What a shell renders while the screen it delegates to does not exist yet
- * (**D19**): section 19's playing screen, or section 20's host console.
+ * What a shell renders while the screen it delegates to does not exist yet:
+ * the playing screen, or the host console.
  *
  * This is a build-order state, not a user-facing failure mode — it can only
- * appear between the day section 17 lands and the day 19 and 20 do. It exists
+ * appear while a shell exists and the screen it delegates to does not. It exists
  * so that the shells, the routes and their tests are buildable in between,
  * rather than the whole frontend being blocked on the last screen written.
  */

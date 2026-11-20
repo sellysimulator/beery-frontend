@@ -1,29 +1,29 @@
 /**
- * `21-frontend-results.md` — `/results/:roomCode`, the debrief screen.
+ * `/results/:roomCode`, the debrief screen (spec §9.8).
  *
- * Covers acceptance criteria 1, 2, 3, 8, 9, 14, 15, 16, 17, 18, 19, 20, 21,
- * 22 and 23, and failure modes 3, 4, 6, 7, 9, 10, 11, 12 and 14. Criteria 4, 5, 6,
- * 7 and 24 and failure modes 1, 2 and 8 are in `BullwhipChart.test.tsx`;
- * criteria 10, 11, 12 and 13 and failure mode 5 in `ExportControls.test.tsx` (the export
- * is open to every viewer since 2026-11-14).
+ * Covers: the route, the region order, the cost cards, Reveal, the statistics
+ * table, counts and null ratios, the guest claim prompt, the two entry paths,
+ * the debrief notes, the print contract, the live path, and Play again. The
+ * chart itself is in `BullwhipChart.test.tsx`; the export, open to every
+ * viewer, is in `ExportControls.test.tsx`.
  *
  * Harness notes:
  *  - `src/api/http.ts` is replaced by a recorder, so every request the screen
- *    makes is observed as a wire call (`15 §2` names the two routes this
+ *    makes is observed as a wire call (spec §11.1 has the two routes this
  *    screen uses). Nothing else about the HTTP layer is mocked.
- *  - `src/auth/AuthContext.tsx` is replaced by a stub of the value `16 §3`
- *    freezes, because `§2.5` gates the claim prompt on `useAuth().mode` and
- *    there is no other declared way to put the context into guest mode.
+ *  - `src/auth/AuthContext.tsx` is replaced by a stub of its frozen value,
+ *    because the claim prompt is gated on `useAuth().mode` and there is no
+ *    other declared way to put the context into guest mode.
  *    `signInWithGoogle` resolves without changing `mode`, so the component's
- *    own post-sign-in flow (`§2.5`: sign in, *then* `POST /games/claim`) is
+ *    own post-sign-in flow (sign in, *then* `POST /games/claim`) is
  *    what the test observes.
- *  - Store state is driven only through section 16's frozen actions, and
- *    browser state only through section 16's storage helpers.
- *  - `chart.js` and `react-chartjs-2` are **not** mocked (failure mode 13).
- *    The chart is read through its visually hidden per-week table (`§2.2a`).
+ *  - Store state is driven only through the store's frozen actions, and
+ *    browser state only through the storage helpers.
+ *  - `chart.js` and `react-chartjs-2` are **not** mocked.
+ *    The chart is read through its visually hidden per-week table.
  *  - Every figure is matched tolerantly (`$1,234.50`, `1234.5`, `92%` for
- *    `0.92`), because `00-conventions.md §5` forbids asserting on formatting
- *    the section does not specify — but a *different* number never matches.
+ *    `0.92`), because no test asserts on formatting the screen does not
+ *    specify — but a *different* number never matches.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ReactNode } from 'react';
@@ -168,7 +168,7 @@ vi.mock('../auth/AuthContext', () => ({
 // Fixtures
 // ---------------------------------------------------------------------------
 
-/** `10 §2`'s alphabet excludes 0, O, 1, I and L; these carry no digits at all. */
+/** The room-code alphabet excludes 0, O, 1, I and L; these carry no digits at all. */
 const ROOM = 'BEERYX';
 /** The permanent id behind `/results/g/:gameId`. */
 const GAME_ID = 'a'.repeat(32);
@@ -204,7 +204,7 @@ const IS_BOT: Record<Role, boolean> = {
 /**
  * Deliberately *not* derivable from `ORDERS`: `Var(retailer orders) / 16` is
  * 2.01, not 1.75, and the retailer's order variance is 32.2, not 31.25. A
- * screen that recomputes either renders a number that is not here (FM 4).
+ * screen that recomputes either renders a number that is not here.
  */
 const STATS: Record<Role, RoleStats> = {
   RETAILER: {
@@ -259,7 +259,7 @@ const DEMAND_VARIANCE = 16;
 /** Deliberately unlike every other figure on the screen. */
 const CLAIMED = 37;
 
-/** Per-week series only the by-URL path carries (`§2.0`). */
+/** Per-week series only the by-URL path carries. */
 const INVENTORY: Record<Role, number[]> = {
   RETAILER: [21, 17, 13, 9, 5, 3],
   WHOLESALER: [31, 27, 22, 18, 13, 8],
@@ -301,7 +301,7 @@ function roleResult(role: Role, over: Partial<RoleResultFixture> = {}): RoleResu
   };
 }
 
-/** `15 §2`'s `ResultsResponse`. */
+/** The `ResultsResponse` payload (spec §9.8). */
 function resultsResponse(over: Record<string, unknown> = {}) {
   return {
     public_id: GAME_ID,
@@ -521,14 +521,14 @@ function numericCells(row: HTMLElement): number[] {
     .filter((n): n is number => n !== null);
 }
 
-/** `§2.2a`: the chart's visually hidden table — one row per week, five series. */
+/** The chart's visually hidden table — one row per week, five series. */
 function chartTable(): HTMLElement {
   const found = tables().find(
     (t) => rowsOf(t).filter((row) => numericCells(row).length >= 5).length === WEEKS,
   );
   if (!found) {
     throw new Error(
-      '§2.2a requires the chart to render a visually hidden table as well, one row per ' +
+      'The chart must render a visually hidden table as well, one row per ' +
         `week with a column for demand and one per role; no such table was rendered. The ` +
         `screen rendered: ${bodyText()}`,
     );
@@ -547,7 +547,7 @@ function chartSeries(): number[][] {
   return columns.filter((col) => col.join(',') !== WEEK_NUMBERS.join(','));
 }
 
-/** `§2.3`: the per-role statistics table. */
+/** The per-role statistics table. */
 function ratioTable(): HTMLElement {
   const found = tables().find((t) => {
     const text = textOf(t);
@@ -560,7 +560,7 @@ function ratioTable(): HTMLElement {
   });
   if (!found) {
     throw new Error(
-      `§2.3 requires a per-role statistics table; none was rendered. The screen rendered: ${bodyText()}`,
+      `The page needs a per-role statistics table; none was rendered. The screen rendered: ${bodyText()}`,
     );
   }
   return found;
@@ -579,7 +579,7 @@ function ratioRows(): Array<{ role: Role; row: HTMLElement }> {
 
 function rowFor(role: Role): HTMLElement {
   const found = ratioRows().find((entry) => entry.role === role);
-  if (!found) throw new Error(`§2.3 requires a row for ${role}; the table has none.`);
+  if (!found) throw new Error(`The statistics table needs a row for ${role}; the table has none.`);
   return found.row;
 }
 
@@ -599,7 +599,7 @@ function precedes(a: Element, b: Element): boolean {
   return (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 }
 
-/** `§3.3`: the print disposition of the region a node sits in. */
+/** The print disposition of the region a node sits in. */
 function printDisposition(el: Element): string | null {
   const holder = el.closest('[data-print]');
   return holder ? holder.getAttribute('data-print') : null;
@@ -612,11 +612,11 @@ function printDisposition(el: Element): string | null {
 function descriptor(): RouteDescriptor {
   const exported = (ResultsPageModule as { route?: RouteDescriptor | RouteDescriptor[] }).route;
   if (!exported) {
-    throw new Error('ResultsPage.tsx exports no `route` descriptor (21 §3.0, 16 §3 registry).');
+    throw new Error('ResultsPage.tsx exports no `route` descriptor.');
   }
   const all = Array.isArray(exported) ? exported : [exported];
   const found = all.find((d) => d.path.startsWith('/results'));
-  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route (21 §3.0).');
+  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route.');
   return found;
 }
 
@@ -709,10 +709,10 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 16 and §3.0 — the route
+// The route
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 16: /results/:roomCode is public and self-sufficient', () => {
+describe('/results/:roomCode is public and self-sufficient', () => {
   it('declares a public route descriptor for /results/:roomCode', () => {
     expect(descriptor().path).toBe('/results/:roomCode');
     expect(descriptor().guard).toBe('public');
@@ -735,17 +735,17 @@ describe('CRITERION 16: /results/:roomCode is public and self-sufficient', () =>
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 1 — the five regions, in the §2 order
+// The five regions, in order
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 1: the debrief order is the specification', () => {
+describe('the debrief order is the specification', () => {
   it('renders the costs, then the chart, then the ratios, then the controls', async () => {
     await renderReady();
 
     const costs = smallestContaining(NAMES.RETAILER);
     const chart = chartTable();
     const ratios = ratioTable();
-    const playAgain = control(/play again/i, 'Play again (§3.4)');
+    const playAgain = control(/play again/i, 'Play again');
 
     expect(precedes(costs, chart)).toBe(true);
     expect(precedes(chart, ratios)).toBe(true);
@@ -754,10 +754,10 @@ describe('CRITERION 1: the debrief order is the specification', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 2 — the cost cards
+// The cost cards
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 2: four role cards and the chain total', () => {
+describe('four role cards and the chain total', () => {
   it('renders every role’s display name and total cost', async () => {
     await renderReady();
 
@@ -787,10 +787,10 @@ describe('CRITERION 2: four role cards and the chain total', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 3 — Reveal
+// Reveal
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 3: Reveal defaults to hidden exactly for the host tab', () => {
+describe('Reveal defaults to hidden exactly for the host tab', () => {
   function costsAreVisible(): boolean {
     return (
       textHasValue(figuresText(), STATS.RETAILER.total_cost) &&
@@ -810,7 +810,7 @@ describe('CRITERION 3: Reveal defaults to hidden exactly for the host tab', () =
     asHostTab();
     await renderReady();
 
-    await user.click(control(/reveal/i, 'Reveal (§2.1)'));
+    await user.click(control(/reveal/i, 'Reveal'));
 
     expect(costsAreVisible()).toBe(true);
   });
@@ -830,10 +830,10 @@ describe('CRITERION 3: Reveal defaults to hidden exactly for the host tab', () =
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 8 and 21, failure modes 3 and 4 — the statistics table
+// The statistics table
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 8: one row per role, in ROLE_ORDER, with all seven columns', () => {
+describe('one row per role, in ROLE_ORDER, with all seven columns', () => {
   it('renders exactly four data rows, Retailer first and Factory last', async () => {
     await renderReady();
 
@@ -902,7 +902,7 @@ describe('CRITERION 8: one row per role, in ROLE_ORDER, with all seven columns',
   });
 });
 
-describe('CRITERION 21 and FAILURE MODE 4: every figure comes from the server', () => {
+describe('every figure comes from the server', () => {
   it('renders no number in a role’s row that the server did not send for that role', async () => {
     await renderReady();
 
@@ -934,7 +934,7 @@ describe('CRITERION 21 and FAILURE MODE 4: every figure comes from the server', 
     const row = rowFor('RETAILER');
     expect(rowHasValue(row, 1.75)).toBe(true);
     // Every ratio a client could arrive at from this row's own data, and the
-    // variances behind them. FM 14's note: none of these shares a prefix with
+    // variances behind them. None of these shares a prefix with
     // a legitimate figure in the row (the nearest is the count 4), so a
     // correctly rendered integer cell can never be read as one of them.
     for (const recomputed of [
@@ -953,10 +953,10 @@ describe('CRITERION 21 and FAILURE MODE 4: every figure comes from the server', 
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 14 — a count is a count
+// A count is a count
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 14: counts render as plain integers', () => {
+describe('counts render as plain integers', () => {
   const COUNTS = ['peak_inventory', 'peak_backlog', 'weeks_in_backlog'] as const;
 
   it('renders every count without a decimal point', async () => {
@@ -973,7 +973,7 @@ describe('FAILURE MODE 14: counts render as plain integers', () => {
         ).toBeDefined();
         expect(
           cell,
-          `${role}'s ${field} is a count (00-conventions.md §4), not a rate: ` +
+          `${role}'s ${field} is a count, not a rate: ` +
             `"2.00 weeks in backlog" is wrong on a projected screen`,
         ).toMatch(/^\d+$/);
       }
@@ -983,7 +983,7 @@ describe('FAILURE MODE 14: counts render as plain integers', () => {
   it('keeps the three rates as they are — the counts are the exception', async () => {
     await renderReady();
 
-    // FM 14 is about `peak_inventory`, `peak_backlog` and `weeks_in_backlog`
+    // This is about `peak_inventory`, `peak_backlog` and `weeks_in_backlog`
     // only; a formatter that fixed them by rounding everything would take the
     // ratio and the fill rate with it.
     for (const role of ROLE_ORDER) {
@@ -995,7 +995,7 @@ describe('FAILURE MODE 14: counts render as plain integers', () => {
   });
 });
 
-describe('CRITERION 9 and FAILURE MODE 3: a null ratio is a dash, never a number', () => {
+describe('a null ratio is a dash, never a number', () => {
   const CONSTANT_DEMAND = [8, 8, 8, 8, 8, 8];
 
   beforeEach(() => {
@@ -1038,7 +1038,7 @@ describe('CRITERION 9 and FAILURE MODE 3: a null ratio is a dash, never a number
     }
   });
 
-  it('explains the dash with §2.3’s tooltip', async () => {
+  it('explains the dash with its tooltip', async () => {
     await renderReady();
 
     const wanted = "Customer demand never varied, so there's nothing to amplify.";
@@ -1050,16 +1050,16 @@ describe('CRITERION 9 and FAILURE MODE 3: a null ratio is a dash, never a number
     const everywhere = [...attributes.map(norm), bodyText()];
     expect(
       everywhere.some((text) => text.includes(norm(wanted))),
-      `§2.3's tooltip is nowhere on the screen. It rendered: ${bodyText()}`,
+      `The null-ratio tooltip is nowhere on the screen. It rendered: ${bodyText()}`,
     ).toBe(true);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 14 and 15, failure modes 6 and 7 — the guest claim prompt
+// The guest claim prompt
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 14: the claim prompt is for a guest who played this game', () => {
+describe('the claim prompt is for a guest who played this game', () => {
   const OFFER = /sign in to keep this result/i;
 
   it('renders for a guest with a guest id and a session token for this room', async () => {
@@ -1070,7 +1070,7 @@ describe('CRITERION 14: the claim prompt is for a guest who played this game', (
     expect(bodyText()).toMatch(OFFER);
   });
 
-  it('is absent for a signed-in user (failure mode 7)', async () => {
+  it('is absent for a signed-in user', async () => {
     asGuestWhoPlayed();
     auth.value = { ...auth.value, mode: 'authenticated' };
     await renderReady();
@@ -1110,20 +1110,20 @@ describe('CRITERION 14: the claim prompt is for a guest who played this game', (
   });
 });
 
-describe('CRITERION 15 and FAILURE MODE 6: claiming posts the guest id, and nothing else does', () => {
+describe('claiming posts the guest id, and nothing else does', () => {
   it('signs in and posts the guest id to /games/claim', async () => {
     const user = userEvent.setup();
     const guestId = asGuestWhoPlayed();
     await renderReady();
 
-    await user.click(control(/sign in|claim/i, 'the claim control (§2.5)'));
+    await user.click(control(/sign in|claim/i, 'the claim control'));
     await waitFor(() => {
       expect(httpRec.post).toHaveBeenCalled();
     });
 
     expect(auth.signIn).toHaveBeenCalled();
     const claim = httpRec.post.mock.calls.find((call) => /\/games\/claim$/.test(String(call[0])));
-    expect(claim, 'no POST to /games/claim was issued (§2.5)').toBeTruthy();
+    expect(claim, 'no POST to /games/claim was issued').toBeTruthy();
     expect(claim?.[1]).toMatchObject({ guest_identity: guestId });
   });
 
@@ -1132,7 +1132,7 @@ describe('CRITERION 15 and FAILURE MODE 6: claiming posts the guest id, and noth
     asGuestWhoPlayed();
     await renderReady();
 
-    await user.click(control(/sign in|claim/i, 'the claim control (§2.5)'));
+    await user.click(control(/sign in|claim/i, 'the claim control'));
     await waitFor(() => {
       expect(textHasValue(figuresText(), CLAIMED)).toBe(true);
     });
@@ -1154,7 +1154,7 @@ describe('CRITERION 15 and FAILURE MODE 6: claiming posts the guest id, and noth
     }
     await renderReady();
 
-    await user.click(control(/sign in|claim/i, 'the claim control (§2.5)'));
+    await user.click(control(/sign in|claim/i, 'the claim control'));
     await waitFor(() => {
       expect(httpRec.post).toHaveBeenCalled();
     });
@@ -1176,10 +1176,10 @@ describe('CRITERION 15 and FAILURE MODE 6: claiming posts the guest id, and noth
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 17 and 18, failure mode 9 — the two entry paths
+// The two entry paths
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 17: a 404 is retried twice before the unavailable message', () => {
+describe('a 404 is retried twice before the unavailable message', () => {
   it(
     'issues three requests and then says results are not available yet',
     async () => {
@@ -1207,7 +1207,7 @@ describe('CRITERION 17: a 404 is retried twice before the unavailable message', 
   );
 });
 
-describe('CRITERION 18 and FAILURE MODE 9: the store is used only for its own room', () => {
+describe('the store is used only for its own room', () => {
   it('issues no fetch when the store already holds this room’s finished payload', async () => {
     seedLiveStore(ROOM);
     await renderReady(ROOM);
@@ -1226,10 +1226,10 @@ describe('CRITERION 18 and FAILURE MODE 9: the store is used only for its own ro
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 19 — the debrief notes
+// The debrief notes
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 19: DebriefNotes is host-only and collapsed', () => {
+describe('DebriefNotes is host-only and collapsed', () => {
   const CLOSING = /no one was incompetent/i;
 
   function expander(): HTMLElement {
@@ -1237,7 +1237,7 @@ describe('CRITERION 19: DebriefNotes is host-only and collapsed', () => {
     if (summary) return summary;
     const collapsed = document.querySelector<HTMLElement>('[aria-expanded="false"]');
     if (collapsed) return collapsed;
-    return control(/debrief|talking point|notes|script/i, 'the DebriefNotes expander (§2.6)');
+    return control(/debrief|talking point|notes|script/i, 'the DebriefNotes expander');
   }
 
   it('is absent for anyone who is not the host of that room', async () => {
@@ -1272,10 +1272,10 @@ describe('CRITERION 19: DebriefNotes is host-only and collapsed', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criteria 20 and 23 — the print contract
+// The print contract
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 23: every region declares what print keeps', () => {
+describe('every region declares what print keeps', () => {
   it('keeps the chart and the ratio table', async () => {
     await renderReady();
 
@@ -1289,13 +1289,13 @@ describe('CRITERION 23: every region declares what print keeps', () => {
     asGuestWhoPlayed();
     await renderReady();
 
-    expect(printDisposition(control(/reveal/i, 'Reveal (§2.1)'))).toBe('omit');
-    expect(printDisposition(control(/play again/i, 'Play again (§3.4)'))).toBe('omit');
+    expect(printDisposition(control(/reveal/i, 'Reveal'))).toBe('omit');
+    expect(printDisposition(control(/play again/i, 'Play again'))).toBe('omit');
     expect(
-      printDisposition(control(/sign in|claim/i, 'the claim control (§2.5)')),
+      printDisposition(control(/sign in|claim/i, 'the claim control')),
     ).toBe('omit');
 
-    await user.click(control(/reveal/i, 'Reveal (§2.1)'));
+    await user.click(control(/reveal/i, 'Reveal'));
     expect(printDisposition(smallestContaining(NAMES.RETAILER))).not.toBeNull();
   });
 
@@ -1311,12 +1311,12 @@ describe('CRITERION 23: every region declares what print keeps', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 22, failure modes 11 and 12 — the live path
+// The live path
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 22 and FAILURE MODES 11 and 12: the live path renders what it has', () => {
+describe('the live path renders what it has', () => {
   beforeEach(() => {
-    // §3.1: the live path is available before persistence has completed.
+    // The live path is available before persistence has completed.
     httpRec.get.mockImplementation(async (url: string) => {
       throw axiosError(404, `Not persisted yet: ${url}`);
     });
@@ -1348,7 +1348,7 @@ describe('CRITERION 22 and FAILURE MODES 11 and 12: the live path renders what i
   it('renders Play again, which the live path can always offer', async () => {
     await renderReady();
 
-    expect(control(/play again/i, 'Play again (§3.4)')).toBeTruthy();
+    expect(control(/play again/i, 'Play again')).toBeTruthy();
   });
 
   it('renders no figure the live payload does not carry', async () => {
@@ -1385,7 +1385,7 @@ describe('CRITERION 22 and FAILURE MODES 11 and 12: the live path renders what i
     add(DEMAND_VARIANCE);
     add(WEEKS);
 
-    // §2.0: `inventory`, `backlog`, `cumulative_cost`, the timestamps, the
+    // `inventory`, `backlog`, `cumulative_cost`, the timestamps, the
     // preset name and `ended_early` are absent on this path. A zero, a dash or
     // a re-derivation would each be a figure the server never sent.
     const offenders = numericTokens(figuresText()).filter((token) => !allowed.has(token));
@@ -1398,7 +1398,7 @@ describe('CRITERION 22 and FAILURE MODES 11 and 12: the live path renders what i
   it('renders no per-week inventory, backlog or cumulative-cost series', async () => {
     await renderReady();
 
-    // The only per-week table is the chart's own (§2.2a); a second one would
+    // The only per-week table is the chart's own; a second one would
     // be a series this path does not have.
     const perWeekTables = tables().filter(
       (t) => rowsOf(t).filter((row) => numericCells(row).length >= 2).length >= WEEKS,
@@ -1409,14 +1409,14 @@ describe('CRITERION 22 and FAILURE MODES 11 and 12: the live path renders what i
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 10 and §3.4 — Play again
+// Play again
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 10: Play again promises no clone', () => {
+describe('Play again promises no clone', () => {
   it('says the game has to be set up again', async () => {
     await renderReady();
 
-    const region = control(/play again/i, 'Play again (§3.4)').closest('[data-print]');
+    const region = control(/play again/i, 'Play again').closest('[data-print]');
     const text = norm((region ?? document.body).textContent ?? '');
     expect(text).toContain('set up the game again');
   });
@@ -1424,7 +1424,7 @@ describe('FAILURE MODE 10: Play again promises no clone', () => {
   it('does not promise the configuration is carried over', async () => {
     await renderReady();
 
-    const region = control(/play again/i, 'Play again (§3.4)').closest('[data-print]');
+    const region = control(/play again/i, 'Play again').closest('[data-print]');
     const text = norm((region ?? document.body).textContent ?? '');
     expect(text).not.toMatch(/clone|same (settings|configuration|config|setup)/i);
     expect(text).not.toMatch(/(keep|carry|reuse)\w*\s+(your\s+)?(settings|configuration|config)/i);
@@ -1434,7 +1434,7 @@ describe('FAILURE MODE 10: Play again promises no clone', () => {
     const user = userEvent.setup();
     await renderReady();
 
-    await user.click(control(/play again/i, 'Play again (§3.4)'));
+    await user.click(control(/play again/i, 'Play again'));
 
     await waitFor(() => {
       expect(currentPath()).toBe('/home');

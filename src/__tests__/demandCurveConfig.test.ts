@@ -1,7 +1,7 @@
 /**
- * BE-5 (`CHARTS-PLAN.md`), the builder half: `buildDemandCurveConfig`'s curve
- * split (segment callbacks, the current-week band option) and the order
- * overlay (`docs/plan/20-frontend-host-console.md §2.1b`).
+ * The host console's demand curve, the builder half: `buildDemandCurveConfig`'s
+ * curve split (segment callbacks, the current-week band option) and the order
+ * overlay (spec §9.6).
  *
  * Pure builder tests. Chart.js is never mocked and nothing here needs a canvas.
  */
@@ -53,7 +53,7 @@ function segmentFn(config: ChartConfiguration<'line'>, key: 'borderColor' | 'bor
   const segment = demandDataset(config).segment as Record<string, unknown> | undefined
   const fn = segment?.[key]
   if (typeof fn !== 'function') {
-    throw new Error(`the demand dataset must carry segment.${key} as a callback (20 §2.1b)`)
+    throw new Error(`the demand dataset must carry segment.${key} as a callback`)
   }
   return fn as SegmentFn
 }
@@ -179,7 +179,7 @@ describe('buildDemandCurveConfig: the curve split (played solid, future faded)',
     }
   })
 
-  it('styles a future segment differently from a played one (acceptance 4)', () => {
+  it('styles a future segment differently from a played one', () => {
     const config = buildDemandCurveConfig([...SERIES], WEEK)
     const colour = segmentFn(config, 'borderColor')
     const dash = segmentFn(config, 'borderDash')
@@ -229,9 +229,9 @@ describe('buildDemandCurveConfig: the current week band', () => {
 })
 
 /**
- * Task 4 (2026-11-02): the projector plots only the weeks the room has already
- * seen — weeks 1 to the open week, the engine's own `customer_demand_series`
- * rule (`07 §3.8`) — while the host console keeps the whole series.
+ * The projector plots only the weeks the room has already seen — weeks 1 to
+ * the open week, the engine's own `customer_demand_series` rule (spec §8.6) —
+ * while the host console keeps the whole series.
  */
 describe('buildDemandCurveConfig: revealedThroughWeek (the projector)', () => {
   function pointArrays(config: ChartConfiguration<'line'>): unknown[][] {

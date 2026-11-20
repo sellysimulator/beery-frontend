@@ -36,7 +36,7 @@ import {
 /**
  * One fixture of the `SceneModel`, as meshes.
  *
- * The rule this file is written against is 24 §8.1, and it is the only rule
+ * The rule this file is written against is the only rule
  * that matters here: **it adds nothing the model does not carry.** Every
  * position, rotation, count, hex and string below arrives on the `fixture`
  * prop, and a coordinate typed into a `<mesh position>` would be a geometry
@@ -55,7 +55,7 @@ import {
 /**
  * How fast the week-change lift converges, per second.
  *
- * 24 §5.5 gives one lerp and `19 §3.2` gives it 400 ms — *"a class of four is
+ * The lift is one lerp, and it gets 400 ms — *"a class of four is
  * waiting"*. At this rate the lane is within a millimetre of the top in about
  * 220 ms and back on the floor the same distance after `weekChanged` flips,
  * so the whole gesture lives inside the window `GameRoomPlaying`'s
@@ -65,11 +65,11 @@ import {
 const LIFT_RATE = 14
 
 /**
- * The front receiving lane's 0.15 u lift (24 §5.5) — **one** `useFrame` on
+ * The front receiving lane's 0.15 u lift — **one** `useFrame` on
  * **one** group, never one per crate.
  *
  * It wraps the supply-lane pool, which is one `InstancedMesh` holding all four
- * lanes (24 §7.2 budgets the lanes as a single pool with four offsets). A lift
+ * lanes (the budget counts the lanes as a single pool with four offsets). A lift
  * confined to lane 0's crates alone is therefore not expressible without
  * splitting that pool into four, and splitting it would cost three draw calls
  * to animate 0.15 of a metre. The lanes rise together; the front one is 1.15×
@@ -93,13 +93,13 @@ function LaneLift({ active, children }: { active: boolean; children: ReactNode }
 }
 
 /**
- * The dark quad that grounds a pile (24 §7.4: shadows are off, so contact is
+ * The dark quad that grounds a pile (shadows are off, so contact is
  * painted). One per stack, sized to the pool's own grid.
  *
  * Only the pools that stand on bare floor get one — the stock floor, the
  * backlog pen, the production queue. The receiving lanes and the order-road
  * markers already stand on painted bay and road, which grounds them for free
- * and saves seven draw calls out of a budget 24 §7.1 caps at 90.
+ * and saves seven draw calls out of a budget capped at 90.
  */
 function PoolContact({ pool }: { pool: InstancePool }): ReactElement {
   const [width, depth] = padSize(pool.gridWidth, pool.gridDepth)
@@ -126,7 +126,7 @@ function PoolContact({ pool }: { pool: InstancePool }): ReactElement {
  * A board on a wall: the ledger, the team board, the leaderboard on its back.
  *
  * Its frame is a **clone** of the hoisted prototype, taken once and recoloured
- * in place (24 §5.5). The ledger's frame swaps to `--color-order` for the
+ * in place. The ledger's frame swaps to `--color-order` for the
  * 400 ms of a week change, and the swap arrives as `fixture.accent` — the
  * model already decided it, which is what makes it testable. Building a new
  * `MeshStandardMaterial` for that would compile a shader on the one frame of
@@ -169,11 +169,11 @@ function WallBoard({ fixture }: { fixture: SceneFixture }): ReactElement {
 }
 
 /**
- * The order desk, its canopy and the clipboard on it (24 §3.2, §4.3).
+ * The order desk, its canopy and the clipboard on it.
  *
  * Three meshes whatever the state of the game: the slab and the clipboard are
  * one merged surface geometry, the two canopy posts are another, and the
- * canopy is its own because it is one of the four things 24 §3.0 lets wear the
+ * canopy is its own because it is one of the four things allowed to wear the
  * role accent. `clipboard: 'absent'` — the game being over — swaps the surface
  * geometry for the one without a clipboard on it rather than dropping a mesh.
  */
@@ -192,7 +192,7 @@ function OrderDesk({ fixture, clipboardVisible }: { fixture: SceneFixture; clipb
  *  glyph that says what it is without asking the player to read a colour. */
 function Pen({ fixture }: { fixture: SceneFixture }): ReactElement {
   const { depth, height } = FIXTURE_SIZE.pen
-  // 24 §3.8 puts the glyph in the same hex as the crates it stands over —
+  // The glyph takes the same hex as the crates it stands over —
   // `--color-backlog` for the pen, `--color-warning` for the production queue.
   // The pool carries that hex, so the glyph takes it from there rather than
   // from a second copy of the palette; an empty pen has no pool and no
@@ -202,7 +202,7 @@ function Pen({ fixture }: { fixture: SceneFixture }): ReactElement {
   return (
     <group position={toTriple(fixture.position)} rotation={[0, fixture.rotationY, 0]}>
       {/* Four rails, one mesh: they share the structural grey and none of them
-          ever moves (24 §7.1). The glyph cannot join them — it takes its hex
+          ever moves. The glyph cannot join them — it takes its hex
           from the pool standing inside the pen. */}
       <mesh geometry={PEN_RAILS_GEOMETRY} material={STRUCTURE_MATERIAL} />
       {fixture.glyph === 'warning' ? (
@@ -277,13 +277,13 @@ function Dressing({
 
     // A placard's post is drawn by `PlacardPosts`, one `InstancedMesh` for
     // every placard in the hall — ten identical posts is one draw call, not
-    // ten (24 §7.1, AC 19). Its sign is still this fixture's, below.
+    // ten. Its sign is still this fixture's, below.
     case 'placard':
       return null
 
     case 'pile-floor':
       // Two fixtures share this kind. The pile's own pad carries no accent;
-      // the empty-pallet ghost of 24 §4.2 carries `--color-border` and is a
+      // the empty-pallet ghost carries `--color-border` and is a
       // separate fixture, which is how "there is none" gets said out loud.
       // The stock floor draws no pad: a grey slab under grey crates reads as
       // a second, larger box rather than as ground. The pen and the empty
@@ -372,12 +372,12 @@ function Dressing({
 export interface FixtureMeshProps {
   readonly fixture: SceneFixture
   /** `SceneModel.desk.clipboard !== 'absent'` — the desk's state is the
-   *  game's, and the model already read it off the props (24 §4.3). */
+   *  game's, and the model already read it off the props. */
   readonly clipboardVisible: boolean
   /** `SceneModel.dispatchDoorClosed`. */
   readonly doorClosed: boolean
   /** True while the front lane should be lifted: `weekChanged`, unless the
-   *  player asked for reduced motion (24 §5.5, §7.6). */
+   *  player asked for reduced motion. */
   readonly laneLift: boolean
 }
 

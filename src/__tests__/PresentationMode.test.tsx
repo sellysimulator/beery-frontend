@@ -1,26 +1,21 @@
 /**
- * `20-frontend-host-console.md §2.4`, `§3.4`, `§3.4a` and `§3.5` —
- * presentation mode, the projector view.
- *
- * Covers acceptance criteria 15, 16 and 17, and failure modes 1, 2, 8, 9 and
- * 13.
+ * Presentation mode, the projector view (spec §9.6).
  *
  * Harness notes:
- *  - `§3.4a` is the whole shape of this file: **the mode is state, and full
+ *  - One rule is the whole shape of this file: **the mode is state, and full
  *    screen is a side effect of entering it**. jsdom implements no Fullscreen
  *    API — `Element.prototype.requestFullscreen` is `undefined` and
  *    `document.fullscreenElement` is always `null` — so entering and exiting
  *    are read from `data-presenting="true"` on the view's root, and whether
  *    the browser was *asked* for full screen is asserted separately by
  *    stubbing the method.
- *  - `§2.4` says "the console keeps running underneath", so every assertion
- *    about what the room can see is scoped to the presenting root, never to
+ *  - "The console keeps running underneath", so every assertion about what
+ *    the room can see is scoped to the presenting root, never to
  *    `document.body`.
- *  - The mode is entered through `HostConsole`'s *Present* control (`§2.2`).
- *    `PresentationMode`'s own props are not declared anywhere in this
- *    section, so rendering it directly would be guessing at an unfrozen
- *    surface.
- *  - **`chart.js` and `react-chartjs-2` are never mocked** (`§2.1a`).
+ *  - The mode is entered through `HostConsole`'s *Present* control.
+ *    `PresentationMode`'s own props are not declared anywhere, so rendering
+ *    it directly would be guessing at an unfrozen surface.
+ *  - **`chart.js` and `react-chartjs-2` are never mocked**.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
@@ -154,7 +149,7 @@ function componentFrom(mod: unknown, name: string): Renderable {
   const exported = mod as Record<string, unknown>;
   const found = exported[name] ?? exported.default;
   if (typeof found !== 'function') {
-    throw new Error(`20 §2.0: \`src/pages/${name}.tsx\` must export \`${name}\`, taking no props.`);
+    throw new Error(`\`src/pages/${name}.tsx\` must export \`${name}\`, taking no props.`);
   }
   return found as Renderable;
 }
@@ -162,7 +157,7 @@ function componentFrom(mod: unknown, name: string): Renderable {
 const HostConsole = componentFrom(HostConsoleModule, 'HostConsole');
 
 // ---------------------------------------------------------------------------
-// Fixtures — four distinct orders and four distinct costs (failure modes 1, 2)
+// Fixtures — four distinct orders and four distinct costs
 // ---------------------------------------------------------------------------
 
 const ROOM = 'HST742';
@@ -216,7 +211,7 @@ const ROLE_NUMBERS: Record<Role, Omit<HostRoleView, 'has_submitted' | 'is_bot'>>
   },
 };
 
-/** `§2.4`: no order quantity may reach the projector. */
+/** No order quantity may reach the projector. */
 const ORDER_QUANTITIES = ROLE_ORDER.map((role) => ROLE_NUMBERS[role].last_order as number);
 
 /** The quantities the neighbours demanded — also orders, also private. */
@@ -224,7 +219,7 @@ const UPSTREAM_INCOMING = (['WHOLESALER', 'DISTRIBUTOR', 'FACTORY'] as Role[]).m
   (role) => ROLE_NUMBERS[role].incoming_order,
 );
 
-/** `§2.4`: no cost may reach the projector either. */
+/** No cost may reach the projector either. */
 const COSTS = [...ROLE_ORDER.map((role) => ROLE_NUMBERS[role].accumulated_cost), CHAIN_TOTAL_COST];
 
 const NAMES: Record<Role, string> = {
@@ -310,7 +305,7 @@ function nextSeq(): number {
 function dispatch(event: string, payload?: unknown): void {
   const listeners = [...(rec.listeners.get(event) ?? [])];
   if (listeners.length === 0) {
-    throw new Error(`Nothing is listening for "${event}" (12 §2, registered by section 16).`);
+    throw new Error(`Nothing is listening for "${event}" (the socket handlers register it).`);
   }
   act(() => {
     for (const cb of listeners) cb(payload);
@@ -387,8 +382,8 @@ function presenting(): boolean {
 }
 
 /**
- * `§3.4a`: "The view carries `data-presenting="true"` on its root", which is
- * both the plain-CSS fallback's hook and what criterion 15 reads. The deepest
+ * "The view carries `data-presenting="true"` on its root", which is both
+ * the plain-CSS fallback's hook and what the entering tests read. The deepest
  * such element is taken, so nesting the projector view inside a presenting
  * wrapper still scopes the assertions to the view itself.
  */
@@ -398,7 +393,7 @@ function presentingRoot(): HTMLElement {
   );
   if (roots.length === 0) {
     throw new Error(
-      '20 §3.4a and criterion 15: entering presentation mode must render the projector view ' +
+      'Entering presentation mode must render the projector view ' +
         `with \`data-presenting="true"\` on its root. The page rendered: ${bodyText()}`,
     );
   }
@@ -422,7 +417,7 @@ function control(re: RegExp, what: string, root: ParentNode = document.body): HT
     .filter((el) => re.test(nameOf(el)))
     .sort((a, b) => nameOf(a).length - nameOf(b).length);
   if (matches.length === 0) {
-    throw new Error(`20 §2.2: no control named "${what}" (${re}). The page rendered: ${bodyText()}`);
+    throw new Error(`No control named "${what}" (${re}). The page rendered: ${bodyText()}`);
   }
   return matches[0];
 }
@@ -431,13 +426,13 @@ async function enterPresentation(user: ReturnType<typeof userEvent.setup>): Prom
   await user.click(control(/present/i, 'Present'));
 }
 
-/** The weeks the room has already seen: 1 to the open week (`07 §3.8`). */
+/** The weeks the room has already seen: 1 to the open week (spec §8.6). */
 const REVEALED_DEMAND = DEMAND_SERIES.slice(0, WEEK);
 /** The weeks still to come — the host's alone, never the projector's. */
 const FUTURE_DEMAND = DEMAND_SERIES.slice(WEEK);
 
 /**
- * The demand curve's visually hidden table, inside a given root (`§2.1a`):
+ * The demand curve's visually hidden table, inside a given root:
  * the one holding every value of `expected`.
  */
 function demandTable(root: ParentNode, expected: number[] = DEMAND_SERIES): HTMLElement {
@@ -448,8 +443,8 @@ function demandTable(root: ParentNode, expected: number[] = DEMAND_SERIES): HTML
   });
   if (!found) {
     throw new Error(
-      '20 §2.4 and criterion 15: the demand curve renders a visually hidden table of what it ' +
-        `plots (§2.1a). None holding ${expected.length} weeks was found, in: ${textOf(root as Node)}`,
+      'The demand curve renders a visually hidden table of what it ' +
+        `plots. None holding ${expected.length} weeks was found, in: ${textOf(root as Node)}`,
     );
   }
   return found;
@@ -488,13 +483,13 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 13 — full screen is not the mechanism
+// Full screen is not the mechanism
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 13: presentation mode enters and exits with no Fullscreen API at all', () => {
-  it('jsdom really has none — the premise of §3.4a', () => {
+describe('presentation mode enters and exits with no Fullscreen API at all', () => {
+  it('jsdom really has none — the premise of this file', () => {
     expect((Element.prototype as unknown as Record<string, unknown>).requestFullscreen).toBeUndefined();
-    // `§3.4a` says `document.fullscreenElement` "is always null"; jsdom does
+    // `document.fullscreenElement` is taken as "always null" here; jsdom does
     // not define the property at all, which is the same thing for any code
     // that reads it — so the assertion is "never an element".
     expect(document.fullscreenElement).toBeFalsy();
@@ -543,10 +538,10 @@ describe('FAILURE MODE 13: presentation mode enters and exits with no Fullscreen
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 15 — what the projector shows, and how it is left
+// What the projector shows, and how it is left
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 15: presentation mode enters full screen and renders the chain, the week, the curve and the tracker', () => {
+describe('presentation mode enters full screen and renders the chain, the week, the curve and the tracker', () => {
   it('asks the browser for full screen when the API exists', async () => {
     const asked: Element[] = [];
     Object.defineProperty(Element.prototype, 'requestFullscreen', {
@@ -618,7 +613,7 @@ describe('CRITERION 15: presentation mode enters full screen and renders the cha
     for (const role of ROLE_ORDER) expect(text).toContain(NAMES[role]);
   });
 
-  it('offers no control except an exit affordance (§2.4)', async () => {
+  it('offers no control except an exit affordance', async () => {
     const user = userEvent.setup();
     renderRunning();
     await enterPresentation(user);
@@ -653,10 +648,10 @@ describe('CRITERION 15: presentation mode enters full screen and renders the cha
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 16 and failure modes 1 and 2 — what the room must never see
+// What the room must never see
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 16 / FAILURE MODE 1: no order quantity reaches the projector', () => {
+describe('no order quantity reaches the projector', () => {
   it('shows none of the four orders placed this week', async () => {
     const user = userEvent.setup();
     renderRunning();
@@ -691,7 +686,7 @@ describe('CRITERION 16 / FAILURE MODE 1: no order quantity reaches the projector
   });
 });
 
-describe('CRITERION 16 / FAILURE MODE 2: no cost reaches the projector', () => {
+describe('no cost reaches the projector', () => {
   it('shows no currency symbol', async () => {
     const user = userEvent.setup();
     renderRunning();
@@ -713,7 +708,7 @@ describe('CRITERION 16 / FAILURE MODE 2: no cost reaches the projector', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Task 4 (2026-11-02) — no future demand reaches the projector
+// No future demand reaches the projector
 // ---------------------------------------------------------------------------
 
 describe('PRESENTATION MODE: demand stops at the current week', () => {
@@ -759,15 +754,15 @@ describe('PRESENTATION MODE: demand stops at the current week', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 17 — the submission tracker
+// The submission tracker
 // ---------------------------------------------------------------------------
 
-describe('CRITERION 17: the submission tracker shows names and tick state only', () => {
+describe('the submission tracker shows names and tick state only', () => {
   /** The smallest element naming a player, plus whatever marks it. */
   function trackerRow(role: Role): HTMLElement {
     const leaf = smallest((text) => text.includes(NAMES[role]), presentingRoot());
     if (!leaf) {
-      throw new Error(`20 §2.4: the submission tracker must name ${NAMES[role]}.`);
+      throw new Error(`The submission tracker must name ${NAMES[role]}.`);
     }
     // Widen to the parent only while it still belongs to this player alone,
     // so the tick beside the name is included but the whole list is not.
@@ -820,10 +815,10 @@ describe('CRITERION 17: the submission tracker shows names and tick state only',
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 8 — no second socket
+// No second socket
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 8: entering presentation mode opens no additional connection', () => {
+describe('entering presentation mode opens no additional connection', () => {
   it('creates no new client and calls connect() no more times', async () => {
     const user = userEvent.setup();
     renderRunning();
@@ -859,14 +854,14 @@ describe('FAILURE MODE 8: entering presentation mode opens no additional connect
 });
 
 // ---------------------------------------------------------------------------
-// Failure mode 9 — backlog is never conveyed by colour alone
+// Backlog is never conveyed by colour alone
 // ---------------------------------------------------------------------------
 
-describe('FAILURE MODE 9: the chain diagram’s backlog indicator carries a non-colour signal', () => {
+describe('the chain diagram’s backlog indicator carries a non-colour signal', () => {
   const GLYPHS = ['⚠', '!', '▲', '✖', '✗', '✘', '▨', '▩', '░', '▒'];
 
   /**
-   * `§3.5`: "no information conveyed by colour alone — backlog carries a
+   * "No information conveyed by colour alone — backlog carries a
    * pattern or an icon as well". Any of: words, a figure, an icon element, a
    * glyph, an accessible description, or a declared pattern. Only a bare
    * change of colour fails.
@@ -897,7 +892,7 @@ describe('FAILURE MODE 9: the chain diagram’s backlog indicator carries a non-
 
     if (links.length === 0) {
       throw new Error(
-        '20 §2.4 and criterion 15: the projector must render the chain diagram, naming each ' +
+        'The projector must render the chain diagram, naming each ' +
           `link. Nothing named the Distributor alone. The view rendered: ${presentingText()}`,
       );
     }
@@ -907,9 +902,8 @@ describe('FAILURE MODE 9: the chain diagram’s backlog indicator carries a non-
 });
 
 // ===========================================================================
-// BE-5 (CHARTS-PLAN.md): no order stream and no lane chip under `presenting`
-// (20 §2.1b). Appended; nothing above this line is changed. The builder is
-// wrapped with the real implementation underneath so its options are visible.
+// No order stream and no lane chip under `presenting`. The builder is wrapped
+// with the real implementation underneath so its options are visible.
 // ===========================================================================
 
 const be5Rec = vi.hoisted(() => ({
@@ -962,7 +956,7 @@ async function be5Curve() {
   }>;
 }
 
-describe('BE-5 acceptance 1 / failure mode: DemandCurve never overlays orders when presenting', () => {
+describe('DemandCurve never overlays orders when presenting', () => {
   beforeEach(() => {
     be5Rec.calls.length = 0;
   });
@@ -1015,7 +1009,7 @@ describe('BE-5 acceptance 1 / failure mode: DemandCurve never overlays orders wh
   );
 });
 
-describe('BE-5 failure mode: order streams and chips do not leak into the projector view', () => {
+describe('order streams and chips do not leak into the projector view', () => {
   it('the console shows them, the presenting root does not', async () => {
     const user = userEvent.setup();
     renderRunning({ ...hostView(), order_history: BE5_HISTORY });

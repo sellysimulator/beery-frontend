@@ -34,10 +34,10 @@ const NULL_FILL_RATE_EXPLANATION = 'Nothing was ever demanded of this role.'
  * average order: the server's number, two decimals.
  *
  * Counts do not go through here. `peak_inventory`, `peak_backlog` and
- * `weeks_in_backlog` are quantities, which `00-conventions.md` §4 makes `int`
+ * `weeks_in_backlog` are quantities, which are `int`
  * everywhere, and "2.00 weeks in backlog" is wrong on a screen a host
- * projects (FM 14). Either way nothing is rounded before it is displayed,
- * added to, or derived from another figure (§3.2).
+ * projects. Either way nothing is rounded before it is displayed,
+ * added to, or derived from another figure.
  */
 function figure(value: number): string {
   return value.toFixed(2)

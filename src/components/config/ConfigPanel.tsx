@@ -12,14 +12,12 @@ import { useConfigSave } from './useConfigSave'
  * The host configuration panel: the form where a teaching intention becomes a
  * game.
  *
- * It takes no props and reads the store directly, like every screen
- * (`00-conventions.md` section 4). Section 17's host lobby resolves this module
- * by path and name through `shellScreens.ts`, which is the seam that lets this
- * section land without either of us editing the other's file (**D19**).
+ * It takes no props and reads the store directly, like every screen. The host
+ * lobby resolves this module by path and name through `shellScreens.ts`.
  *
  * Three rules shape everything below:
  *
- * - **The store is the source of truth** (`18 section 3.0`). Every input renders
+ * - **The store is the source of truth**. Every input renders
  *   from `useGameStore().config`; React Hook Form holds the keystrokes of the
  *   field being edited and nothing else. What the field shows once a save
  *   lands is what the game will actually play.

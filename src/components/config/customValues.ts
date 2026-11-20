@@ -4,8 +4,7 @@
  * A host arrives with a column out of a spreadsheet, a comma-separated line, or
  * a one-column CSV file. All three are the same thing once the separators are
  * normalised, and the trailing newline a text editor or `csv` export leaves
- * behind must not become a fourth, empty week: `"4,4,8,\n"` is three values
- * (`18` FM 9).
+ * behind must not become a fourth, empty week: `"4,4,8,\n"` is three values.
  */
 
 /** One entry per non-empty token, in order, with the tokens that did not parse. */
@@ -20,7 +19,7 @@ export interface ParsedSeries {
  * and keeps whole numbers only.
  *
  * Fractional input is rejected rather than rounded: quantities are integers
- * everywhere (`00-conventions.md` section 4) and silently turning `4.6` into
+ * everywhere and silently turning `4.6` into
  * `5` hides a mistake in a series the host will not read back week by week.
  */
 export function parseCustomValues(raw: string): ParsedSeries {

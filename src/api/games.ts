@@ -7,10 +7,9 @@
  *   - authority is only ever `host_secret`. A client-side "I am the host"
  *     boolean is a UI hint and is never sent (D3).
  *   - no payload carries a client-computed total. Inventory, cost and
- *     eligibility all arrive from the server and are display-only
- *     (`00-conventions.md` section 4).
+ *     eligibility all arrive from the server and are display-only.
  *
- * This module holds no REST call: `rooms.ts` is section 10's REST client and
+ * This module holds no REST call: `rooms.ts` is the rooms REST client and
  * `health.ts` is the wake-up probe.
  */
 import { socket } from './socket'
@@ -34,7 +33,7 @@ import type {
   SubstituteBotEmit,
 } from '../types/game'
 
-/* ─── lobby (section 11) ─── */
+/* ─── lobby ─── */
 
 /**
  * Claims the host seat. The payload omits `host_secret` when this tab holds
@@ -77,7 +76,7 @@ export function startGame(payload: StartGameEmit): void {
   socket.emit('start_game', payload)
 }
 
-/* ─── play (section 12) ─── */
+/* ─── play ─── */
 
 /**
  * `week` is this tab's belief about the open week. The server treats it as a
