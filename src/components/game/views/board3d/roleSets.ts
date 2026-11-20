@@ -125,7 +125,8 @@ export const ROLE_SETS: Record<Role, RoleSet> = {
   },
 
   /** The cross-dock: the only room you can see all the way through,
-   *  and the only racking that reaches the ceiling. */
+   *  and the tallest racking in the hall — three tiers, `6.2` m, still
+   *  clear of the 10 m wall top (`RACKING_HEIGHT`). */
   DISTRIBUTOR: {
     accent: ARCHITECTURE_HEX.roleDistributor,
     accentSoft: ARCHITECTURE_HEX.roleDistributorSoft,

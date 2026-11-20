@@ -357,7 +357,7 @@ describe('the minimum and the maximum are stated in text', () => {
   });
 
   it('takes both bounds from your_state, as min and max attributes', () => {
-    // Amended 2026-11-02: there are no negative orders. The floor is the
+    // There are no negative orders. The floor is the
     // server's `min_order_quantity` (always 0), never one the form invents.
     renderForm(viewFor('WHOLESALER', { min_order_quantity: 0, max_order_quantity: 500 }));
 

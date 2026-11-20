@@ -1,7 +1,7 @@
 /**
  * `ExportControls`, the full record's download (spec §9.5).
  *
- * Since 2026-11-14 the export is open to anyone who can see the results
+ * The export is open to anyone who can see the results
  * screen: host or player, signed in or guest, everybody downloads by the
  * game's permanent id (`GET /api/v1/games/id/{public_id}/export`) with no host
  * secret. Each format can be downloaded once per game per browser session

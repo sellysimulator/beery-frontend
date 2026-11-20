@@ -23,7 +23,7 @@ interface ClaimResponse {
  * `session_token` for it (a player), or this tab hosting it (a host). A guest
  * host who claims becomes the game's registered host; a hosted game
  * never enters the profile's game history, which counts only the roles a user
- * played. Exporting needs no claim: since 2026-11-14 anyone who can open the
+ * played. Exporting needs no claim: anyone who can open the
  * results downloads the record by its permanent id (`ExportControls`), so the
  * host's copy must not promise an account is the way to keep exporting.
  *

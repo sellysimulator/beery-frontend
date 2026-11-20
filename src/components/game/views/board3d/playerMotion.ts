@@ -47,8 +47,9 @@ import type { InteractTarget, InteractTargetId } from './sceneModel'
  *  144 Hz panel as on a throttled tab. */
 export const MOVE_SPEED = 7
 
-/** Yaw is unclamped, pitch is not. Looking further up than this in a
- *  room with a ceiling shows the player nothing and loses them the floor. */
+/** Yaw is unclamped, pitch is not. The hall is open to the sky, so looking
+ *  further up than this shows the player nothing but flat cyan and loses
+ *  them the floor. */
 export const PITCH_MIN = -Math.PI / 3
 export const PITCH_MAX = Math.PI / 3.2
 
