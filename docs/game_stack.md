@@ -420,6 +420,17 @@ if (mode === 'authenticated') return <Navigate to={destination} replace />
   Firebase session, and the welcome screen is usually the one route to a real account — so
   leaving guests on it is defensible.
 
+### Only signed-in users sign out
+
+Show **Sign out** only to a signed-in user. A guest has no sign-out and leaves guest mode only
+by signing in: the header offers a guest **Sign in** instead (a link to the welcome screen if it
+keeps guests on it, else a direct Google sign-in). Pulky and Lemony also make the sign-out
+function do nothing when no Firebase user is signed in, so a stray call cannot wipe a guest.
+Why: the guest identity (the stored guest id) is what lets a guest, including a guest host,
+claim or export their games later; a guest who wiped it would lose access to them for good. The
+cost: a guest's keys stay on that browser until they sign in and later sign out. (Decided
+2026-11-20.)
+
 ### Backend wake-up probe **[HARD-WON]**
 
 A free-tier host sleeps and cold-starts in 30–60 s. Poll `GET /api/v1/health` and show a

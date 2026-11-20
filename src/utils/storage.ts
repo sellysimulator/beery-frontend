@@ -51,6 +51,15 @@ export function getOrCreateGuestId(): string {
   return minted
 }
 
+/**
+ * Forgets this browser's guest identity; the next `getOrCreateGuestId` mints a
+ * new one. Sign-out only (spec §9.9): every per-room `session_token` is left in
+ * place, so a player signed out mid-game keeps their seat.
+ */
+export function clearGuestId(): void {
+  localStorage.removeItem(GUEST_ID_KEY)
+}
+
 /* ─── session_token — SECRET, per room ─── */
 
 function sessionTokenKey(roomCode: string): string {
