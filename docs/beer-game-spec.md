@@ -63,7 +63,7 @@ What the implementing agent SHOULD take from it:
 | Real-time transport | **Server-Sent Events (SSE)** | One stream per room; no WebSockets |
 | ORM | **SQLAlchemy** | Declarative models |
 | Migrations | **Alembic** | Every schema change ships a migration |
-| Database | **MySQL (cloud-hosted)** | Credentials from environment file only |
+| Database | **PostgreSQL 17 (Aiven, cloud-hosted)** | Credentials from environment file only |
 | Frontend | **React + Vite + TypeScript** | |
 | Styling | **Tailwind CSS** | |
 
@@ -526,7 +526,7 @@ Every event carries `game_id`, `seq`, `week`, and a server timestamp. Payloads a
 
 ## 12. Non-functional requirements
 
-- **Optimisation.** A week must settle and broadcast in well under 200 ms. Game state for an active game SHOULD be held in memory by the `GameEngine` and written through to MySQL; do not recompute from the database on every request.
+- **Optimisation.** A week must settle and broadcast in well under 200 ms. Game state for an active game SHOULD be held in memory by the `GameEngine` and written through to PostgreSQL; do not recompute from the database on every request.
 - **Determinism.** Same config + same seed + same orders = same game. A replay test MUST enforce this.
 - **Concurrency.** Order submission and window closing must be race-free. Use a per-game lock or a serialised command queue; two players submitting at the same instant must not corrupt the week.
 - **Resilience.** A player refreshing the page or losing connection rejoins with full state via `GET /games/{id}/state` + SSE `Last-Event-ID` replay. No game state lives in client memory alone.

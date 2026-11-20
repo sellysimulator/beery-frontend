@@ -39,7 +39,7 @@ export interface UserStatsResponse {
 export interface MatchSummary {
   game_id: number
   room_code: string
-  /** ISO 8601; a datetime is a string on the wire. */
+  /** ISO 8601 in UTC with a `Z` suffix (`2026-11-18T14:00:00Z`), so `new Date()` reads it as UTC. */
   finished_at: string
   role: Role
   weeks_played: number

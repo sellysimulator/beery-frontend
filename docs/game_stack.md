@@ -484,12 +484,12 @@ production; REST can go through either.
 
 **Core**: Python 3.11, FastAPI, plain **uvicorn** (`--http h11 --proxy-headers` needed for a
 correct WebSocket upgrade behind a reverse proxy), `python-socketio`, SQLAlchemy 2.0 (sync,
-declarative), PyMySQL driver, Alembic migrations, Redis (`redis.asyncio`), `firebase-admin`,
+declarative), psycopg 3 driver (PostgreSQL), Alembic migrations, Redis (`redis.asyncio`), `firebase-admin`,
 Pydantic Settings.
 
-> Driver note: use **PyMySQL**, not `mysql-connector-python`. The latter pins
-> `protobuf<=4.21.12`, which conflicts with `firebase-admin` — pulling both into one venv breaks
-> pip's resolver. PyMySQL is pure-Python and is a drop-in swap (`mysql+pymysql://...`).
+> Database note: every game persists to **PostgreSQL 17** (one managed Aiven PostgreSQL service
+> shared by all the games, one database and role per game) through **psycopg 3** (`psycopg[binary]`, URL scheme `postgresql+psycopg://`). The
+> binary wheel bundles libpq, so the slim Docker image needs no system packages for it.
 
 ### Bootstrap commands
 
@@ -499,7 +499,7 @@ python3.11 -m venv venv
 source venv/bin/activate
 
 pip install fastapi "uvicorn[standard]" python-socketio pydantic pydantic-settings \
-  sqlalchemy pymysql alembic firebase-admin python-dotenv httpx redis
+  sqlalchemy "psycopg[binary]" alembic firebase-admin python-dotenv httpx redis
 
 pip install pytest pytest-asyncio pytest-cov pytest-mock black ruff mypy  # dev/test
 
@@ -519,7 +519,7 @@ python-socketio==5.17.0
 pydantic==2.13.5
 pydantic-settings==2.15.0
 sqlalchemy==2.0.54
-pymysql==1.2.3
+psycopg[binary]==3.3.9
 alembic==1.20.0
 firebase-admin==7.6.0
 python-dotenv==1.2.3
@@ -537,6 +537,7 @@ pytest-mock==3.15.1
 black==26.5.1
 ruff==0.16.8
 mypy==2.3.1
+testcontainers[postgres]==4.15.0
 ```
 
 Install both for local work: `pip install -r requirements.txt -r requirements-dev.txt`.
@@ -910,19 +911,96 @@ which is exactly the raw UID the new schema exists to stop broadcasting.
 
 ### Database
 
-Sync SQLAlchemy 2.0, `DeclarativeBase` + `TimestampMixin`. Credentials come from separate env
-vars assembled in `config.py` (`mysql+pymysql://...`).
+PostgreSQL 17 on one managed **Aiven PostgreSQL** service shared by every Novus game, reached
+over TLS. Each game has its own database on it (`sellydb`, `lemonydb`, `pulkydb`, `beerydb`;
+Aiven's own `defaultdb` holds no game). Every game connects as the service's one user,
+`avnadmin`; there are no per-game roles, so isolation between the games is by database name
+only. Sync
+SQLAlchemy 2.0 with psycopg 3, `DeclarativeBase` + `TimestampMixin`. Credentials come from
+separate env vars that `config.py` assembles into a URL-encoded
+`postgresql+psycopg://user:pass@host:port/db` (encode them: a `@` or `%` in a password otherwise
+breaks the URL).
 
 ```python
 engine = create_engine(
     settings.db_url,
     pool_pre_ping=True,
     pool_recycle=3600,
-    pool_size=10, max_overflow=20,     # don't silently inherit QueuePool's 5+10
+    pool_size=settings.DB_POOL_SIZE,       # 2 (Lemony 3)
+    max_overflow=settings.DB_MAX_OVERFLOW, # 1
+    pool_timeout=10,                       # fail fast instead of hanging a request 30 s
     connect_args=settings.db_connect_args,
 )
 ```
-Plus a `connect` event listener running `SET time_zone = '+00:00'` — keep every timestamp UTC.
+
+**Size the pools to the shared plan, not the other way round.** The Aiven Free plan allows 20
+connections for the whole service, and all four games draw on them. Each instance opens at most
+`DB_POOL_SIZE + DB_MAX_OVERFLOW`: 2 + 1 = 3 for Selly, Pulky and Beery, and 3 + 1 = 4 for
+Lemony, whose live play goes through the database while Redis is off.
+
+| Who holds connections | Count |
+|---|---|
+| The four games in normal running (3 + 3 + 3 + 4) | 13 |
+| The second instance Render runs while one game deploys | at most +4 = 17 |
+| That deploy's `preDeployCommand` migration | +1 = 18 |
+| One operator `psql` session | +1 = 19 of 20 |
+
+So **deploy one game at a time**. A backend run locally against the shared service is one more
+instance; develop against a local Docker PostgreSQL. On a bigger plan, raise the two env vars;
+there is no code change. Sync handlers hold a connection only for the length of a query or
+transaction, so a few per instance serve many concurrent players. A burst beyond that waits up
+to `pool_timeout` and then fails that one request, rather than exhausting the server for the
+other games.
+
+`db_connect_args` always carries `options="-c timezone=UTC"`, so every session runs in UTC
+without a connect listener. With a CA it adds `sslmode="verify-full"` and
+`sslrootcert=<file>`. psycopg needs a **file path**, so `DB_SSL_CA` (PEM text or a path) is
+written once to a temp file when it holds PEM text. Without a CA and with `DB_REQUIRE_SSL` it
+adds `sslmode="require"`, which encrypts the connection but does not verify the server. For
+SQLite test URLs it returns `{}`.
+
+**Constraint names come from a naming convention.** `Base.metadata = MetaData(naming_convention=
+{"ix": "ix_%(column_0_label)s", "uq": "uq_%(table_name)s_%(column_0_N_name)s", "ck":
+"ck_%(table_name)s_%(constraint_name)s", "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+"pk": "pk_%(table_name)s"})`. A later migration then drops a constraint by a name the code
+chose, not by one the database invented. Pulky once had to drop a unique key whose only name
+was whatever the database had generated.
+
+**Every timestamp is `timestamptz` in UTC, and the API says so.** Columns are
+`DateTime(timezone=True)` and writers pass aware UTC datetimes. Responses serialize them as
+ISO-8601 with a `Z` suffix through one annotated type, `UtcDateTime` in `app/schemas/types.py`
+(`PlainSerializer` plus `WithJsonSchema({"type": "string", "format": "date-time"})`, so the
+OpenAPI document keeps `format: date-time`). It treats a naive value as UTC (SQLite unit tests
+return naive values). Exports and socket payloads use the same format. Pulky's schemas carry
+`str` fields filled by its one formatter, `results_service.iso_utc`, with the same output. A naive `2026-11-18T14:00:00` on the wire is parsed by a browser
+as *local* time, which is a silent offset bug.
+
+**Booleans are `sa.Boolean`.** PostgreSQL has a real `boolean` and rejects an integer bound into
+it, so raw SQL binds Python `True`/`False`, never `1`/`0`, and never filters with `flag = 1`.
+
+**String equality is case-sensitive.** Normalize identifiers such as room codes (`.upper()`) at
+the API boundary instead of relying on a collation.
+
+**`char(n)` comes back space-padded.** Use `CHAR(n)` only for values that are always exactly
+`n` characters (a `uuid4().hex` public id, a fixed-length room code). Otherwise use
+`String(n)`.
+
+**Dialect-specific SQL:**
+
+| Need | Write |
+|---|---|
+| Upsert | `postgresql.insert(t).on_conflict_do_update(index_elements=[...], set_={c: stmt.excluded[c]})` |
+| Id of a new row | `RETURNING id` (`.returning(t.c.id)`, then `.scalar_one()`) |
+| Update joined to another table | `UPDATE a SET ... FROM b WHERE ...` |
+| Nullable sort | `ORDER BY x DESC NULLS LAST` when NULLs must sort last |
+
+SQLite, used by the fast unit tests, supports `RETURNING`, `ON CONFLICT ... DO UPDATE` and
+`NULLS LAST`, so this SQL stays portable.
+
+**Server defaults: timestamps only.** `server_default` exists only on the `TimestampMixin`
+columns (`created_at`/`updated_at` = `now()`). Every fact column is written explicitly by the
+app, with no value defaults such as `false`, `0` or `20`. A database default that silently fills
+a fact hides a write bug and stores a fact nobody played.
 
 **`TimestampMixin` needs `server_default`, not just a Python default. [HARD-WON]**
 
@@ -934,32 +1012,41 @@ updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow,
 ```
 
 `default=`/`onupdate=` are **ORM-side** and only fire for ORM inserts. Bulk result-upload paths
-use raw `text()` INSERTs, which bypass them — so a `NOT NULL` column with no DB-side default
-fails hard under a strict `sql_mode` (`STRICT_ALL_TABLES`) with
-`Field 'created_at' doesn't have a default value`, swallowed by the upload's `except` and
-silently dropping every completed game. Let the database supply the value and do **not** name
-those columns in the raw INSERT — that keeps the same SQL correct against a schema that has the
-columns and one that doesn't.
+use raw `text()` INSERTs, which bypass them. A `NOT NULL` column with no DB-side default then
+fails with `null value in column "created_at" violates not-null constraint`. The upload's
+`except` swallows that error and silently drops every completed game. Let the database supply
+the value and do **not** name those columns in the raw INSERT.
 
-**Migrations are Alembic-managed**, not `create_all()` at startup:
+**Migrations are Alembic-managed**, not `create_all()` at startup. Revisions are numbered
+(`0001_postgres_baseline`, `0002_...`), and the baseline builds the whole schema on an empty
+database:
+
 ```bash
-alembic revision --autogenerate -m "describe the change"
-alembic upgrade head          # fresh/dev database, and every later revision anywhere
-alembic stamp <baseline>      # adopt Alembic on a DB whose tables already exist, then upgrade head
+alembic revision --autogenerate -m "describe the change"   # then review it by hand
+alembic upgrade head
 ```
-`alembic/env.py` imports `Base`, sets `target_metadata = Base.metadata`, and pulls the URL from
-`app.config.settings.db_url` at runtime.
 
-Adopt an inherited database at the **baseline** revision, never `alembic stamp head`: that marks
-every later revision as applied without running it. Render runs no migrations, so back up, then
-migrate **before** the push whose code needs the new schema; otherwise the end-of-game upload
-fails on the missing table or column and every finished game is lost.
+`alembic/env.py` imports `Base`, sets `target_metadata = Base.metadata`, and passes
+`settings.db_url` + `settings.db_connect_args` straight to `create_engine`. Never route the URL
+through `config.set_main_option`: configparser treats a `%` in the password as interpolation.
 
-> **Verify the live schema before trusting the migration. [HARD-WON]** Tequila Game's production
-> database was built by the old `create_all()`, was never stamped, and has no `alembic_version`
-> table — so the migration file and the real schema disagree (the live tables have no
-> `created_at`/`updated_at` at all). Running `alembic upgrade head` there would try to recreate
-> existing tables. On any inherited database, inspect `information_schema.COLUMNS` first.
+Render runs migrations as the **`preDeployCommand: alembic upgrade head`** in `render.yaml`,
+and `autoDeployTrigger: checksPass` makes a deploy wait for CI. A failed migration therefore
+fails the deploy before the new code serves traffic. Back up before a migration that drops or
+rewrites data (`pg_dump -Fc`).
+
+**The DDL is generated and checked in.** `Novus/scripts/db/gen_ddl.py --backend <Game>_Backend`
+runs `alembic upgrade head` against a throwaway `postgres:17` container and writes the
+normalized `pg_dump --schema-only` to `<Game>_Backend/db/schema.postgres.sql`. The backend's
+`dbschema` suite repeats that dump against its Testcontainers database and fails if the
+committed file differs, and a second test requires `compare_metadata(Base.metadata) == []`. So
+models, migrations and the committed DDL cannot drift. Regenerate the file in the same change as
+any migration.
+
+**Tests.** Fast unit tests use SQLite. Tests marked `dbschema` run against a real
+`postgres:17` through Testcontainers (`testcontainers[postgres]`): `alembic upgrade head`
+once per session, and `TRUNCATE ... RESTART IDENTITY CASCADE` between tests. CI runs them as
+their own job.
 
 **Store facts, derive the rest. [HARD-WON]** (`pulky-findings.md` item 15) A stored game must
 read back exactly as it was played, and the schema stays normalized: nothing the database can
@@ -975,9 +1062,10 @@ compute is stored.
 - **A parity test** plays whole games through the real path, stores them, reads them back and
   requires equality field for field. A second test compares the config model to the config
   columns, so a new setting cannot ship without its column and migration.
-- **Exact types.** Money is `DECIMAL(20,2)` (prices rounded to the cent where they enter);
-  host settings that are any number in their bounds are `DOUBLE`. Read `DECIMAL` back as
-  `float` (`Numeric(..., asdecimal=False)`), the type the engine wrote.
+- **Exact types.** Money is `NUMERIC(20,2)` (prices rounded to the cent where they enter);
+  host settings that are any number in their bounds are `double precision` (`sa.Double`). Read
+  `NUMERIC` back as `float` (`Numeric(..., asdecimal=False)`), the type the engine wrote.
+  Money goes over the wire as a JSON number, never a Decimal string.
 
 Tequila Game's implementation: `Selly_Backend/app/core/records.py` (`derive_week`),
 `db_service.load_game`, `tests/test_services/test_stored_parity.py`, and
@@ -1008,12 +1096,14 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["https://<game>.web.app", "http://localhost:5173"]
 
     DB_HOST: str = "localhost"
-    DB_PORT: int = 3306
-    DB_USER: str = "root"
+    DB_PORT: int = 5432
+    DB_USER: str = "postgres"
     DB_PASSWORD: str = ""
-    DB_DATABASE: str = "app_db"
-    DB_REQUIRE_SSL: bool = False   # opt-in; see note below
-    DB_SSL_CA: str = ""
+    DB_DATABASE: str = "<game>"    # the game's database on the shared service
+    DB_REQUIRE_SSL: bool = False   # true on Render; see note below
+    DB_SSL_CA: str = ""            # PEM text or path of the shared service's CA
+    DB_POOL_SIZE: int = 2          # see "Size the pools to the shared plan"
+    DB_MAX_OVERFLOW: int = 1
 
     REDIS_URL: str = ""
     FIREBASE_SERVICE_ACCOUNT_JSON: str = ""
@@ -1025,11 +1115,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 ```
 
-> TLS to a managed MySQL: PyMySQL negotiates TLS opportunistically, so a managed provider may
-> already be encrypting the connection even with no `ssl` connect args — verify with
-> `SELECT * FROM performance_schema.session_status WHERE VARIABLE_NAME='Ssl_cipher';` before
-> assuming it isn't. The durable control is `require_secure_transport=ON` on the server, which
-> covers every client; `DB_REQUIRE_SSL` is belt-and-braces.
+> TLS to the managed PostgreSQL: set `DB_SSL_CA` to the CA certificate of the shared Aiven
+> PostgreSQL service (Aiven console → service → *CA certificate*), so the backend connects with
+> `sslmode=verify-full`, which checks both the certificate chain and the hostname. All four
+> games use the same CA. Keep the one local copy at `Novus/novus-secrets/aiven-pg-ca.pem`
+> (outside every game repo) and point each local `DB_SSL_CA` at that path; on Render paste the
+> PEM text. Each Aiven project has its own CA, so a service in a different project needs its
+> CA. Aiven only
+> accepts TLS connections, so `DB_REQUIRE_SSL` without a CA still encrypts. It does not
+> verify the server, and the startup log warns about that. Confirm a live session with
+> `SELECT ssl, version, cipher FROM pg_stat_ssl WHERE pid = pg_backend_pid();`.
 
 ### Dockerfile
 
@@ -1066,6 +1161,9 @@ DB_USER=
 DB_PASSWORD=
 DB_DATABASE=
 DB_REQUIRE_SSL=
+DB_SSL_CA=
+DB_POOL_SIZE=
+DB_MAX_OVERFLOW=
 REDIS_URL=
 FIREBASE_SERVICE_ACCOUNT_JSON=
 ```
@@ -1122,8 +1220,8 @@ be written down in that game's plan rather than silently resolved in code.
 - [ ] **`REDIS_URL` points at a live instance.** Managed free-tier Redis databases get reclaimed
       when idle; the hostname then returns `NXDOMAIN` and every room operation fails. All room
       state lives there — this takes the whole game down.
-- [ ] Schema: `alembic upgrade head` (new DB) or `alembic stamp head` + a manual
-      `information_schema` check (inherited DB). Never assume the migration matches production.
+- [ ] Schema: `render.yaml` runs `alembic upgrade head` as the `preDeployCommand`, and
+      `db/schema.postgres.sql` matches it (`python scripts/db/gen_ddl.py --backend <Game>_Backend --check`).
 - [ ] Startup logs show Firebase verification is **active**, not the CRITICAL warning.
 - [ ] Smoke test in the deployed environment: sign in → create → join from a second browser →
       play a full round → **finish a game** (that last step is the only one that exercises the
