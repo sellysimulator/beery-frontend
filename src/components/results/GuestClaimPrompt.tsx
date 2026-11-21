@@ -2,7 +2,7 @@ import { useState, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 import http, { errorMessage } from '../../api/http'
 import { useAuth } from '../../auth/AuthContext'
-import { getGuestId, getSessionToken, isHostForRoom } from '../../utils/storage'
+import { getGuestId, getSessionToken } from '../../utils/storage'
 
 export interface GuestClaimPromptProps {
   roomCode: string
@@ -19,13 +19,13 @@ interface ClaimResponse {
  * Who played is decided by this browser, not by the payload: `identity` is
  * server-only and never on the wire, so no results
  * payload can say who was in the room. The three conditions are guest mode, a
- * minted guest id, and this browser's own evidence that it was in the room: a
- * `session_token` for it (a player), or this tab hosting it (a host). A guest
- * host who claims becomes the game's registered host; a hosted game
- * never enters the profile's game history, which counts only the roles a user
- * played. Exporting needs no claim: anyone who can open the
- * results downloads the record by its permanent id (`ExportControls`), so the
- * host's copy must not promise an account is the way to keep exporting.
+ * minted guest id, and this browser's own evidence that it played a seat in
+ * the room: a `session_token` for it. Hosting is not offered: a claim moves
+ * only the seats a guest played, and a guest host is never recorded (**D23**),
+ * so there is nothing of a hosted game to claim. Exporting needs no claim
+ * either: anyone who can open the results downloads the record by its
+ * permanent id (`ExportControls`), so this must not promise an account is the
+ * way to keep exporting.
  *
  * The guest id travels in the `POST /games/claim` body and nowhere else: not
  * in a path, not in a query string, not in a log.
@@ -38,8 +38,7 @@ export function GuestClaimPrompt({ roomCode }: GuestClaimPromptProps): ReactElem
 
   const guestId = getGuestId()
   const playedHere = getSessionToken(roomCode) !== null
-  const hostedHere = isHostForRoom(roomCode)
-  const eligible = mode === 'guest' && guestId !== null && (playedHere || hostedHere)
+  const eligible = mode === 'guest' && guestId !== null && playedHere
 
   // Signing in flips `mode` to 'authenticated', which would otherwise pull the
   // panel out from under the result it was asked for.
@@ -71,14 +70,11 @@ export function GuestClaimPrompt({ roomCode }: GuestClaimPromptProps): ReactElem
       {claimed === null ? (
         <>
           <h2 className="text-lg font-semibold">
-            {playedHere
-              ? 'Sign in to keep this result in your profile.'
-              : 'Sign in to link this game to your account.'}
+            Sign in to keep this result in your profile.
           </h2>
           <p className="text-sm text-ink-muted">
-            {playedHere
-              ? 'You played this game as a guest. Signing in attaches it — and every other game this browser played — to your account.'
-              : "You hosted this game as a guest. Signing in records your account as its host. You don't need an account to download the full record: anyone with this results page can. Hosted games don't appear in your game history; games this browser played as a guest are added to it."}
+            You played this game as a guest. Signing in attaches it — and every other game
+            this browser played — to your account.
           </p>
           <div>
             <button

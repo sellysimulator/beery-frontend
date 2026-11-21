@@ -150,13 +150,21 @@ export function HostConsole(): ReactElement {
           {/* Every host control is GONE at FINISHED, not disabled: there is
               nothing left to pause, force or end, and a greyed-out "End the
               game now" invites the host to wonder whether it worked. */}
+          {/* The results URL is the game's `public_id` (D22), which arrives
+              with `game_persisted`; until then there is nothing to link to. */}
           {isFinished ? (
-            <Link
-              to={resultsPath(roomCode, gamePublicId)}
-              className="rounded-md border border-brand bg-brand-soft px-5 py-2.5 text-base font-semibold text-brand-strong hover:border-ink"
-            >
-              See the results
-            </Link>
+            gamePublicId ? (
+              <Link
+                to={resultsPath(gamePublicId)}
+                className="rounded-md border border-brand bg-brand-soft px-5 py-2.5 text-base font-semibold text-brand-strong hover:border-ink"
+              >
+                See the results
+              </Link>
+            ) : (
+              <p role="status" className="text-sm text-ink-muted">
+                Saving the results…
+              </p>
+            )
           ) : (
             <HostControls
               roomCode={roomCode}

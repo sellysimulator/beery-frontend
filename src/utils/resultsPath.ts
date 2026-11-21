@@ -1,11 +1,13 @@
 /**
- * Where "See the results" points once a game has ended.
+ * The one URL of a finished game's results: `/results/:publicId` (spec §9.8,
+ * **D22**).
  *
- * The permanent `/results/g/:gameId` once the game is persisted; before that
- * (or if persistence failed) the room-code URL, which the results page can
- * still serve from the live `game_finished` payload. A room code is recycled
- * once the room expires, so it is the fallback, never the preference.
+ * The `public_id` arrives in `game_persisted` once the game is written; until
+ * then there is no results URL, and the end-of-game screens say the results
+ * are being saved. Never a room code: codes are recycled, so a code names no
+ * particular game. The link needs no secret, no live room and no browser
+ * storage, and it never expires.
  */
-export function resultsPath(roomCode: string, gamePublicId: string | null): string {
-  return gamePublicId ? `/results/g/${gamePublicId}` : `/results/${roomCode}`
+export function resultsPath(publicId: string): string {
+  return `/results/${publicId}`
 }

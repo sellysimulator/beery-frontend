@@ -25,7 +25,7 @@ backend host in production, e.g. `https://beery-backend.onrender.com` --
 `FirebaseExtended/action-hosting-deploy` step.
 
 `firebase.json` declares `public: "dist"` and a catch-all SPA rewrite to
-`/index.html`, so a deep link -- `/results/:roomCode`, `/host/:roomCode`,
+`/index.html`, so a deep link -- `/results/:publicId`, `/host/:roomCode`,
 `/join/:roomCode`, `/profile` -- resolves on a hard load or a shared URL
 instead of 404ing (Hosting otherwise looks for a literal file at that path).
 
@@ -86,14 +86,25 @@ old frontend against a new backend means nobody can play.
 `app/sockets/handlers/`, deploy `Beery_Backend` and `Beery_Frontend` in the
 same window, backend first.**
 
+**A REST route the live frontend still calls is removed frontend first**, for the
+same reason: the new frontend must stop calling it before the backend drops it.
+The public_id-only results change (spec D22) is one: the previous frontend fetched
+`GET /games/{room_code}/results`, which the backend no longer serves, while the new
+frontend calls only routes the previous backend already had for its results flow
+(`GET /games/id/{public_id}/results`, `/export`, `game_persisted`). The new profile
+needs the new backend (`/users/me/hosted-games`, `/users/me/games/{public_id}`,
+`public_id` on history rows, `best_game_public_id`), so deploy the backend right
+after the frontend, in the same window: in between, only the profile's links and
+its hosted list are degraded.
+
 ## Deploy checklist (frontend-relevant subset)
 
 - [ ] Frontend and backend deployed from the same commit window (see above).
 - [ ] CI built the frontend -- confirm the Hosting release timestamp moved.
 - [ ] `VITE_SOCKET_URL` points directly at the backend host, **not** at
       `beersim.web.app` or any other Hosting origin.
-- [ ] A deep link, e.g. `https://beersim.web.app/results/ABC123`, loads
-      instead of 404ing.
+- [ ] A deep link, e.g. a finished game's `https://beersim.web.app/results/<public_id>`,
+      loads instead of 404ing.
 - [ ] Smoke test: sign in, create a room, join from a second browser, play a
       full week, finish a game -- both as a signed-in user and as a guest.
 - [ ] `git ls-files firebase.ts` still reports the file tracked at the

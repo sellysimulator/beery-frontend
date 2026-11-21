@@ -102,11 +102,11 @@ bearing documentation — match that style.
 |---|---|
 | `/` | public |
 | `/player-manual`, `/host-manual` | public |
-| `/results/:roomCode`, `/results/g/:gameId` | public (the second is the permanent URL, by `public_id`) |
+| `/results/:publicId` | public — the one results URL (D22), by the game's `public_id`; never a room code |
 | `/join/:roomCode` | public (redirect into `/game/:roomCode`) |
 | `/home`, `/game/:roomCode`, `/host/:roomCode` | auth+backend |
 | `/multihost/new`, `/multihost` | auth+backend |
-| `/profile`, `/profile/games/:gameId` | auth+backend |
+| `/profile`, `/profile/games/:publicId` | auth+backend |
 
 ## 4. Commands
 
@@ -427,13 +427,32 @@ dashboard card shows a small inline QR and opens it too. `utils/clipboard.ts`'s
 `public_id`), host or player, guest or signed in, and downloads from
 `GET /games/id/{public_id}/export` with no `X-Host-Secret` — the host too. The export is not
 bound to the host because a guest host has no account to fall back on once the room or tab is
-gone (D22). The export by room code stays host-only on the
-server and is not called from here. Each game and format can be downloaded **once per browser
+gone (D22). There is no export or results route by room code on the server. Each game and format can be downloaded **once per browser
 session**: after a success the button is disabled and reads "CSV already downloaded this
 session"; a failure marks nothing. That flag is UX only; the server's per-address limit (100
 exports an hour, both formats) is the real guard, and its 429 arrives through `errorMessage`.
 Don't reintroduce a host check, an expiry warning or "only the host can export" copy, and
 `GuestClaimPrompt` must not sell an account as the way to keep exporting.
+
+### Results are shown only by `public_id` (D22)
+
+The one results URL is `/results/:publicId` (`utils/resultsPath.ts`), and `ResultsPage` renders
+only what `GET /games/id/{public_id}/results` answers: never the live store's `game_finished`
+payload, a room code or anything in browser storage (the host tab's hidden-costs default is the
+one presentation detail storage still decides). The end screens (`GameOverPanel`, the finished
+`HostConsole`) link there once `game_persisted` has put `gamePublicId` in the store and say
+"Saving the results…" until then — never a fallback link by room code. The profile names games
+by `public_id` too: history rows and the best game open `/profile/games/:publicId`
+(`GET /users/me/games/{public_id}`), and no wire field here is an internal `games.id`.
+
+### Games you hosted (D23)
+
+`profile/HostedGamesList.tsx` is the profile's separate "Games you hosted" section, from
+`GET /users/me/hosted-games` (the profile's third request on mount; it pages with
+`?hosted_page=N`). Each entry links to `/results/:publicId`. It is a list only: the match
+history and the stats stay played-only, and `GuestClaimPrompt` is offered only to a guest whose
+browser played a seat in the room (a `session_token`) — a guest host is never recorded, so there
+is no host claim and no "records your account as its host" copy.
 
 ## 7. Storage scopes — not interchangeable
 

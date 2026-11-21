@@ -426,10 +426,56 @@ Show **Sign out** only to a signed-in user. A guest has no sign-out and leaves g
 by signing in: the header offers a guest **Sign in** instead (a link to the welcome screen if it
 keeps guests on it, else a direct Google sign-in). Pulky and Lemony also make the sign-out
 function do nothing when no Firebase user is signed in, so a stray call cannot wipe a guest.
-Why: the guest identity (the stored guest id) is what lets a guest, including a guest host,
-claim or export their games later; a guest who wiped it would lose access to them for good. The
-cost: a guest's keys stay on that browser until they sign in and later sign out. (Decided
-2026-11-20.)
+Why: the guest identity (the stored guest id) is what lets a guest claim the games they
+played once they sign in; a guest who wiped it would lose them for good. (Hosting leaves no
+guest record to claim: see "Host records" below.) The cost: a guest's keys stay on that
+browser until they sign in and later sign out. (Decided 2026-11-20.)
+
+### Host records: signed-in hosts only, for finding hosted games
+
+A finished game stores its host in `games.host_user_id` (nullable FK to `users`, `ON DELETE
+SET NULL`, explicitly named index `ix_games_host_user_id`) and nowhere else:
+
+- **Signed-in hosts only, from a verified token.** The id is captured at `start_game`, after
+  the `host_secret` check, from the starting connection's uid **only if the handshake verified
+  a Firebase ID token**: never inferred from the absence of a `guest_` prefix. First start
+  wins. It rides in a server-only room-document field that no broadcast or payload may carry.
+  At persist the uid is looked up in `users`; no row means `NULL`, and a host's `users` row is
+  never created there. A guest host is never recorded, under any column.
+- **One use: "Games you hosted".** `GET /users/me/hosted-games` (signed in only) lists the
+  caller's hosted games, newest first, as metadata plus a link to the game's open results page
+  (`/results/:publicId`, see "Results by public id"). The profile shows it as its own section; match history and stats stay
+  played-only (§4).
+- **Nothing else reads it.** No export, results, claim or authority depends on the host
+  record: hosts may be guests, so nothing is gated on a host account. The live room's host
+  recovery by `host_identity` (Beery's D18) is untouched: it is live-room only, works for
+  guests, and never reads the stored record.
+
+Why: a teacher who hosts signed in can find last month's classes without having kept the link,
+while a guest host, who has no account, loses nothing they had. Lemony is single-player and
+has no host. (Decided 2026-11-20; replaces each game's earlier host bookkeeping.)
+
+### Results by public id: one link, never expires
+
+A finished game is shown in exactly one way, in every game:
+
+- **Id.** `games.public_id` = `uuid4().hex` (32 characters, unique), set once when the game is
+  stored and never changed. Internal ids and room codes never appear in a results URL: a room
+  code is reissued and its room expires, so a room-code link would later name another game.
+- **Backend.** `GET /api/v1/games/id/{public_id}/results` (and `/export` where the game has
+  one): no sign-in, no secret, no time limit, `404` for an unknown id, and only what the
+  results screen shows (players by seat alias, never a uid, email, user id, guest identity or
+  token). Only a per-address rate limit gates it (the game's general or heavy REST budget).
+- **Frontend.** `/results/:publicId` on a public route is the only URL for a finished game: the
+  end-of-game screen goes there once the game's `public_id` arrives, and the profile history,
+  the "Games you hosted" list and any share link point there. The signed-in profile detail
+  (`/profile/games/:publicId`) also keys on the public id.
+- **Never expires.** The app never deletes a stored game, and nothing on the way to its results
+  reads the live room, a room code, browser storage or a session, so a link copied today still
+  opens years later.
+
+Why: a teacher shares or bookmarks one link per game and it keeps working; anyone who has it
+can already download the data, so the page grants nothing new. (Decided 2026-11-20.)
 
 ### Backend wake-up probe **[HARD-WON]**
 
@@ -1385,8 +1431,9 @@ re-decide it. Specifically: the **real-time transport** (Socket.IO — see §2),
 model (verified Firebase ID token or guest id, established at the handshake), the
 authority model (`host_secret` compared with `hmac.compare_digest`), the three identifiers
 (`alias` / `session_token` / `identity`), Redis as the live room store and lock, and the
-deploy shape. Likewise, a user's profile and game history list only the games they
-**played**; games they hosted are never listed there.
+deploy shape. Likewise, a user's game history and stats count only the games they
+**played**; games they hosted appear only in the profile's separate "Games you hosted" list
+(see "Host records" in §1).
 
 A game's own spec document is authoritative on **game semantics** — rules, costs, scoring,
 round structure, what a player sees. This file is authoritative on **plumbing**. Where the

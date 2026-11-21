@@ -41,9 +41,9 @@ function Ratio({ value }: { value: number | null }): ReactElement {
 
 function MatchRow({ match }: { match: MatchSummary }): ReactElement {
   const navigate = useNavigate()
-  // By game id, never room code: codes are recycled, so `/results/{code}` can
-  // open a later game the player was never in.
-  const destination = `/profile/games/${match.game_id}`
+  // By public_id, never room code: codes are recycled and name no
+  // particular game (D22).
+  const destination = `/profile/games/${match.public_id}`
 
   /**
    * The whole row is the target, and the room code is a real link inside it
@@ -82,10 +82,10 @@ function MatchRow({ match }: { match: MatchSummary }): ReactElement {
 /**
  * The caller's match history, one page at a time.
  *
- * A row opens `/profile/games/:gameId` — the caller's own copy of that game,
- * which `MatchDetail` draws with the results page's components, so the
- * application still has exactly one results renderer. Not
- * `/results/:roomCode`, which names a different game once the code is reused.
+ * A row opens `/profile/games/:publicId` — the caller's own copy of that
+ * game, by its permanent `public_id` (D22), which `MatchDetail` draws with
+ * the results page's components, so the application still has exactly one
+ * results renderer.
  *
  * The table never fetches. It is handed a page and a callback, which is what
  * keeps the page's two-request budget a property of the page rather
@@ -141,7 +141,7 @@ export function MatchHistoryTable({
           </thead>
           <tbody>
             {matches.map((match) => (
-              <MatchRow key={match.game_id} match={match} />
+              <MatchRow key={match.public_id} match={match} />
             ))}
           </tbody>
         </table>

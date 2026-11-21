@@ -81,7 +81,7 @@ boundary that keeps Chart.js, react-hook-form and Zod off the welcome and lobby 
 so they are fetched on the first render that actually shows one.
 
 Without a backend, `/`, `/player-manual` and `/host-manual` still render — they need neither auth
-nor the API. `/results/:roomCode` and `/join/:roomCode` are also unguarded, but they have nothing
+nor the API. `/results/:publicId` and `/join/:roomCode` are also unguarded, but they have nothing
 to show until the API answers. Every other route sits behind a guard that shows the wake-up screen
 while `/api/v1/health` is failing.
 
@@ -165,7 +165,7 @@ src/
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export (by
 │   │                           public_id, for every viewer)
-│   ├── profile/                match history, stats, role breakdown, guest-claim prompt
+│   ├── profile/                match history, games you hosted, stats, role breakdown, guest-claim prompt
 │   ├── charts/                 chartSetup.ts (results view model + bullwhip builder),
 │   │                           chartTheme.ts (every canvas colour), ChartBox, Legend,
 │   │                           plugins/ (crosshair sync)

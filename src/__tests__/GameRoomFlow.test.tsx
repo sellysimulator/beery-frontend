@@ -1220,20 +1220,23 @@ describe('game over: the player can open the results', () => {
     expect(resultsLink()).toBeUndefined();
   });
 
-  it('links to the room-code results once the game is over', () => {
+  it('waits for the public_id: no results link, and never by room code, until the game is saved', () => {
     renderPlaying('RETAILER', { phase: 'FINISHED' });
 
-    expect(resultsLink()?.getAttribute('href')).toBe(`/results/${ROOM}`);
+    expect(resultsLink()).toBeUndefined();
+    expect(document.body.textContent ?? '').toMatch(/saving the results/i);
+    const hrefs = Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+    expect(hrefs).not.toContain(`/results/${ROOM}`);
   });
 
-  it('switches to the permanent game-id URL once the game is persisted', () => {
+  it('links to /results/:publicId once game_persisted arrives (D22)', () => {
     renderPlaying('RETAILER', { phase: 'FINISHED' });
 
     act(() => {
       useGameStore.getState().applyGamePersisted({ seq: nextSeq(), game_id: 'a'.repeat(32) });
     });
 
-    expect(resultsLink()?.getAttribute('href')).toBe(`/results/g/${'a'.repeat(32)}`);
+    expect(resultsLink()?.getAttribute('href')).toBe(`/results/${'a'.repeat(32)}`);
   });
 });
 

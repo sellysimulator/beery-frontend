@@ -105,14 +105,14 @@ export interface ResultsView {
   started_at?: string
   /** URL path only. */
   finished_at?: string
-  /** URL path only: the permanent id the host's export by account uses. */
+  /** The game's permanent id: its results URL and its export (D22). */
   public_id?: string
 }
 
 /* ─── The persisted payload, and its normaliser ─── */
 
 /**
- * One role's entry in `GET /games/{code}/results` and
+ * One role's entry in `GET /games/id/{public_id}/results` and
  * `GET /users/me/games/{id}` — the two routes that return the identical
  * payload.
  */
@@ -135,7 +135,7 @@ export interface RoleResult {
 }
 
 export interface ResultsResponse {
-  /** Permanent id for `/results/g/:gameId`; a room code is recycled. */
+  /** Permanent id for `/results/:publicId` (D22); a room code is recycled. */
   public_id: string
   room_code: string
   weeks_played: number

@@ -22,7 +22,7 @@ export const NULL_BULLWHIP_AVG_EXPLANATION =
  *
  * The server pools every finished game into one figure — `avg_cost_per_week`
  * is total cost over total weeks, `bullwhip_avg` the mean of each game's
- * ratio, and `best_game_id` the lowest cost per week — whatever each game's
+ * ratio, and `best_game_public_id` the lowest cost per week — whatever each game's
  * length, preset or cost settings (spec §10.5). That is deliberate and stays,
  * but a player comparing a 20-week Fast Game with a 52-week Chaos game would
  * otherwise read the result as like for like, so the screen says so.
@@ -124,13 +124,13 @@ export function StatsSummary({ stats }: StatsSummaryProps): ReactElement {
         </Figure>
 
         <Figure label="Best game" explanation="Your lowest cost per week.">
-          {stats.best_game_id === null ? (
+          {stats.best_game_public_id === null ? (
             MISSING
           ) : (
-            /* By id, never by room code: a room code can belong to several
-               games (spec §10.1), so the link has to name the game. */
+            /* By public_id, never by room code: a room code can belong to
+               several games (spec §10.1), so the link has to name the game. */
             <Link
-              to={`/profile/games/${stats.best_game_id}`}
+              to={`/profile/games/${stats.best_game_public_id}`}
               className="text-brand-strong underline"
             >
               Open it

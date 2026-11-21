@@ -1,15 +1,17 @@
 /**
- * `/results/:roomCode`, the debrief screen (spec §9.8).
+ * `/results/:publicId`, the debrief screen (spec §9.8) — the one results URL
+ * (D22).
  *
  * Covers: the route, the region order, the cost cards, Reveal, the statistics
- * table, counts and null ratios, the guest claim prompt, the two entry paths,
- * the debrief notes, the print contract, the live path, and Play again. The
+ * table, counts and null ratios, the guest claim prompt, that only the by-id
+ * route ever shows results (never the live store or a room code), the debrief
+ * notes, the print contract, and Play again. The
  * chart itself is in `BullwhipChart.test.tsx`; the export, open to every
  * viewer, is in `ExportControls.test.tsx`.
  *
  * Harness notes:
  *  - `src/api/http.ts` is replaced by a recorder, so every request the screen
- *    makes is observed as a wire call (spec §11.1 has the two routes this
+ *    makes is observed as a wire call (spec §11.1 has the routes this
  *    screen uses). Nothing else about the HTTP layer is mocked.
  *  - `src/auth/AuthContext.tsx` is replaced by a stub of its frozen value,
  *    because the claim prompt is gated on `useAuth().mode` and there is no
@@ -170,7 +172,7 @@ vi.mock('../auth/AuthContext', () => ({
 
 /** The room-code alphabet excludes 0, O, 1, I and L; these carry no digits at all. */
 const ROOM = 'BEERYX';
-/** The permanent id behind `/results/g/:gameId`. */
+/** The permanent id behind `/results/:publicId`. */
 const GAME_ID = 'a'.repeat(32);
 const OTHER = 'MASHUP';
 const HOST_SECRET = 'host-secret-for-tests';
@@ -616,7 +618,7 @@ function descriptor(): RouteDescriptor {
   }
   const all = Array.isArray(exported) ? exported : [exported];
   const found = all.find((d) => d.path.startsWith('/results'));
-  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route.');
+  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:publicId` route.');
   return found;
 }
 
@@ -631,7 +633,7 @@ function currentPath(): string {
   return seen[seen.length - 1] ?? '';
 }
 
-function renderResults(code: string = ROOM) {
+function renderResults(code: string = GAME_ID) {
   const route = descriptor();
   return render(
     <MemoryRouter initialEntries={[`/results/${code}`]}>
@@ -647,7 +649,7 @@ function renderResults(code: string = ROOM) {
 }
 
 /** Renders and waits for the screen to have its figures. */
-async function renderReady(code: string = ROOM) {
+async function renderReady(code: string = GAME_ID) {
   const result = renderResults(code);
   await waitFor(() => {
     expect(ratioRows().length).toBe(4);
@@ -712,26 +714,52 @@ beforeEach(() => {
 // The route
 // ---------------------------------------------------------------------------
 
-describe('/results/:roomCode is public and self-sufficient', () => {
-  it('declares a public route descriptor for /results/:roomCode', () => {
-    expect(descriptor().path).toBe('/results/:roomCode');
+describe('/results/:publicId is public and self-sufficient', () => {
+  it('declares the one public route, /results/:publicId (D22)', () => {
+    const exported = (ResultsPageModule as { route?: RouteDescriptor | RouteDescriptor[] }).route;
+    const all = Array.isArray(exported) ? exported : exported ? [exported] : [];
+    expect(all.map((d) => d.path)).toEqual(['/results/:publicId']);
     expect(descriptor().guard).toBe('public');
   });
 
   it('renders for a visitor with no auth mode and an empty store', async () => {
     await renderReady();
 
-    expect(currentPath()).toBe(`/results/${ROOM}`);
+    expect(currentPath()).toBe(`/results/${GAME_ID}`);
     expect(ratioRows().map((entry) => entry.role)).toEqual([...ROLE_ORDER]);
     expect(chartSeries()).toHaveLength(5);
   });
 
-  it('fetches the results for the room code in the URL', async () => {
+  it('fetches the results by the public_id in the URL, never by room code', async () => {
     await renderReady();
 
     expect(resultsCalls()).toHaveLength(1);
-    expect(String(resultsCalls()[0][0])).toContain(ROOM);
+    expect(String(resultsCalls()[0][0])).toBe(`/games/id/${GAME_ID}/results`);
   });
+
+  it('shows the room code the persisted record carries', async () => {
+    await renderReady();
+
+    expect(bodyText()).toContain(ROOM);
+  });
+
+  it('treats a room code in the URL as an unknown id, asking only the by-id route', async () => {
+    httpRec.get.mockImplementation(async (url: string) => {
+      throw axiosError(404, `No results for ${url}`);
+    });
+
+    renderResults(ROOM);
+
+    await waitFor(
+      () => {
+        expect(bodyText()).toContain("Results aren't available yet.");
+      },
+      { timeout: 15000 },
+    );
+    for (const call of resultsCalls()) {
+      expect(String(call[0])).toBe(`/games/id/${ROOM}/results`);
+    }
+  }, 30000);
 });
 
 // ---------------------------------------------------------------------------
@@ -1097,17 +1125,19 @@ describe('the claim prompt is for a guest who played this game', () => {
     expect(bodyText()).not.toMatch(OFFER);
   });
 
-  it('is offered to a guest host in the host tab, never as the way to export', async () => {
+  it('is not offered to a guest who only hosted (D23): there is nothing to claim', async () => {
     auth.value = { ...auth.value, mode: 'guest' };
     getOrCreateGuestId();
     asHostTab();
     await renderReady();
 
-    expect(bodyText()).toMatch(/sign in to link this game to your account/i);
-    expect(bodyText()).toMatch(/don't need an account to download the full record/i);
-    expect(bodyText()).not.toMatch(/keep exporting/i);
-    expect(bodyText()).toMatch(/hosted games don't appear in your game history/i);
     expect(bodyText()).not.toMatch(OFFER);
+    expect(bodyText()).not.toMatch(/link this game to your account/i);
+    expect(bodyText()).not.toMatch(/as its host/i);
+    const claimButtons = Array.from(document.querySelectorAll('button')).filter((b) =>
+      /claim/i.test(b.textContent ?? ''),
+    );
+    expect(claimButtons).toEqual([]);
   });
 });
 
@@ -1208,22 +1238,34 @@ describe('a 404 is retried twice before the unavailable message', () => {
   );
 });
 
-describe('the store is used only for its own room', () => {
-  it('issues no fetch when the store already holds this room’s finished payload', async () => {
+describe('nothing but the by-id route shows the results', () => {
+  it('fetches even when the store holds this game’s finished payload', async () => {
     seedLiveStore(ROOM);
-    await renderReady(ROOM);
-
-    expect(resultsCalls()).toEqual([]);
-  });
-
-  it('fetches for the requested room when the store holds another room’s payload', async () => {
-    seedLiveStore(OTHER);
-    await renderReady(ROOM);
+    act(() => {
+      useGameStore.getState().applyGamePersisted({ seq: FINISHED.seq + 1, game_id: GAME_ID });
+    });
+    await renderReady();
 
     expect(resultsCalls()).toHaveLength(1);
-    expect(String(resultsCalls()[0][0])).toContain(ROOM);
-    expect(String(resultsCalls()[0][0])).not.toContain(OTHER);
+    expect(String(resultsCalls()[0][0])).toBe(`/games/id/${GAME_ID}/results`);
   });
+
+  it('never renders the live store’s payload when the record is not there', async () => {
+    httpRec.get.mockImplementation(async (url: string) => {
+      throw axiosError(404, `Not persisted: ${url}`);
+    });
+    seedLiveStore(ROOM);
+
+    renderResults();
+
+    await waitFor(
+      () => {
+        expect(bodyText()).toContain("Results aren't available yet.");
+      },
+      { timeout: 15000 },
+    );
+    expect(document.querySelector('table')).toBeNull();
+  }, 30000);
 });
 
 // ---------------------------------------------------------------------------
@@ -1315,104 +1357,6 @@ describe('every region declares what print keeps', () => {
 // The live path
 // ---------------------------------------------------------------------------
 
-describe('the live path renders what it has', () => {
-  beforeEach(() => {
-    // The live path is available before persistence has completed.
-    httpRec.get.mockImplementation(async (url: string) => {
-      throw axiosError(404, `Not persisted yet: ${url}`);
-    });
-    auth.value = { ...auth.value, mode: 'authenticated' };
-    seedLiveStore(ROOM);
-  });
-
-  it('renders the cost cards with display names and bot badges from participants', async () => {
-    await renderReady();
-
-    for (const role of ROLE_ORDER) {
-      expect(bodyText()).toContain(NAMES[role]);
-      expect(textHasValue(figuresText(), STATS[role].total_cost)).toBe(true);
-    }
-    expect(textHasValue(figuresText(), CHAIN_TOTAL)).toBe(true);
-    expect(textOf(smallestContaining(NAMES.FACTORY).parentElement ?? document.body)).toMatch(/bot/i);
-  });
-
-  it('renders the chart and the ratios', async () => {
-    await renderReady();
-
-    expect(chartSeries()).toHaveLength(5);
-    expect(ratioRows().map((entry) => entry.role)).toEqual([...ROLE_ORDER]);
-    for (const role of ROLE_ORDER) {
-      expect(rowHasValue(rowFor(role), STATS[role].bullwhip_ratio as number)).toBe(true);
-    }
-  });
-
-  it('renders Play again, which the live path can always offer', async () => {
-    await renderReady();
-
-    expect(control(/play again/i, 'Play again')).toBeTruthy();
-  });
-
-  it('renders no figure the live payload does not carry', async () => {
-    await renderReady();
-
-    const allowed = new Set<string>();
-    const add = (v: number) => {
-      for (const candidate of [v, v * 100]) {
-        allowed.add(String(candidate));
-        allowed.add(candidate.toFixed(0));
-        allowed.add(candidate.toFixed(1));
-        allowed.add(candidate.toFixed(2));
-      }
-    };
-    for (const week of WEEK_NUMBERS) add(week);
-    for (const value of DEMAND) add(value);
-    for (const role of ROLE_ORDER) {
-      for (const value of ORDERS[role]) add(value);
-      const stats = STATS[role];
-      for (const value of [
-        stats.total_cost,
-        stats.peak_inventory,
-        stats.peak_backlog,
-        stats.weeks_in_backlog,
-        stats.order_variance,
-        stats.bullwhip_ratio as number,
-        stats.fill_rate as number,
-        stats.average_order,
-      ]) {
-        add(value);
-      }
-    }
-    add(CHAIN_TOTAL);
-    add(DEMAND_VARIANCE);
-    add(WEEKS);
-
-    // `inventory`, `backlog`, `cumulative_cost`, the timestamps, the
-    // preset name and `ended_early` are absent on this path. A zero, a dash or
-    // a re-derivation would each be a figure the server never sent.
-    const offenders = numericTokens(figuresText()).filter((token) => !allowed.has(token));
-    expect(
-      offenders,
-      `the live path rendered figures the server never sent: ${offenders.join(', ')}`,
-    ).toEqual([]);
-  });
-
-  it('renders no per-week inventory, backlog or cumulative-cost series', async () => {
-    await renderReady();
-
-    // The only per-week table is the chart's own; a second one would
-    // be a series this path does not have.
-    const perWeekTables = tables().filter(
-      (t) => rowsOf(t).filter((row) => numericCells(row).length >= 2).length >= WEEKS,
-    );
-    expect(perWeekTables).toHaveLength(1);
-    expect(perWeekTables[0]).toBe(chartTable());
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Play again
-// ---------------------------------------------------------------------------
-
 describe('Play again promises no clone', () => {
   it('says the game has to be set up again', async () => {
     await renderReady();
@@ -1440,80 +1384,5 @@ describe('Play again promises no clone', () => {
     await waitFor(() => {
       expect(currentPath()).toBe('/home');
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// The permanent results URL — /results/g/:gameId
-// ---------------------------------------------------------------------------
-
-function byIdDescriptor(): RouteDescriptor {
-  const exported = (ResultsPageModule as { route?: RouteDescriptor | RouteDescriptor[] }).route;
-  const all = Array.isArray(exported) ? exported : exported ? [exported] : [];
-  const found = all.find((d) => d.path === '/results/g/:gameId');
-  if (!found) throw new Error('ResultsPage.tsx declares no `/results/g/:gameId` route.');
-  return found;
-}
-
-async function renderReadyById(gameId: string = GAME_ID) {
-  const route = byIdDescriptor();
-  const result = render(
-    <MemoryRouter initialEntries={[`/results/g/${gameId}`]}>
-      <Routes>
-        <Route path={route.path} element={route.element} />
-        <Route path="*" element={<div data-testid="elsewhere" />} />
-      </Routes>
-    </MemoryRouter>,
-  );
-  await waitFor(() => {
-    expect(ratioRows().length).toBe(4);
-  });
-  return result;
-}
-
-describe('/results/g/:gameId: the permanent results URL', () => {
-  it('declares a public route descriptor', () => {
-    expect(byIdDescriptor().guard).toBe('public');
-  });
-
-  it('fetches by game id, never by room code', async () => {
-    await renderReadyById();
-
-    expect(resultsCalls()).toHaveLength(1);
-    expect(String(resultsCalls()[0][0])).toBe(`/games/id/${GAME_ID}/results`);
-  });
-
-  it('shows the room code the persisted record carries', async () => {
-    await renderReadyById();
-
-    expect(bodyText()).toContain(ROOM);
-  });
-
-  it('renders the live payload with no fetch when the store holds that game', async () => {
-    httpRec.get.mockImplementation(async (url: string) => {
-      throw axiosError(404, `Not persisted yet: ${url}`);
-    });
-    seedLiveStore(ROOM);
-    act(() => {
-      useGameStore.getState().applyGamePersisted({ seq: FINISHED.seq + 1, game_id: GAME_ID });
-    });
-
-    await renderReadyById();
-
-    expect(resultsCalls()).toHaveLength(0);
-  });
-
-  it('fetches when the store holds a different game', async () => {
-    seedLiveStore(ROOM);
-    act(() => {
-      useGameStore
-        .getState()
-        .applyGamePersisted({ seq: FINISHED.seq + 1, game_id: 'b'.repeat(32) });
-    });
-
-    await renderReadyById();
-
-    expect(resultsCalls()).toHaveLength(1);
-    expect(String(resultsCalls()[0][0])).toBe(`/games/id/${GAME_ID}/results`);
   });
 });

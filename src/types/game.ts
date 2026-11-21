@@ -838,8 +838,9 @@ export interface GameFinishedPayload {
 
 /**
  * Sent after `game_finished`, once the game is written to the database:
- * `game_id` is the permanent id behind `/results/g/:gameId`. Never sent when
- * persistence fails.
+ * `game_id` is the game's `public_id`, the one results URL `/results/:publicId`
+ * (D22). Never sent when persistence fails, and until it arrives the
+ * end-of-game screens have no results link.
  */
 export interface GamePersistedPayload {
   seq: number

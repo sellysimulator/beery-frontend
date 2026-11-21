@@ -142,13 +142,18 @@ vi.mock('../auth/AuthContext', () => ({
 // Fixtures
 // ---------------------------------------------------------------------------
 
+/** A game's `public_id`: 32 hex characters, never an internal id (D22). */
+function pid(n: number): string {
+  return n.toString(16).padStart(32, '0');
+}
+
 const STATS = {
   games_played: 25,
   weeks_played: 393,
   total_cost: 41250.75,
   avg_cost_per_week: 104.96,
   bullwhip_avg: 2.35,
-  best_game_id: 4007,
+  best_game_public_id: pid(4007),
   games_as_retailer: 7,
   games_as_wholesaler: 7,
   games_as_distributor: 6,
@@ -174,7 +179,7 @@ function roomCodeFor(index: number): string {
 const PRESETS = ['Classic MIT', 'Volatile demand', 'Long lead times', 'Steady state'];
 
 interface MatchFixture {
-  game_id: number;
+  public_id: string;
   room_code: string;
   finished_at: string;
   role: Role;
@@ -187,7 +192,7 @@ interface MatchFixture {
 
 /** 25 games, newest first — the server orders by `finished_at` descending. */
 const MATCHES: MatchFixture[] = Array.from({ length: 25 }, (_, i) => ({
-  game_id: 4000 + i,
+  public_id: pid(4000 + i),
   room_code: roomCodeFor(i),
   // One month apart, so every row carries an unambiguous year in any format.
   finished_at: new Date(Date.UTC(2026, 8 - i, 15, 10, 30)).toISOString(),
@@ -424,7 +429,7 @@ function renderAt(entry: string) {
         <Routes>
           <Route path={profile.path} element={profile.element} />
           {detail ? <Route path={detail.path} element={detail.element} /> : null}
-          <Route path="/results/:roomCode" element={<div data-testid="results" />} />
+          <Route path="/results/:publicId" element={<div data-testid="results" />} />
           <Route path="/home" element={<div data-testid="home" />} />
           <Route path="*" element={<div data-testid="elsewhere" />} />
         </Routes>
@@ -483,7 +488,7 @@ function gamesCalls(): unknown[][] {
 }
 
 function detailCalls(): unknown[][] {
-  return mineCalls().filter((call) => /\/users\/me\/games\/\d+$/.test(pathOf(call)));
+  return mineCalls().filter((call) => /\/users\/me\/games\/[0-9a-f]{32}$/.test(pathOf(call)));
 }
 
 function pagesRequested(): number[] {
@@ -517,10 +522,13 @@ beforeEach(() => {
     const path = String(url).split('?')[0];
     const params = paramsOf([url, config]);
     if (/\/users\/me\/stats$/.test(path)) return { data: { ...STATS }, status: 200 };
-    if (/\/users\/me\/games\/\d+$/.test(path)) throw axiosError(404, 'Not found');
+    if (/\/users\/me\/games\/[0-9a-f]{32}$/.test(path)) throw axiosError(404, 'Not found');
     if (/\/users\/me\/games$/.test(path)) {
       const size = Number(params.page_size ?? PAGE_SIZE);
       return { data: historyPage(Number(params.page ?? 1), size), status: 200 };
+    }
+    if (/\/users\/me\/hosted-games$/.test(path)) {
+      return { data: { games: [], total: 0, page: 1, page_size: PAGE_SIZE }, status: 200 };
     }
     if (/health/.test(path)) return { data: { status: 'ok' }, status: 200 };
     throw axiosError(404, `Unexpected GET ${url}`);
@@ -612,16 +620,15 @@ describe('a null ratio in the table is "—"', () => {
 // Opening a row
 // ---------------------------------------------------------------------------
 
-describe('a row opens /profile/games/:gameId', () => {
-  // By game id, not room code: room codes are recycled, so a
-  // code can name a later game the player never played. Lemony and Pulky
-  // link their history by game id too.
-  it('navigates to that game, by its id', async () => {
+describe('a row opens /profile/games/:publicId', () => {
+  // By public_id, not room code or internal id: room codes are recycled, so
+  // a code can name a later game the player never played (D22).
+  it('navigates to that game, by its public_id', async () => {
     await renderHistory();
 
     const match = PAGE_ONE[2];
     const row = rowFor(match);
-    const href = `/profile/games/${match.game_id}`;
+    const href = `/profile/games/${match.public_id}`;
     const anchor = Array.from(row.querySelectorAll<HTMLAnchorElement>('a[href]')).find(
       (a) => (a.getAttribute('href') ?? '').split('?')[0] === href,
     );
@@ -649,7 +656,7 @@ describe('a row opens /profile/games/:gameId', () => {
     await user.click(anchor ?? row);
     await flush();
 
-    expect(currentPath()).toBe(`/profile/games/${match.game_id}`);
+    expect(currentPath()).toBe(`/profile/games/${match.public_id}`);
   });
 
   it('never links a row by its room code', async () => {
@@ -659,7 +666,7 @@ describe('a row opens /profile/games/:gameId', () => {
       const hrefs = Array.from(rowFor(match).querySelectorAll<HTMLAnchorElement>('a[href]')).map(
         (a) => a.getAttribute('href') ?? '',
       );
-      expect(hrefs, match.room_code).toEqual([`/profile/games/${match.game_id}`]);
+      expect(hrefs, match.room_code).toEqual([`/profile/games/${match.public_id}`]);
     }
   });
 });
@@ -761,8 +768,8 @@ describe('a page beyond the end', () => {
 // What a 25-game history costs
 // ---------------------------------------------------------------------------
 
-describe('two requests for a 25-game history', () => {
-  it('issues exactly two /users/me/ requests on mount and no per-row detail', async () => {
+describe('three requests for a 25-game history', () => {
+  it('issues exactly three /users/me/ requests on mount and no per-row detail', async () => {
     // The app's providers are mounted around this page; their traffic is
     // not the page's own, so it is simulated here to prove the count
     // is of `/users/me/*` rather than of the axios instance.
@@ -775,7 +782,7 @@ describe('two requests for a 25-game history', () => {
     expect(
       mineCalls().map(urlOf),
       'a client that fetches each game to fill a column undoes the single-query guarantee',
-    ).toHaveLength(2);
+    ).toHaveLength(3); // stats, history page 1, hosted page 1 (D23)
     expect(detailCalls()).toHaveLength(0);
     expect(httpRec.get.mock.calls.length).toBeGreaterThan(mineCalls().length);
   });
