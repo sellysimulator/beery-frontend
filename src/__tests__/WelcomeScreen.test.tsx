@@ -1,8 +1,8 @@
 /**
  * `/`, the public welcome screen (spec §9.10).
  *
- * Covers: the screen renders with no backend, the guest path, and the guest
- * path's half of the display name.
+ * Covers: the screen renders with no backend, the guest path, and that the
+ * screen asks for no name (players name themselves on the game screen).
  *
  * Harness notes:
  *  - The page is reached through the route descriptor it exports, which
@@ -23,7 +23,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AuthProvider } from '../auth/AuthContext';
-import { GUEST_ID_KEY, getDisplayName, getGuestId } from '../utils/storage';
+import { GUEST_ID_KEY, getDisplayName, getGuestId, setDisplayName } from '../utils/storage';
 import type { RouteDescriptor } from '../routes/registry';
 import * as WelcomeScreenModule from '../pages/WelcomeScreen';
 
@@ -219,24 +219,6 @@ function currentHref(): string {
   return last ? `${last.pathname}${last.search}${last.hash}` : '';
 }
 
-/**
- * Every key and value in a Web Storage area.
- *
- * `JSON.stringify(localStorage)` does NOT do this: a `Storage` exposes its
- * entries through `key()`/`getItem()`, not as own enumerable properties, so it
- * serialises to `{"length":N}` and an assertion against it can neither find a
- * value nor fail to find one.
- */
-function dumpStorage(area: Storage): string {
-  const entries: string[] = [];
-  for (let i = 0; i < area.length; i += 1) {
-    const key = area.key(i);
-    if (key === null) continue;
-    entries.push(`${key}=${area.getItem(key) ?? ''}`);
-  }
-  return entries.join('\n');
-}
-
 function anchorsTo(href: string): HTMLAnchorElement[] {
   return Array.from(document.querySelectorAll('a')).filter((a) => {
     const value = a.getAttribute('href') ?? '';
@@ -419,54 +401,40 @@ describe('continuing as a guest', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The guest path's half of the display name
+// No name is asked here
 // ---------------------------------------------------------------------------
 
-describe('the guest path collects and persists a name', () => {
-  /**
-   * The name field is part of the guest choice — "two identity choices and
-   * nothing else" constrains the choices, not the fields inside them. Its
-   * accessible name is `Your name`.
-   */
-  function guestNameInput(): HTMLInputElement {
-    return screen.getByRole('textbox', { name: /^Your name$/i }) as HTMLInputElement;
-  }
+describe('the welcome screen asks for no name', () => {
+  // A player names themselves on the game screen, right before joining a room
+  // (spec §4.1); a host in the create-room form. Neither identity choice
+  // carries a name field.
 
-  it('persists the name with setDisplayName, so an invite link lands with one', async () => {
-    const user = userEvent.setup();
+  it('renders no text field at all', () => {
     renderWelcome();
 
-    expect(getDisplayName()).toBeNull();
-
-    await user.type(guestNameInput(), 'Cara');
-    await user.click(screen.getByRole('button', { name: /continue as .*guest/i }));
-
-    // "so a guest who follows an invite link straight into a room already
-    // has one" — which is the lobby's `join` emit, and
-    // `rejoinAfterConnect` after that.
-    await waitFor(() => expect(getDisplayName()).toBe('Cara'));
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    expect(screen.queryByLabelText(/name/i)).toBeNull();
   });
 
-  it('keeps the name in localStorage, where it survives a reload', async () => {
+  it('continuing as a guest leaves the stored name alone', async () => {
+    setDisplayName('Cara');
     const user = userEvent.setup();
     renderWelcome();
 
-    await user.type(guestNameInput(), 'Cara');
     await user.click(screen.getByRole('button', { name: /continue as .*guest/i }));
 
-    await waitFor(() => expect(getDisplayName()).toBe('Cara'));
-    expect(dumpStorage(window.localStorage)).toContain('Cara');
-    expect(dumpStorage(window.sessionStorage)).not.toContain('Cara');
+    await waitFor(() => expect(currentPath()).toBe('/home'));
+    expect(getDisplayName()).toBe('Cara');
   });
 
-  it('still navigates once the guest identity is chosen', async () => {
+  it('continuing as a guest stores no name when there was none', async () => {
     const user = userEvent.setup();
     renderWelcome();
 
-    await user.type(guestNameInput(), 'Cara');
     await user.click(screen.getByRole('button', { name: /continue as .*guest/i }));
 
     expect(getGuestId()).toBeTruthy();
     expect(currentPath()).toBe('/home');
+    expect(getDisplayName()).toBeNull();
   });
 });

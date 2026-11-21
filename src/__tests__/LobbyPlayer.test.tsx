@@ -2,9 +2,14 @@
  * `GameRoom.tsx`, the player-side shell and the lobby it renders before
  * week 1 (spec §9.10).
  *
- * Covers: the join emit, the participant list, bot labels, the explained wait,
- * no configuration shown to a player, claiming a role, and the shell resolving
- * the playing screen by discovery.
+ * Covers: the join emit, the name form before a first join (NameForm), the
+ * participant list, bot labels, the explained wait, no configuration shown to a
+ * player, claiming a role, and the shell resolving the playing screen by
+ * discovery.
+ *
+ * Unless a test says otherwise the browser already holds this room's
+ * `session_token` (a seated player), so the shell skips the name form and
+ * renders the lobby; the name form has its own block below.
  *
  * Harness notes:
  *  - `socket.io-client` is replaced by a recorder, so `src/api/socket.ts` and
@@ -22,7 +27,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { useGameStore } from '../store/gameStore';
-import { getSessionToken, setDisplayName, setSessionToken } from '../utils/storage';
+import { getDisplayName, getSessionToken, setDisplayName, setSessionToken } from '../utils/storage';
 import type { GameConfig, Role } from '../types/game';
 import type { RouteDescriptor } from '../routes/registry';
 import * as GameRoomModule from '../pages/GameRoom';
@@ -219,7 +224,8 @@ function gameDescriptor(): RouteDescriptor {
   return found;
 }
 
-function renderPlayerRoom({ strict = false }: { strict?: boolean } = {}) {
+function renderPlayerRoom({ strict = false, seated = true }: { strict?: boolean; seated?: boolean } = {}) {
+  if (seated && getSessionToken(ROOM) === null) setSessionToken(ROOM, 'tok-seated');
   const tree = (
     <MemoryRouter initialEntries={[`/game/${ROOM}`]}>
       <Routes>
@@ -289,14 +295,6 @@ describe('the player lobby joins on mount', () => {
     expect(payloads[0].session_token).toBe('tok-stored');
   });
 
-  it('emits join with no session_token for a first-time player', () => {
-    renderPlayerRoom();
-
-    const payloads = emitsOf('join');
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0].room_id).toBe(ROOM);
-    expect(payloads[0].session_token ?? null).toBeNull();
-  });
 
   it('never puts the host_secret or an identity on the wire', () => {
     setSessionToken(ROOM, 'tok-stored');
@@ -309,7 +307,7 @@ describe('the player lobby joins on mount', () => {
   });
 
   it('carries the persisted display name, so a reload keeps the name', () => {
-    // The name was entered on /home and written through
+    // The name was entered in the name form and written through
     // `storage.ts`. Router navigation state does not survive a reload; this
     // does, which is the whole point of putting it in storage.
     setDisplayName('Bea');
@@ -340,6 +338,137 @@ describe('the player lobby joins on mount', () => {
   it('does not emit join_waiting — this tab is a player, not the host', () => {
     renderPlayerRoom();
     expect(emitsOf('join_waiting')).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The name comes first (NameForm)
+// ---------------------------------------------------------------------------
+
+describe('a first-time player names themselves before the first join', () => {
+  const NAME = /^Your name$/i;
+  const SUBMIT = /^Join the room$/i;
+
+  function nameInput(): HTMLInputElement {
+    return screen.getByRole('textbox', { name: NAME }) as HTMLInputElement;
+  }
+
+  it('shows the name form and emits no join until it is submitted', () => {
+    renderPlayerRoom({ seated: false });
+
+    expect(nameInput()).toBeInTheDocument();
+    expect(bodyText()).toContain(ROOM);
+    expect(emitsOf('join')).toHaveLength(0);
+    // Not the lobby yet: there is no seat to leave.
+    expect(screen.queryByRole('button', { name: /leave room/i })).toBeNull();
+  });
+
+  it('StrictMode emits nothing on mount either', () => {
+    renderPlayerRoom({ seated: false, strict: true });
+
+    expect(emitsOf('join')).toHaveLength(0);
+  });
+
+  it('prefills the field with the name this browser used last', () => {
+    setDisplayName('Bea');
+    renderPlayerRoom({ seated: false });
+
+    expect(nameInput().value).toBe('Bea');
+  });
+
+  it('starts empty when the browser has never stored a name', () => {
+    renderPlayerRoom({ seated: false });
+
+    expect(nameInput().value).toBe('');
+  });
+
+  it('caps the field at 24 characters, the server\'s clamp', () => {
+    renderPlayerRoom({ seated: false });
+
+    expect(nameInput()).toHaveAttribute('maxLength', '24');
+  });
+
+  it('stores the name, sanitised, and joins with what was stored', async () => {
+    const user = userEvent.setup();
+    renderPlayerRoom({ seated: false });
+
+    // A spreadsheet paste: the tab becomes a space, the edges are trimmed.
+    await user.type(nameInput(), '  Cara\tLópez ');
+    await user.click(screen.getByRole('button', { name: SUBMIT }));
+
+    expect(getDisplayName()).toBe('Cara López');
+    const payloads = emitsOf('join');
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].room_id).toBe(ROOM);
+    expect(payloads[0].display_name).toBe('Cara López');
+    expect(payloads[0].session_token ?? null).toBeNull();
+  });
+
+  it('an empty submit joins with no name, so the server names the seat', async () => {
+    setDisplayName('Bea');
+    const user = userEvent.setup();
+    renderPlayerRoom({ seated: false });
+
+    await user.clear(nameInput());
+    await user.click(screen.getByRole('button', { name: SUBMIT }));
+
+    const payloads = emitsOf('join');
+    expect(payloads).toHaveLength(1);
+    expect(Object.keys(payloads[0])).not.toContain('display_name');
+    // The stored name only ever prefills; an empty answer does not erase it.
+    expect(getDisplayName()).toBe('Bea');
+  });
+
+  it('shows the lobby once submitted, and keeps it when the server seats the player', async () => {
+    const user = userEvent.setup();
+    renderPlayerRoom({ seated: false });
+
+    await user.type(nameInput(), 'Cara');
+    await user.click(screen.getByRole('button', { name: SUBMIT }));
+    expect(screen.queryByRole('textbox', { name: NAME })).toBeNull();
+
+    dispatch('joined', { alias: 'P1', session_token: 'tok-new', role: null, is_host: false });
+    dispatch('lobby_update', lobbyUpdate({ participants: [participant({ alias: 'P1', display_name: 'Cara' })] }));
+
+    expect(getSessionToken(ROOM)).toBe('tok-new');
+    expect(screen.queryByRole('textbox', { name: NAME })).toBeNull();
+    expect(bodyText()).toContain('Cara');
+  });
+
+  it('a refused join brings the form back with the server\'s reason, and a retry joins again', async () => {
+    const user = userEvent.setup();
+    renderPlayerRoom({ seated: false });
+
+    await user.type(nameInput(), 'Cara');
+    await user.click(screen.getByRole('button', { name: SUBMIT }));
+    dispatch('join_error', { message: 'Room is full.' });
+
+    expect(nameInput().value).toBe('Cara');
+    expect(nameInput()).toHaveAttribute('aria-invalid', 'true');
+    expect(bodyText()).toContain('Room is full.');
+
+    await user.click(screen.getByRole('button', { name: SUBMIT }));
+    expect(emitsOf('join')).toHaveLength(2);
+  });
+
+  it('a rejoin with this room\'s session_token skips the form and joins on mount', () => {
+    setSessionToken(ROOM, 'tok-stored');
+    setDisplayName('Bea');
+    renderPlayerRoom({ seated: false });
+
+    expect(screen.queryByRole('textbox', { name: NAME })).toBeNull();
+    const payloads = emitsOf('join');
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].session_token).toBe('tok-stored');
+    expect(payloads[0].display_name).toBe('Bea');
+  });
+
+  it('a token for another room does not skip the form', () => {
+    setSessionToken('XYZ789', 'tok-other');
+    renderPlayerRoom({ seated: false });
+
+    expect(nameInput()).toBeInTheDocument();
+    expect(emitsOf('join')).toHaveLength(0);
   });
 });
 

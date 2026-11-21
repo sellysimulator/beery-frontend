@@ -63,16 +63,20 @@ export function HomePage(): ReactElement {
   const navigate = useNavigate()
   const { firebaseUser, mode, logout } = useAuth()
 
-  const suggestedName = firebaseUser?.displayName ?? getDisplayName() ?? ''
-
   const [presets, setPresets] = useState<PresetSummary[]>([])
   /**
-   * One name, two fields. Both panels ask for `Your name` and
-   * it is the same person either way, so the two inputs are views of one
-   * value: typing it while deciding to host and then joining instead must not
-   * silently lose it.
+   * The host's name, asked only here in the create form. Joining asks for no
+   * name on this screen: a player names themselves on the game screen, right
+   * before their first `join` of the room (spec §4.1).
+   *
+   * Prefilled from the account name, then the last name this browser used: a
+   * host creates room after room under the same name, so retyping it each time
+   * buys nothing. Creating stores it with `setDisplayName`, so it also
+   * prefills this browser's next player name form — hosts can be players too.
    */
-  const [displayName, setName] = useState(suggestedName)
+  const [hostName, setHostName] = useState(
+    () => firebaseUser?.displayName ?? getDisplayName() ?? '',
+  )
   const [preset, setPreset] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -103,10 +107,10 @@ export function HomePage(): ReactElement {
     setCreateError('')
     try {
       const room = await createRoom({
-        host_display_name: displayName.trim() || 'Host',
+        host_display_name: hostName.trim() || 'Host',
         preset: preset === '' ? null : preset,
       })
-      setDisplayName(displayName)
+      setDisplayName(hostName)
       setHostSecret(room.room_code, room.host_secret)
       setHostRoom(room.room_code)
       navigate(`/host/${room.room_code}`)
@@ -133,7 +137,6 @@ export function HomePage(): ReactElement {
         setJoinError(joinRefusal(status))
         return
       }
-      setDisplayName(displayName)
       navigate(`/game/${code}`)
     } catch (err) {
       setJoinError({ message: errorMessage(err, 'Could not reach that room.'), hint: null })
@@ -193,9 +196,9 @@ export function HomePage(): ReactElement {
               <span>Name to host as</span>
               <input
                 type="text"
-                value={displayName}
+                value={hostName}
                 maxLength={MAX_DISPLAY_NAME_LENGTH}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => setHostName(event.target.value)}
                 placeholder="Host"
                 className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
               />
@@ -243,7 +246,8 @@ export function HomePage(): ReactElement {
           >
             <h2 className="text-xl font-semibold">Join a game</h2>
             <p className="text-sm text-ink-muted">
-              You play one link in the chain for the whole session.
+              You play one link in the chain for the whole session. You choose your name on
+              the next screen.
             </p>
 
             <label className="flex flex-col gap-1 text-sm">
@@ -268,18 +272,6 @@ export function HomePage(): ReactElement {
                 {joinError.hint ? <span className="text-ink-muted">{joinError.hint}</span> : null}
               </p>
             ) : null}
-
-            <label className="flex flex-col gap-1 text-sm">
-              <span>Name to join as</span>
-              <input
-                type="text"
-                value={displayName}
-                maxLength={MAX_DISPLAY_NAME_LENGTH}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="What the room should call you"
-                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-              />
-            </label>
 
             <button
               type="submit"

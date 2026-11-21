@@ -3,8 +3,9 @@
  * declarations and the `/join/:roomCode` redirect.
  *
  * Covers: hosting persists the host_secret before navigating, presets, joining
- * and the three reasons a room refuses, the display name entered on `/home`,
- * the room-code alphabet, and the invite link in either form.
+ * and the three reasons a room refuses, the host's name (asked only in the
+ * create form; joining asks for no name here), the room-code alphabet, and the
+ * invite link in either form.
  *
  * Harness notes:
  *  - The page is reached through the route descriptor it exports.
@@ -13,9 +14,8 @@
  *    instance underneath it, so recording at `http` observes the wire whether
  *    the page calls the client or the instance.
  *  - Controls are located by their fixed accessible names — `Room code`,
- *    `Name to host as`, `Name to join as`, `Preset`, `Create game`,
- *    `Join game` — and by nothing else. The two name fields are distinct
- *    because the page renders both panels at once.
+ *    `Name to host as`, `Preset`, `Create game`, `Join game` — and by nothing
+ *    else.
  *  - Every room code used as a fixture is drawn from the room-code alphabet,
  *    `ABCDEFGHJKMNPQRSTUVWXYZ23456789`. A code the field would itself reject is
  *    a code the server never mints.
@@ -27,7 +27,7 @@ import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-route
 
 import { AuthProvider } from '../auth/AuthContext';
 import { BackendStatusProvider } from '../contexts/BackendStatusContext';
-import { getDisplayName, getHostSecret, isHostForRoom } from '../utils/storage';
+import { getDisplayName, getHostSecret, isHostForRoom, setDisplayName } from '../utils/storage';
 import { discoverRoutes, type RouteDescriptor } from '../routes/registry';
 import * as HomePageModule from '../pages/HomePage';
 import * as GameRoomModule from '../pages/GameRoom';
@@ -194,7 +194,6 @@ function homeDescriptor(): RouteDescriptor {
 const NAMES = {
   roomCode: /^Room code$/i,
   hostName: /^Name to host as$/i,
-  joinName: /^Name to join as$/i,
   preset: /^Preset$/i,
   create: /^Create game$/i,
   join: /^Join game$/i,
@@ -212,18 +211,9 @@ function codeInput(): HTMLInputElement {
   return screen.getByRole('textbox', { name: NAMES.roomCode }) as HTMLInputElement;
 }
 
-/**
- * The host panel and the join panel sit side by side, so the two name
- * fields are on screen together and have distinct names. Each
- * `getByRole` below therefore resolves to exactly one input, and would throw if
- * the two names were ever merged again.
- */
+/** The one name field on the page: the host's, in the create form. */
 function hostNameInput(): HTMLInputElement {
   return screen.getByRole('textbox', { name: NAMES.hostName }) as HTMLInputElement;
-}
-
-function joinNameInput(): HTMLInputElement {
-  return screen.getByRole('textbox', { name: NAMES.joinName }) as HTMLInputElement;
 }
 
 async function typeInto(user: ReturnType<typeof userEvent.setup>, input: HTMLInputElement, value: string) {
@@ -335,11 +325,10 @@ function dumpStorage(area: Storage): string {
 }
 
 /** Fills the join panel and submits it. */
-async function join(user: ReturnType<typeof userEvent.setup>, code: string, name = 'Bea') {
+async function join(user: ReturnType<typeof userEvent.setup>, code: string) {
   const input = codeInput();
   await user.clear(input);
   await user.type(input, code);
-  await typeInto(user, joinNameInput(), name);
   await user.click(joinButton());
 }
 
@@ -571,46 +560,53 @@ describe('joining a game reads GET /rooms/{code}/status and acts on the reason',
 });
 
 // ---------------------------------------------------------------------------
-// The display name survives the page
+// A name is asked only of the host
 // ---------------------------------------------------------------------------
 
-describe('the display name entered on /home is persisted', () => {
-  it('the two panels are on screen together, under distinct names', () => {
+describe('the only name field on /home is the host\'s, in the create form', () => {
+  it('renders exactly one name field, inside the create form', () => {
     renderHome();
 
-    // `getByRole` throws on more than one match, so this test fails the moment
-    // the two fields share a name again.
     const host = hostNameInput();
-    const joinName = joinNameInput();
-
-    expect(host).not.toBe(joinName);
-    expect(host).toBeInTheDocument();
-    expect(joinName).toBeInTheDocument();
+    expect(host.closest('form')).toContainElement(createButton());
+    expect(screen.queryByRole('textbox', { name: /name to join as/i })).toBeNull();
+    // The join form holds the room code and nothing else to type.
+    const joinForm = joinButton().closest('form') as HTMLFormElement;
+    expect(Array.from(joinForm.querySelectorAll('input'))).toEqual([codeInput()]);
   });
 
-  it('writes it through storage.setDisplayName, where the socket layer can read it back', async () => {
+  it('joining neither stores nor changes the browser\'s name', async () => {
     const user = userEvent.setup();
     renderHome();
 
+    // The host field is prefilled, and typing in it must not leak into a join:
+    // a player names themselves on the game screen (spec §4.1).
+    await typeInto(user, hostNameInput(), 'Bea');
+    await join(user, ROOM);
+
+    await screen.findByTestId('game-room');
     expect(getDisplayName()).toBeNull();
-
-    await join(user, ROOM, 'Bea');
-
-    // Router navigation state does not survive a reload, so the name is
-    // persisted — and in `storage.ts`, because `rejoinAfterConnect` emits it
-    // too.
-    await waitFor(() => expect(getDisplayName()).toBe('Bea'));
   });
 
-  it('keeps it in localStorage, not sessionStorage — it is not tab-scoped', async () => {
+  it('prefills the host name with the name this browser used last', () => {
+    // The account name comes first in the app, where AuthGuard has resolved
+    // the user before /home renders; this harness renders the page unguarded,
+    // so the first render sees no user and falls back to storage.
+    setDisplayName('Bea');
+    renderHome();
+
+    expect(hostNameInput().value).toBe('Bea');
+  });
+
+  it('creating stores the host name, so the next name form is prefilled with it', async () => {
     const user = userEvent.setup();
     renderHome();
 
-    await join(user, ROOM, 'Bea');
+    await typeInto(user, hostNameInput(), 'Bea');
+    await user.click(createButton());
 
     await waitFor(() => expect(getDisplayName()).toBe('Bea'));
-    // It lives in localStorage: it is display data, not a credential, and
-    // it has to survive a reload.
+    // Display data, not a credential: localStorage, not the tab.
     expect(dumpStorage(window.localStorage)).toContain('Bea');
     expect(dumpStorage(window.sessionStorage)).not.toContain('Bea');
   });

@@ -539,17 +539,18 @@ describe('reconnection', () => {
     expect(emitsOf('join_waiting')).toHaveLength(0);
   });
 
-  it('a first-time player joins with no session_token field', () => {
+  it('a first-time player is not joined on connect: the name form sends the first join', () => {
+    // Without this room's session_token the browser has never been seated
+    // here. Joining on connect would create the seat before the player chose a
+    // name, and the server keeps the name a seat was created with (spec §4.1).
     window.history.pushState({}, '', `/game/${ROOM}`);
     useGameStore.setState({ roomCode: ROOM });
+    setDisplayName('Ana Maria');
 
     dispatch('connect');
 
-    const payloads = emitsOf('join') as Array<Record<string, unknown>>;
-    expect(payloads.length).toBeGreaterThanOrEqual(1);
-    for (const payload of payloads) {
-      expect(onTheWire(payload)).not.toHaveProperty('session_token');
-    }
+    expect(emitsOf('join')).toHaveLength(0);
+    expect(emitsOf('join_waiting')).toHaveLength(0);
   });
 
   it('carries the stored display name, so a reconnect does not drop it', () => {

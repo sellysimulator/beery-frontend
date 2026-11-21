@@ -1,7 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { MAX_DISPLAY_NAME_LENGTH, setDisplayName } from '../utils/storage'
 import type { RouteDescriptor } from '../routes/registry'
 
 /**
@@ -10,6 +9,9 @@ import type { RouteDescriptor } from '../routes/registry'
  * Hosting is a capability, not an account (**D3**), so neither choice is the
  * "real" one: a guest can create and run a game exactly as a signed-in user
  * can. Signing in buys results tracked across games, and nothing else.
+ *
+ * It asks for no name. A player names themselves on the game screen, right
+ * before joining a room (spec §4.1), and a host in the create-room form.
  *
  * It deliberately does NOT wait on `loading`. Both choices are valid whatever
  * Firebase decides — signing in is valid for someone already signed in, and
@@ -23,7 +25,6 @@ export function WelcomeScreen(): ReactElement {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [signingIn, setSigningIn] = useState(false)
 
@@ -38,7 +39,6 @@ export function WelcomeScreen(): ReactElement {
     setSigningIn(true)
     try {
       await signInWithGoogle()
-      if (name.trim()) setDisplayName(name)
       navigate(destination, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.')
@@ -49,7 +49,6 @@ export function WelcomeScreen(): ReactElement {
 
   function handleGuest(): void {
     setError('')
-    setDisplayName(name)
     continueAsGuest()
     navigate(destination, { replace: true })
   }
@@ -115,17 +114,6 @@ export function WelcomeScreen(): ReactElement {
 
           <hr className="border-border" />
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span>Your name</span>
-            <input
-              type="text"
-              value={name}
-              maxLength={MAX_DISPLAY_NAME_LENGTH}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="What the room should call you"
-              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-            />
-          </label>
           <button
             type="button"
             onClick={handleGuest}
@@ -134,7 +122,8 @@ export function WelcomeScreen(): ReactElement {
             Continue as a guest
           </button>
           <p className="text-sm text-ink-muted">
-            A display name only. Your results count for this game and are not kept.
+            No account. You choose your name when you join a game, and your results count for
+            that game only and are not kept.
           </p>
         </div>
 

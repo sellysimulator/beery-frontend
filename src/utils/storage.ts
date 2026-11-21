@@ -99,8 +99,9 @@ export function clearHostSecret(roomCode: string): void {
 /* ─── display name — DISPLAY DATA, not a credential; browser-scoped ─── */
 //
 // It lives here with every other browser-storage accessor rather than in a
-// per-screen helper because BOTH emitters need it: the lobby shells on
-// mount, and `rejoinAfterConnect` on every reconnect. The server
+// per-screen helper because several screens need it: the game screen's name
+// form (prefill and save) and its join on mount, `rejoinAfterConnect` on every
+// reconnect, and the host name fields (create room, multi-game setup). The server
 // sanitises and truncates it (spec §4.2) and it grants nothing, so it is
 // deliberately not tab-scoped and not treated as a secret.
 

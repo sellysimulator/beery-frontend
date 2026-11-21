@@ -95,8 +95,10 @@ const BODY: ManualPageSpec[] = [
     content: (
       <>
         <p>
-          Open the link your host sent you. Enter a display name. Sign in if you want your
-          results tracked across games, or continue as a guest if you don't.
+          Open the link your host sent you. Sign in if you want your results tracked across
+          games, or continue as a guest if you don't. Then type the name the room should call
+          you and join. It stays for the whole game; leave it empty to be called by your seat
+          number (P1, P2…).
         </p>
         <p>
           Then wait. The host is configuring the game. You'll see who else has joined. You'll

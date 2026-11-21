@@ -464,8 +464,8 @@ A finished game is shown in exactly one way, in every game:
   code is reissued and its room expires, so a room-code link would later name another game.
 - **Backend.** `GET /api/v1/games/id/{public_id}/results` (and `/export` where the game has
   one): no sign-in, no secret, no time limit, `404` for an unknown id, and only what the
-  results screen shows (players by seat alias, never a uid, email, user id, guest identity or
-  token). Only a per-address rate limit gates it (the game's general or heavy REST budget).
+  results screen shows (players by their chosen display names, never a uid, email, user id,
+  guest identity or token; the export names them only `P1`..`Pn`, see "Display names"). Only a per-address rate limit gates it (the game's general or heavy REST budget).
 - **Frontend.** `/results/:publicId` on a public route is the only URL for a finished game: the
   end-of-game screen goes there once the game's `public_id` arrives, and the profile history,
   the "Games you hosted" list and any share link point there. The signed-in profile detail
@@ -476,6 +476,24 @@ A finished game is shown in exactly one way, in every game:
 
 Why: a teacher shares or bookmarks one link per game and it keeps working; anyone who has it
 can already download the data, so the page grants nothing new. (Decided 2026-11-20.)
+
+### Display names: chosen in the lobby, `P<N>` in every export
+
+- **Where.** A player chooses their name on the game screen right before their first `join` of
+  a room (a "Your name" form, prefilled from the last name this browser used). A rejoin with
+  the room's stored `session_token` skips the form. The host types a name in the create-room
+  form; it lives only in the room document and is never saved with the game.
+- **Rules.** The server owns one sanitiser (control characters out, whitespace runs to one
+  space, trimmed, clamped to 24 characters, re-trimmed; empty means the seat's fallback) and
+  the frontend mirrors it. The name is fixed once the seat exists; a later `join` never
+  renames. Duplicates are allowed, so nothing may identify a player by name: anything that
+  points at another player (a buyer, a trade partner) is stored by seat alias and resolved to
+  a name only for display.
+- **Where it shows.** Lobby, game, results screen and profile show chosen names. Every CSV and
+  JSON export names players only `P1`..`Pn`, so a file never carries a chosen name.
+
+Why: players recognise each other in class, while exported data stays anonymous and nobody
+has to keep a name-to-seat key. (Decided 2026-11-21.)
 
 ### Backend wake-up probe **[HARD-WON]**
 
