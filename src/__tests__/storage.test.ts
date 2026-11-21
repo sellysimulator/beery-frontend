@@ -17,6 +17,7 @@ import {
   setAlias,
   getGuestId,
   getOrCreateGuestId,
+  clearGuestId,
   getSessionToken,
   setSessionToken,
   clearSessionToken,
@@ -119,6 +120,22 @@ describe('guest identity', () => {
     expect(window.sessionStorage.getItem(GUEST_ID_KEY)).toBeNull();
     openFreshTab();
     expect(getGuestId()).toBe(id);
+  });
+
+  it('clearGuestId() forgets the id, so the next call mints a new one', () => {
+    const first = getOrCreateGuestId();
+    clearGuestId();
+    expect(getGuestId()).toBeNull();
+    expect(window.localStorage.getItem(GUEST_ID_KEY)).toBeNull();
+    expect(getOrCreateGuestId()).not.toBe(first);
+  });
+
+  it('clearGuestId() leaves every session_token in place', () => {
+    // Sign-out calls it, and a player signed out mid-game keeps their seat.
+    getOrCreateGuestId();
+    setSessionToken(ROOM, 'tok-abc');
+    clearGuestId();
+    expect(getSessionToken(ROOM)).toBe('tok-abc');
   });
 });
 

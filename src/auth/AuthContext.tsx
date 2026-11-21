@@ -18,7 +18,7 @@ import {
 import { auth, googleProvider } from '../../firebase'
 import http from '../api/http'
 import { socket } from '../api/socket'
-import { GUEST_ID_KEY, getOrCreateGuestId } from '../utils/storage'
+import { clearGuestId, getGuestId, getOrCreateGuestId } from '../utils/storage'
 
 export type AuthMode = 'authenticated' | 'guest' | null
 
@@ -105,7 +105,7 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
         syncUserWithBackend(user)
       } else {
         setFirebaseUser(null)
-        setMode(localStorage.getItem(GUEST_ID_KEY) ? 'guest' : null)
+        setMode(getGuestId() ? 'guest' : null)
       }
 
       setInitTimedOut(false)
@@ -117,7 +117,7 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
 
     const watchdog = setTimeout(() => {
       if (resolved) return
-      setMode(localStorage.getItem(GUEST_ID_KEY) ? 'guest' : null)
+      setMode(getGuestId() ? 'guest' : null)
       setInitTimedOut(true)
       setLoading(false)
       // Without this the socket is never connected at all: the only call site
@@ -154,7 +154,7 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
 
   const logout = useCallback(async () => {
     await signOut(auth)
-    localStorage.removeItem(GUEST_ID_KEY)
+    clearGuestId()
     setFirebaseUser(null)
     setMode(null)
     reconnectSocket()

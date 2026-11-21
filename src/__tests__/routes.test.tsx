@@ -27,7 +27,7 @@ import { NotFound } from '../components/shared/NotFound';
 import { collectRoutes, type RouteDescriptor } from '../routes/registry';
 import { ROLE_ORDER } from '../types/game';
 import type { DemandKind, Distribution, Role, RoleAssignmentMode, RoomState } from '../types/game';
-import { getGuestId } from '../utils/storage';
+import { getGuestId, getSessionToken, setSessionToken } from '../utils/storage';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -1012,6 +1012,28 @@ describe('AuthContext drives the socket connection', () => {
     resolveAuthState({ uid: 'uid-1', displayName: 'Ana', getIdToken: async () => 'tok' });
 
     expect(captured.value?.mode).toBe('authenticated');
+  });
+
+  it('logout forgets the guest id, keeps every session_token and reconnects', async () => {
+    mountAuth();
+    resolveAuthState(null);
+    act(() => {
+      captured.value?.continueAsGuest();
+    });
+    setSessionToken('ABC234', 'tok-seat');
+    expect(getGuestId()).not.toBeNull();
+    const before = rec.connectCalls;
+
+    await act(async () => {
+      await captured.value?.logout();
+    });
+
+    // Spec §9.9: sign-out drops the guest identity but not the per-room
+    // reconnect credential, so a player signed out mid-game keeps their seat.
+    expect(getGuestId()).toBeNull();
+    expect(getSessionToken('ABC234')).toBe('tok-seat');
+    expect(captured.value?.mode).toBeNull();
+    expect(rec.connectCalls).toBeGreaterThan(before);
   });
 });
 

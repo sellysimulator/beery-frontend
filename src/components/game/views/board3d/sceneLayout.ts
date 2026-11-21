@@ -700,7 +700,7 @@ export const SIGN_HEIGHT = {
    * stamp on the desk itself) have to clear each other, since every sign
    * carries a plate; at `2.8` the caption's plate would sit on the stamp's.
    * At this height the whole column is open and the role sign tops out at
-   * 6.2 m, well under the 9 m walls.
+   * 6.2 m, well under the 10 m walls (`HALL.wallHeight`).
    */
   canopy: 4.3,
   /** On a wall board. */
