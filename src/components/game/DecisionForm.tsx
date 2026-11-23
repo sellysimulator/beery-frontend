@@ -50,12 +50,14 @@ export function DecisionForm({
 }: DecisionFormProps): ReactElement {
   const inputId = useId()
   const [value, setValue] = useState(initialOrder === null ? '' : String(initialOrder))
-  // While the socket is down, Socket.IO would buffer the order and replay it
-  // ahead of the rejoin, where the server refuses it from a sid it no longer
-  // knows and the decision is lost. So the confirm waits for the connection;
-  // typing does not. Read here rather than passed in, so the 2D and the 3D
-  // board (which mount this same form) cannot disagree.
-  const reconnecting = useGameStore((state) => state.reconnecting)
+  // While the socket is not connected, Socket.IO would buffer the order and
+  // replay it ahead of the rejoin, where the server refuses it from a sid it
+  // no longer knows and the decision is lost. So the confirm waits for the
+  // connection; typing does not. `connected`, not `reconnecting`: the latter
+  // stays false through the page's own `disconnect().connect()`. Read here
+  // rather than passed in, so the 2D and the 3D board (which mount this same
+  // form) cannot disagree.
+  const connected = useGameStore((state) => state.connected)
 
   const isFactory = view.role === 'FACTORY'
   const supplier = UPSTREAM_LABEL[view.role]
@@ -72,7 +74,7 @@ export function DecisionForm({
   const hasNumber = value.trim() !== '' && Number.isFinite(parsed)
   const outOfRange =
     hasNumber && (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum)
-  const canSubmit = hasNumber && !outOfRange && !disabled && !reconnecting
+  const canSubmit = hasNumber && !outOfRange && !disabled && connected
 
   // The server's lead time and the server's arrival week. Nothing added here.
   const arrivalWeek = view.order_arrival_week
@@ -176,7 +178,7 @@ export function DecisionForm({
           {notice}
         </p>
       ) : null}
-      {reconnecting ? (
+      {!connected ? (
         <p role="status" className="text-sm text-ink-muted">
           Reconnecting… You can confirm your order once the connection is back.
         </p>

@@ -41,6 +41,7 @@ const DECLARED_FIELDS = [
   'durationWeeks',
   'lastSeq',
   'reconnecting',
+  'connected',
   'myState',
   'hostState',
   'awaitingRoles',
@@ -736,6 +737,7 @@ describe('identity and lifecycle actions', () => {
     store.addAlert({ kind: 'info', message: 'kept' });
     store.setConnectionError('still down');
     store.setReconnecting(true);
+    store.setConnected(true);
     store.setBatchRooms(['ROOMZZ']);
     expect(useGameStore.getState().roomState).toBe('FINISHED');
 
@@ -753,6 +755,7 @@ describe('identity and lifecycle actions', () => {
     expect(after.alerts.map((a) => a.message)).toEqual(['kept']);
     expect(after.connectionError).toBe('still down');
     expect(after.reconnecting).toBe(true);
+    expect(after.connected).toBe(true);
     expect(after.batchRooms).toEqual(['ROOMZZ']);
 
     // The new room's first events, seq 1 upwards, are applied, not dropped.
@@ -866,5 +869,18 @@ describe('gameStore — readers see writes', () => {
 
     expect(useGameStore.getState().roomCode).toBe('ABCD12');
     expect(seen).toContain('ABCD12');
+  });
+});
+
+describe('`connected` belongs to the tab, not to a room', () => {
+  it('survives a reset and a leave, which start the room state over', () => {
+    // The dashboard resets the store and a leave clears it while the socket
+    // stays up; a stale `false` would keep the order form shut for good.
+    useGameStore.getState().setConnected(true);
+    useGameStore.getState().reset();
+    expect(useGameStore.getState().connected).toBe(true);
+    useGameStore.getState().applyLeaveAck();
+    expect(useGameStore.getState().connected).toBe(true);
+    useGameStore.getState().setConnected(false);
   });
 });

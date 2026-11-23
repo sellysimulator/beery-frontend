@@ -1,5 +1,5 @@
 /**
- * The "Reconnecting…" banner on the player and host screens: shown while
+ * The "Connection lost. Reconnecting…" banner on the player and host screens: shown while
  * `store.reconnecting` is set (a drop after a working connection), gone once
  * the socket is back, and never blocking the screen beneath it.
  */
@@ -26,7 +26,7 @@ describe('ReconnectingNotice', () => {
     act(() => useGameStore.getState().setReconnecting(true));
 
     const notice = screen.getByRole('status');
-    expect(notice).toHaveTextContent('Reconnecting…');
+    expect(notice).toHaveTextContent(/^Connection lost\. Reconnecting…$/);
     expect(notice.className).toContain('pointer-events-none');
 
     act(() => useGameStore.getState().setReconnecting(false));

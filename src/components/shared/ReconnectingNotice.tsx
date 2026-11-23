@@ -6,7 +6,8 @@ import { useGameStore } from '../../store/gameStore'
  * socket is down after having connected once (`store.reconnecting`, written by
  * `socketHandlers.ts`). It blocks nothing: Socket.IO keeps retrying on its
  * own, and the screen comes back by itself once the rejoin's resync lands.
- * Until then the decision form will not confirm an order (`DecisionForm`).
+ * The decision form will not confirm an order while the socket is not
+ * connected (`store.connected`, `DecisionForm`).
  */
 export function ReconnectingNotice(): ReactElement | null {
   const reconnecting = useGameStore((state) => state.reconnecting)
@@ -21,7 +22,7 @@ export function ReconnectingNotice(): ReactElement | null {
         aria-hidden="true"
         className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-brand"
       />
-      Reconnecting…
+      Connection lost. Reconnecting…
     </div>
   )
 }

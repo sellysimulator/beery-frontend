@@ -59,6 +59,8 @@ vi.mock('../api/socket', () => ({
       wire.listeners.set(event, [...(wire.listeners.get(event) ?? []), cb]);
     },
     connect: () => {},
+    // Leaving a room reconnects the socket (`socketHandlers.ts`).
+    disconnect: () => ({ connect: () => {} }),
   },
 }));
 

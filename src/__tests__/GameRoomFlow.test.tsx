@@ -532,6 +532,8 @@ beforeEach(() => {
   rec.emits.length = 0;
   act(() => {
     useGameStore.getState().reset();
+    // The socket is up; the connection's own tests take it down.
+    useGameStore.getState().setConnected(true);
   });
 });
 

@@ -340,6 +340,8 @@ beforeEach(() => {
   rec.emits.length = 0;
   act(() => {
     useGameStore.getState().reset();
+    // The socket is up; the connection's own tests take it down.
+    useGameStore.getState().setConnected(true);
   });
 });
 
@@ -641,15 +643,30 @@ describe('no order is confirmed while the socket is down', () => {
     await typeOrder(user, '37');
     expect(isDisabled(confirmControl())).toBe(false);
 
-    act(() => useGameStore.getState().setReconnecting(true));
+    act(() => useGameStore.getState().setConnected(false));
     expect(isDisabled(confirmControl())).toBe(true);
     expect(container.textContent).toContain('Reconnecting');
     await user.click(confirmControl());
     expect(emitsOf('submit_order')).toHaveLength(0);
 
-    act(() => useGameStore.getState().setReconnecting(false));
+    act(() => useGameStore.getState().setConnected(true));
     await user.click(confirmControl());
     expect(emitsOf('submit_order')).toHaveLength(1);
+  });
+
+  it("is gated on the connection, not on `reconnecting`, which the page's own reconnect leaves false", async () => {
+    // A new room or a new identity reconnects the socket with
+    // `disconnect().connect()`; no "Reconnecting…" notice is raised for it,
+    // but an order sent in that gap would be buffered and lost all the same.
+    const user = userEvent.setup();
+    renderForm(viewFor('WHOLESALER'));
+    await typeOrder(user, '37');
+
+    act(() => useGameStore.getState().setConnected(false));
+    expect(useGameStore.getState().reconnecting).toBe(false);
+    expect(isDisabled(confirmControl())).toBe(true);
+    await user.keyboard('{Enter}');
+    expect(emitsOf('submit_order')).toHaveLength(0);
   });
 });
 

@@ -213,18 +213,32 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
    look identical) and raises an alert; `applyJoined` clears it.
 4. **The socket does not auto-connect.** `autoConnect: false`, and `auth` is a **callback**
    so it re-runs with a fresh ID token on every reconnect. `AuthContext` connects it once
-   `onAuthStateChanged` resolves (or after an 8s watchdog). Auto-connecting would hand a
+   `onAuthStateChanged` resolves (or after an 8s watchdog), but **never with no identity**:
+   with no Firebase user and no stored guest id (a first visit, the watchdog, after logout)
+   `reconnectSocket` calls `socket.disconnect()` and returns, because the server would refuse
+   the handshake and the refusal is an alert over the welcome screen, manuals or results page,
+   which need no socket. Auto-connecting would hand a
    returning signed-in user a guest identity. A signed-in user whose `getIdToken()` fails
    sends `{ idToken: null, guestId: null }`, **never** the guest id (the server refuses a
    handshake with no identity), and `socketHandlers.ts` retries that refusal with
-   `socket.connect()` every 5 s (`SIGNED_IN_RETRY_DELAY_MS`) while `auth.currentUser` is set.
+   `socket.connect()` every 5 s (`SIGNED_IN_RETRY_DELAY_MS`) while `auth.currentUser` is set,
+   saying "Could not reach the game server. Retrying…" (an info alert, no sign-out advice).
    **Reconnection never gives up**: no `reconnectionAttempts` (Socket.IO's default,
    Infinity), `reconnectionDelayMax: 10000`. A drop after the first connect sets
    `store.reconnecting` (written by the `connect`/`disconnect` handlers; this page's own
-   `disconnect()` does not count), which shows `shared/ReconnectingNotice` on `/game/:roomCode`
-   and `/host/:roomCode` (mounted in their route elements) and disables `DecisionForm`'s
-   Confirm: Socket.IO would buffer the emit and replay it before the rejoin, where the server
-   refuses it.
+   `disconnect()` does not count), which shows `shared/ReconnectingNotice` ("Connection lost.
+   Reconnecting…") on `/game/:roomCode` and `/host/:roomCode` (mounted in their route
+   elements). `DecisionForm`'s Confirm (and its submit handler) is gated on `store.connected`,
+   true only while the socket is connected, never on `reconnecting`, which stays false through
+   the page's own `disconnect().connect()`: Socket.IO would buffer the emit and replay it before
+   the rejoin, where the server refuses it. `connected` belongs to the tab: `setRoomCode`,
+   `reset` and `applyLeaveAck` keep it.
+   **A tab that moves off a room reconnects its socket** (`useGameStore.subscribe` in
+   `socketHandlers.ts`: `roomCode` changed from a code, socket connected →
+   `disconnect().connect()`), synchronously with the store's reset. One late event of the old
+   room, with its higher `seq`, would otherwise make the fresh store drop every event of the
+   new one, and a player on the new room's name form sends no `join` that could move the
+   socket. The server treats the old connection's drop as leaving that room.
 5. **Pages register themselves.** A module in `src/pages/*.tsx` exports
    `route: RouteDescriptor | RouteDescriptor[]`; `discoverRoutes()` globs them. Adding a
    screen is adding a file — **never edit `App.tsx`'s route table** (there isn't one).
@@ -263,7 +277,8 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
     your network. Try again in a minute."), which `classifyConnectError` calls `cap` and
     retries with bounded jittered backoff because Socket.IO never retries a `CONNECT_ERROR`
     itself; any other refusal (the generic `Connection rejected by server`, a failed ID token)
-    is `auth`: the sign-in message, retried every 5 s only while signed in (rule 4).
+    is `auth`: while signed in it says "Could not reach the game server. Retrying…" and is
+    retried every 5 s (rule 4); otherwise the sign-in message, not retried.
     A 429 that would leave the UI stuck is retried after its `Retry-After`
     (`retryAfterMs(err)` in `http.ts`, 1–60 s, 5 s when hidden): `useConfigPreview` asks for
     the same draft again, and `useDraftConfig` resends the edit (it stays in flight, so

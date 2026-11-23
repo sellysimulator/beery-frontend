@@ -40,6 +40,8 @@ const rec = vi.hoisted(() => ({
   url: undefined as unknown,
   connectCalls: 0,
   disconnectCalls: 0,
+  /** `connect` / `disconnect` calls, in order */
+  calls: [] as string[],
 }));
 
 vi.mock('socket.io-client', () => {
@@ -62,11 +64,13 @@ vi.mock('socket.io-client', () => {
     },
     connect: () => {
       rec.connectCalls += 1;
+      rec.calls.push('connect');
       socket.connected = true;
       return socket;
     },
     disconnect: () => {
       rec.disconnectCalls += 1;
+      rec.calls.push('disconnect');
       socket.connected = false;
       return socket;
     },
@@ -194,6 +198,7 @@ beforeEach(() => {
   rec.emits.length = 0;
   rec.connectCalls = 0;
   rec.disconnectCalls = 0;
+  rec.calls.length = 0;
   window.history.pushState({}, '', '/');
 });
 
@@ -756,6 +761,19 @@ describe('reconnection never gives up, and the screens say so', () => {
     expect(useGameStore.getState().reconnecting).toBe(false);
   });
 
+  it('`connected` is true only while the socket is up, own disconnects included', () => {
+    dispatch('connect');
+    expect(useGameStore.getState().connected).toBe(true);
+    dispatch('disconnect', 'io client disconnect');
+    expect(useGameStore.getState().connected).toBe(false);
+    expect(useGameStore.getState().reconnecting).toBe(false);
+    dispatch('connect');
+    dispatch('disconnect', 'transport close');
+    expect(useGameStore.getState().connected).toBe(false);
+    dispatch('connect');
+    expect(useGameStore.getState().connected).toBe(true);
+  });
+
   it("the page's own disconnect (AuthContext's reconnect) announces nothing", () => {
     dispatch('connect');
     dispatch('disconnect', 'io client disconnect');
@@ -782,7 +800,11 @@ describe('reconnection never gives up, and the screens say so', () => {
       useGameStore.getState().reset();
       socket.connected = false;
       dispatch('connect_error', { message: 'Connection rejected by server' });
-      expect(useGameStore.getState().connectionError).toMatch(/^Sign-in could not be verified/);
+      // It is being retried, so it says so; no sign-out advice.
+      expect(useGameStore.getState().connectionError).toBe('Could not reach the game server. Retrying…');
+      expect(useGameStore.getState().alerts).toEqual([
+        expect.objectContaining({ kind: 'info', message: 'Could not reach the game server. Retrying…' }),
+      ]);
 
       vi.advanceTimersByTime(SIGNED_IN_RETRY_DELAY_MS - 1);
       expect(rec.connectCalls).toBe(0);
@@ -822,6 +844,75 @@ describe('reconnection never gives up, and the screens say so', () => {
     const authCallback = rec.options?.auth as (cb: (p: Record<string, unknown>) => void) => void;
     const payload = await new Promise<Record<string, unknown>>((resolve) => authCallback(resolve));
     expect(payload).toEqual({ idToken: null, guestId });
+  });
+});
+
+describe('a tab that moves off a room leaves it at once', () => {
+  function lobbyUpdate(seq: number, state: string) {
+    return {
+      seq,
+      state,
+      host_display_name: 'Host',
+      participants: [],
+      role_to_alias: { RETAILER: null, WHOLESALER: null, DISTRIBUTOR: null, FACTORY: null },
+      role_assignment_mode: 'HOST_ASSIGNS',
+      seats_total: 4,
+      config_locked: false,
+      can_start: false,
+      start_blocked_reason: 'Waiting for players.',
+    };
+  }
+
+  async function connectedSocket(): Promise<Record<string, unknown>> {
+    const socket = (await import('../api/socket')).socket as unknown as Record<string, unknown>;
+    socket.connected = true;
+    dispatch('connect');
+    return socket;
+  }
+
+  it('reconnects the socket the moment the store starts over, and the new room applies from seq 1', async () => {
+    // A late event of the old room carries its high `seq`; heard after the
+    // reset it would make the store drop every event of the new room. A
+    // player on the new room's name form sends no `join`, so nothing else
+    // would take the socket out of the old room.
+    await connectedSocket();
+    useGameStore.getState().setRoomCode('ROOMAA');
+    dispatch('lobby_update', lobbyUpdate(40, 'FINISHED'));
+    rec.calls.length = 0;
+
+    useGameStore.getState().setRoomCode('ROOMBB');
+
+    // Synchronous with the reset: no event of the old connection can land
+    // in between (Socket.IO stops delivering them at `disconnect()`).
+    expect(rec.calls).toEqual(['disconnect', 'connect']);
+    expect(useGameStore.getState().lastSeq).toBe(0);
+    dispatch('connect');
+    dispatch('lobby_update', lobbyUpdate(1, 'LOBBY'));
+    expect(useGameStore.getState().roomState).toBe('LOBBY');
+    expect(useGameStore.getState().lastSeq).toBe(1);
+  });
+
+  it('also when the tab leaves its room for none (the dashboard, a leave)', async () => {
+    await connectedSocket();
+    useGameStore.getState().setRoomCode('ROOMAA');
+    rec.calls.length = 0;
+
+    useGameStore.getState().reset();
+
+    expect(rec.calls).toEqual(['disconnect', 'connect']);
+  });
+
+  it('not for the first room, the same room, or a socket that is down', async () => {
+    const socket = await connectedSocket();
+    useGameStore.getState().setRoomCode('ROOMAA');
+    useGameStore.getState().setRoomCode('ROOMAA');
+    expect(rec.calls).toEqual([]);
+
+    // Down: its reconnection is a new connection, in no room, anyway.
+    socket.connected = false;
+    useGameStore.getState().setRoomCode('ROOMBB');
+    expect(rec.calls).toEqual([]);
+    socket.connected = true;
   });
 });
 

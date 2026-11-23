@@ -93,6 +93,13 @@ const CONNECT_ERROR_MESSAGE = {
   cap: 'Too many connections from your network. Retrying…',
 } as const
 
+/**
+ * A signed-in user's refusal is retried every few seconds (below), so it says
+ * what is happening rather than asking them to sign out: most often their ID
+ * token could not be fetched on a flaky network, and the next try works.
+ */
+const SIGNED_IN_REFUSAL_MESSAGE = CONNECT_ERROR_MESSAGE.network
+
 const CAP_GAVE_UP_MESSAGE =
   'Too many connections from your network. Please reload the page in a few minutes.'
 
@@ -157,7 +164,7 @@ function scheduleSignedInRetry(): void {
 /**
  * Whether this page has had a working connection yet. A disconnect before the
  * first connect is the cold start (`BackendWakeUp` covers it); after it, the
- * screens show "Reconnecting…" until the socket is back.
+ * screens show "Connection lost. Reconnecting…" until the socket is back.
  */
 let hasConnected = false
 
@@ -260,6 +267,7 @@ export function rejoinAfterConnect(): void {
 
 socket.on('connect', () => {
   hasConnected = true
+  store().setConnected(true)
   store().setReconnecting(false)
   connectErrorAlerted = false
   clearCapRetry()
@@ -271,8 +279,10 @@ socket.on('connect', () => {
 
 socket.on('disconnect', (reason?: string) => {
   connectErrorAlerted = false
-  // `io client disconnect` is this page's own `disconnect()`, which
-  // `AuthContext` follows with a `connect()` at once: nothing to announce.
+  store().setConnected(false)
+  // `io client disconnect` is this page's own `disconnect()` (a new identity
+  // or a new room, followed by a `connect()` at once, or no identity left at
+  // all): nothing to announce.
   if (hasConnected && reason !== 'io client disconnect') store().setReconnecting(true)
 })
 
@@ -289,15 +299,34 @@ socket.on('connect_error', (error: Error) => {
     return
   }
 
-  if (kind === 'auth') scheduleSignedInRetry()
+  const signedInRefusal = kind === 'auth' && auth.currentUser !== null
+  if (signedInRefusal) scheduleSignedInRetry()
 
-  const message = CONNECT_ERROR_MESSAGE[kind]
+  const message = signedInRefusal ? SIGNED_IN_REFUSAL_MESSAGE : CONNECT_ERROR_MESSAGE[kind]
   store().setConnectionError(message)
 
   // One alert per failed retry cycle, not one per attempt.
   if (connectErrorAlerted) return
   connectErrorAlerted = true
-  connectErrorAlertId = store().addAlert({ kind: kind === 'auth' ? 'error' : 'info', message })
+  const alertKind = kind === 'auth' && !signedInRefusal ? 'error' : 'info'
+  connectErrorAlertId = store().addAlert({ kind: alertKind, message })
+})
+
+/**
+ * A tab that moves off a room (to another room, or to none: "Play again",
+ * Home's create or join, the dashboard, a leave) takes its socket out of the
+ * old room at once by reconnecting it; the server treats the old connection's
+ * drop as leaving that room. The store has just started over for the new
+ * room, and one late event of the old room, with that room's higher `seq`,
+ * would make it drop every event of the new one. Joining the new room is not
+ * enough on its own: a first-time player sends no `join` until they have
+ * named themselves, and until then the old room's events kept arriving. The
+ * `connect` handler's `rejoinAfterConnect` joins the new room, and a join a
+ * screen emits meanwhile is buffered until the new connection is up.
+ */
+useGameStore.subscribe((state, previous) => {
+  if (previous.roomCode === null || state.roomCode === previous.roomCode) return
+  if (socket.connected) socket.disconnect().connect()
 })
 
 /* ─── lobby ─── */
