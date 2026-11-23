@@ -342,7 +342,8 @@ button is disabled: socket.io buffers an emit made while offline and sends it on
 *before* the `connect` handler re-joins, so the server refuses it and the decision is lost.
 Gate Submit on a store `connected` flag that is true only between `connect` and `disconnect`,
 not on a "reconnecting" flag: the app's own `disconnect().connect()` never sets the latter.
-The notice text is the same in every game: "Connection lost. Reconnecting…".
+The notice text is the same in every game: "Connection lost. Reconnecting…", and it ignores the
+app's own disconnects (reason `io client disconnect`, e.g. the room-switch reconnect below).
 
 **A tab that changes room reconnects its socket.** **[HARD-WON]** The store resets for the new
 room and its `seq` filter starts over, but a socket still in the old room's channel keeps
