@@ -1490,10 +1490,11 @@ FIREBASE_SERVICE_ACCOUNT_JSON=
 ## 3. Explicitly excluded
 
 - **OpenRouter / any AI feedback provider** — cleanly separable; add per-game if wanted. If you
-  do: send each player's output with `emit_to_sid`, not `emit_to_room`; put a hard per-room call
-  budget behind a setting (`AI_MAX_CALLS_PER_ROOM`), because an uncapped round count plus a
-  paid model is an unauthenticated route to unbounded spend on your API key; and make a provider
-  failure degrade to a neutral message rather than blocking the round.
+  do: send each player's output with `emit_to_sid`, not `emit_to_room`; put a hard daily call
+  budget across every room behind a setting (`AI_MAX_CALLS_PER_DAY`, sized to the provider's
+  quota), because anyone can open rooms and a paid model is an unauthenticated route to
+  unbounded spend on your API key (a per-room cap stops neither, and cuts long games short);
+  and make a provider failure degrade to a neutral message rather than blocking the round.
 - **Gunicorn** — plain uvicorn only.
 
 ---
