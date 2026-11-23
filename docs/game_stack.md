@@ -684,8 +684,8 @@ correct WebSocket upgrade behind a reverse proxy), `python-socketio`, SQLAlchemy
 declarative), psycopg 3 driver (PostgreSQL), Alembic migrations, Redis (`redis.asyncio`), `firebase-admin`,
 Pydantic Settings.
 
-> Database note: every game persists to **PostgreSQL 17** (one managed Aiven PostgreSQL service
-> shared by all the games, one database and role per game) through **psycopg 3** (`psycopg[binary]`, URL scheme `postgresql+psycopg://`). The
+> Database note: every game persists to **PostgreSQL 18** (its own managed Neon project, one
+> per game) through **psycopg 3** (`psycopg[binary]`, URL scheme `postgresql+psycopg://`). The
 > binary wheel bundles libpq, so the slim Docker image needs no system packages for it.
 
 ### Bootstrap commands
@@ -1128,11 +1128,16 @@ which is exactly the raw UID the new schema exists to stop broadcasting.
 
 ### Database
 
-PostgreSQL 17 on one managed **Aiven PostgreSQL** service shared by every Novus game, reached
-over TLS. Each game has its own database on it (`sellydb`, `lemonydb`, `pulkydb`, `beerydb`;
-Aiven's own `defaultdb` holds no game). Every game connects as the service's one user,
-`avnadmin`; there are no per-game roles, so isolation between the games is by database name
-only. Sync
+PostgreSQL 18 on **Neon**, one project per game (Free plan, AWS US East 1, the region of the
+Render services), reached over TLS. Each project holds its game's database (`sellydb`,
+`lemonydb`, `pulkydb`, `beerydb`; Neon's default `neondb` holds no game), and the game connects
+as the project's owner role `neondb_owner` with its own password, so a leaked password exposes
+one game only. `DB_HOST` is the project's **direct** endpoint (`ep-….aws.neon.tech`, never the
+`-pooler` host): the pooled endpoint is PgBouncer in transaction mode, which rejects the
+`options` startup parameter `db_connect_args` sends. The Free plan fixes the compute at 0.25 CU
+(`max_connections` 112) and scales it to zero after 5 minutes idle, so the first request after a
+pause waits a cold start (under a second) and `pool_pre_ping` replaces the dropped connections.
+Its restore window is short: keep your own `pg_dump -Fc` backups. Sync
 SQLAlchemy 2.0 with psycopg 3, `DeclarativeBase` + `TimestampMixin`. Credentials come from
 separate env vars that `config.py` assembles into a URL-encoded
 `postgresql+psycopg://user:pass@host:port/db` (encode them: a `@` or `%` in a password otherwise
@@ -1143,28 +1148,28 @@ engine = create_engine(
     settings.db_url,
     pool_pre_ping=True,
     pool_recycle=3600,
-    pool_size=settings.DB_POOL_SIZE,       # 2 (Lemony 3)
-    max_overflow=settings.DB_MAX_OVERFLOW, # 1
+    pool_size=settings.DB_POOL_SIZE,       # 7 (Lemony 20)
+    max_overflow=settings.DB_MAX_OVERFLOW, # 2 (Lemony 4)
     pool_timeout=10,                       # fail fast instead of hanging a request 30 s
     connect_args=settings.db_connect_args,
 )
 ```
 
-**Size the pools to the shared plan, not the other way round.** The Aiven Free plan allows 20
-connections for the whole service, and all four games draw on them. Each instance opens at most
-`DB_POOL_SIZE + DB_MAX_OVERFLOW`: 2 + 1 = 3 for Selly, Pulky and Beery, and 3 + 1 = 4 for
-Lemony, whose live play goes through the database while Redis is off.
+**Size the pools to the game's connection budget.** Each game has a budget for its whole
+project, deploys included: **20 connections, Lemony 50** (its live play goes through the
+database while Redis is off). During a deploy Render runs the old and new instance side by side,
+the new one's startup migration opens one more, and an operator `psql` one more, so
+2 × (`DB_POOL_SIZE` + `DB_MAX_OVERFLOW`) + 1 + 1 ≤ budget:
 
-| Who holds connections | Count |
-|---|---|
-| The four games in normal running (3 + 3 + 3 + 4) | 13 |
-| The second instance Render runs while one game deploys | at most +4 = 17 |
-| That deploy's startup migration (`alembic upgrade head` in the Dockerfile CMD) | +1 = 18 |
-| One operator `psql` session | +1 = 19 of 20 |
+| | Per instance | Normal | Deploy overlap | + migration | + `psql` |
+|---|---|---|---|---|---|
+| Selly, Pulky, Beery (7 + 2) | 9 | 9 | 18 | 19 | **20 of 20** |
+| Lemony (20 + 4) | 24 | 24 | 48 | 49 | **50 of 50** |
 
-So **deploy one game at a time**. A backend run locally against the shared service is one more
-instance; develop against a local Docker PostgreSQL. On a bigger plan, raise the two env vars;
-there is no code change. Sync handlers hold a connection only for the length of a query or
+Projects are separate, so games deploy independently. A backend run locally against the game's
+Neon project is one more instance and takes the game over budget while it deploys; develop
+against a local Docker PostgreSQL 18. To change a pool, set the two env vars; there is no code
+change. Sync handlers hold a connection only for the length of a query or
 transaction, so a few per instance serve many concurrent players. A burst beyond that waits up
 to `pool_timeout` and then fails that one request, rather than exhausting the server for the
 other games.
@@ -1256,7 +1261,7 @@ Auto-Deploy is `After CI checks pass`, set in the Render dashboard (`render.yaml
 read the file). Back up before a migration that drops or rewrites data (`pg_dump -Fc`).
 
 **The DDL is generated and checked in.** `Novus/scripts/db/gen_ddl.py --backend <Game>_Backend`
-runs `alembic upgrade head` against a throwaway `postgres:17` container and writes the
+runs `alembic upgrade head` against a throwaway `postgres:18` container and writes the
 normalized `pg_dump --schema-only` to `<Game>_Backend/db/schema.postgres.sql`. The backend's
 `dbschema` suite repeats that dump against its Testcontainers database and fails if the
 committed file differs, and a second test requires `compare_metadata(Base.metadata) == []`. So
@@ -1264,7 +1269,7 @@ models, migrations and the committed DDL cannot drift. Regenerate the file in th
 any migration.
 
 **Tests.** Fast unit tests use SQLite. Tests marked `dbschema` run against a real
-`postgres:17` through Testcontainers (`testcontainers[postgres]`): `alembic upgrade head`
+`postgres:18` through Testcontainers (`testcontainers[postgres]`): `alembic upgrade head`
 once per session, and `TRUNCATE ... RESTART IDENTITY CASCADE` between tests. CI runs them as
 their own job.
 
@@ -1319,11 +1324,11 @@ class Settings(BaseSettings):
     DB_PORT: int = 5432
     DB_USER: str = "postgres"
     DB_PASSWORD: str = ""
-    DB_DATABASE: str = "<game>"    # the game's database on the shared service
+    DB_DATABASE: str = "<game>db"  # the game's database in its Neon project
     DB_REQUIRE_SSL: bool = False   # true on Render; see note below
-    DB_SSL_CA: str = ""            # PEM text or path of the shared service's CA
-    DB_POOL_SIZE: int = 2          # see "Size the pools to the shared plan"
-    DB_MAX_OVERFLOW: int = 1
+    DB_SSL_CA: str = ""            # PEM text or path of the CA bundle (note below)
+    DB_POOL_SIZE: int = 7          # see "Size the pools to the game's connection budget"
+    DB_MAX_OVERFLOW: int = 2
 
     REDIS_URL: str = ""
     FIREBASE_SERVICE_ACCOUNT_JSON: str = ""
@@ -1335,16 +1340,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 ```
 
-> TLS to the managed PostgreSQL: set `DB_SSL_CA` to the CA certificate of the shared Aiven
-> PostgreSQL service (Aiven console → service → *CA certificate*), so the backend connects with
-> `sslmode=verify-full`, which checks both the certificate chain and the hostname. All four
-> games use the same CA. Keep the one local copy at `Novus/novus-secrets/aiven-pg-ca.pem`
-> (outside every game repo) and point each local `DB_SSL_CA` at that path; on Render paste the
-> PEM text. Each Aiven project has its own CA, so a service in a different project needs its
-> CA. Aiven only
-> accepts TLS connections, so `DB_REQUIRE_SSL` without a CA still encrypts. It does not
-> verify the server, and the startup log warns about that. Confirm a live session with
-> `SELECT ssl, version, cipher FROM pg_stat_ssl WHERE pid = pg_backend_pid();`.
+> TLS to the managed PostgreSQL: set `DB_SSL_CA` to the Let's Encrypt roots that Neon's
+> certificates chain to, ISRG Root X1 and ISRG Root X2 in one PEM bundle, so the backend
+> connects with `sslmode=verify-full`, which checks both the certificate chain and the hostname.
+> The bundle is public and the same for all four games. Keep the one local copy at
+> `Novus/novus-secrets/neon-ca.pem` (outside every game repo; exported from macOS's
+> `SystemRootCertificates` keychain) and point each local `DB_SSL_CA` at that path; on Render
+> paste the PEM text of both certificates. Neon only accepts TLS connections, so
+> `DB_REQUIRE_SSL` without a CA still encrypts. It does not verify the server, and the startup
+> log warns about that. Confirm TLS on the client side: the boot log line, `psql`'s `\conninfo`
+> (`SSL Connection | true`) or `Novus/scripts/db/verify_live_db.py`. Not with `pg_stat_ssl`:
+> Neon's proxy terminates TLS, so that view reports `ssl = f` even for an encrypted link.
 
 ### Dockerfile
 
