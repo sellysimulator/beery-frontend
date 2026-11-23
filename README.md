@@ -218,6 +218,7 @@ up.
 | `host_batch` | `sessionStorage` | The multi-game dashboard's room codes (a JSON array). Only codes: each secret is under `host_secret_<room>`. |
 | `export_downloaded_<public_id>_<format>` | `sessionStorage` | The results screen's "already downloaded this session" flag. **UX only**, not a guard: the backend's per-address export limit (100 an hour) is the real one. |
 | display name | `localStorage` | Display data, sanitised on write. Written by the game screen's name form and the host name fields; it only prefills the next form and rides along on a rejoin. |
+| `vite_preload_reloaded` | `sessionStorage` | Set when the page reloads once after a deploy removed a code-split chunk it asked for (`vite:preloadError` in `main.tsx`), so it never reloads in a loop. |
 | `board_view` | `localStorage` | Display preference, **not a credential**; browser-wide on purpose, so a second tab keeps the choice. An unrecognised value is treated as unset. |
 
 A host who closes the tab loses the secret, and recovers by verified identity instead — the server

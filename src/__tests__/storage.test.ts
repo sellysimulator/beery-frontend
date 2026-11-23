@@ -31,7 +31,10 @@ import {
   setDisplayName,
   getBoardView,
   setBoardView,
+  claimPreloadReload,
 } from '../utils/storage';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const ROOM = 'ABCD12';
 const OTHER_ROOM = 'ZZZZ99';
@@ -425,5 +428,26 @@ describe('board view — a display preference, not a credential', () => {
     setBoardView('3D');
     openFreshTab();
     expect(getBoardView()).toBe('3D');
+  });
+});
+
+describe('stale chunk after a deploy — reload once per tab', () => {
+  it('allows one reload, then refuses, so a missing chunk cannot loop', () => {
+    expect(claimPreloadReload()).toBe(true);
+    expect(window.sessionStorage.getItem('vite_preload_reloaded')).toBe('1');
+    expect(claimPreloadReload()).toBe(false);
+  });
+
+  it('a fresh tab may reload again', () => {
+    expect(claimPreloadReload()).toBe(true);
+    openFreshTab();
+    expect(claimPreloadReload()).toBe(true);
+  });
+
+  it('main.tsx reloads on vite:preloadError through the flag', () => {
+    const source = readFileSync(join(process.cwd(), 'src', 'main.tsx'), 'utf8');
+    expect(source).toMatch(/addEventListener\('vite:preloadError'/);
+    expect(source).toMatch(/claimPreloadReload\(\)/);
+    expect(source.indexOf('vite:preloadError')).toBeLessThan(source.indexOf('createRoot('));
   });
 });

@@ -486,6 +486,7 @@ is no host claim and no "records your account as its host" copy.
 | `host_batch` | sessionStorage | The multi-game dashboard's room codes (JSON array; `getHostBatch()` is null when absent or malformed). Codes only — each secret is under `host_secret_<room>` |
 | `export_downloaded_<public_id>_<format>` | sessionStorage | The results screen's once-per-session download flag (`markExportDownloaded` / `wasExportDownloaded`). **UX only**: the server's per-address export budget (100 an hour, backend `core/abuse.py`) is the real guard |
 | `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it). Written by `NameForm`'s submit and the host name fields (Home's create form, `/multihost/new`); read to prefill them and by every token-bearing `join` |
+| `vite_preload_reloaded` | sessionStorage | Set by `claimPreloadReload()` when `main.tsx` reloads after a `vite:preloadError` (a stale chunk after a deploy), so it reloads once per tab, never in a loop. Same key in every Novus game |
 | `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (spec §9.7) |
 
 **D18 host recovery**: closing the tab loses `host_secret`. The host lobby therefore emits
