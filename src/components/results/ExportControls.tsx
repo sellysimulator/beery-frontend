@@ -44,9 +44,10 @@ function saveFile(data: unknown, filename: string): void {
  * host has no account to fall back on once the room or the tab is gone, so
  * every viewer — host included — downloads by the game's permanent id,
  * `GET /games/id/{public_id}/export`, with no secret and no token. The file
- * carries what this screen already shows (names, seats, figures) and no
- * account or credential. The export by room code stays host-only on the
- * server and is not used here.
+ * carries the week-by-week figures by seat and names players only by their
+ * seat alias (`P1`..`P4`), never a chosen display name, an account or a
+ * credential. There is no export by room code: `public_id` is the only way in
+ * (D22).
  *
  * **Once per game and format per browser session.** After a download the
  * button is disabled and says so, from a sessionStorage flag

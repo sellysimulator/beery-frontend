@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import http from '../api/http'
 import BullwhipChart from '../components/results/BullwhipChart'
@@ -14,65 +14,11 @@ import {
   resultsViewFromResponse,
   type ResultsResponse,
   type ResultsView,
-  type RoleResultView,
 } from '../components/charts/chartSetup'
 import { ROLE_LABEL } from '../components/lobby/roleCopy'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
-import { useGameStore } from '../store/gameStore'
-import { ROLE_ORDER, type GameFinishedPayload, type Participant } from '../types/game'
 import { isHostForRoom } from '../utils/storage'
 import type { RouteDescriptor } from '../routes/registry'
-
-/* ─── Normalisation: two sources, one view model ─── */
-
-/**
- * The live path — `game_finished` plus the store, available the instant the
- * game ends and before persistence has necessarily completed.
- *
- * The three per-week series and the four session facts are **absent** here,
- * and they stay absent: a zero, a dash or a re-derivation from `orders` would
- * each be a client-computed figure the server never sent (sections 2.0, 3.2).
- */
-function viewFromFinished(
-  roomCode: string,
-  finished: GameFinishedPayload,
-  participants: Participant[],
-  currencySymbol: string,
-): ResultsView {
-  const perRole: RoleResultView[] = ROLE_ORDER.flatMap((role) => {
-    const stats = finished.stats.per_role[role]
-    if (!stats) return []
-    const participant = participants.find((candidate) => candidate.role === role)
-    return [
-      {
-        role,
-        display_name: participant?.display_name ?? '',
-        is_bot: participant?.is_bot ?? false,
-        total_cost: stats.total_cost,
-        peak_inventory: stats.peak_inventory,
-        peak_backlog: stats.peak_backlog,
-        weeks_in_backlog: stats.weeks_in_backlog,
-        order_variance: stats.order_variance,
-        bullwhip_ratio: stats.bullwhip_ratio,
-        fill_rate: stats.fill_rate,
-        average_order: stats.average_order,
-        // `inventory`, `backlog` and `cumulative_cost` are simply not here.
-        orders: finished.orders_by_role[role] ?? [],
-      },
-    ]
-  })
-
-  return {
-    room_code: roomCode,
-    weeks_played: finished.weeks_played,
-    demand_series: finished.demand_series,
-    chain_total_cost: finished.stats.chain_total_cost,
-    demand_variance: finished.stats.demand_variance,
-    currency_symbol: currencySymbol,
-    per_role: perRole,
-    // The session facts are the second block the live path does not have.
-  }
-}
 
 /* ─── Fetching ─── */
 
@@ -247,60 +193,22 @@ function WeekByWeek({ view }: { view: ResultsView }): ReactElement | null {
  * field, printed as it arrived (spec §9.8).
  */
 export function ResultsPage(): ReactElement {
-  // Two routes, one screen: `/results/:roomCode`, or the permanent
-  // `/results/g/:gameId`, which keeps naming the same game after the room code
-  // is recycled.
-  const { roomCode: roomCodeParam = '', gameId = '' } = useParams<{
-    roomCode: string
-    gameId: string
-  }>()
-
-  const finished = useGameStore((state) => state.finished)
-  const storeRoomCode = useGameStore((state) => state.roomCode)
-  const gamePublicId = useGameStore((state) => state.gamePublicId)
-  const participants = useGameStore((state) => state.participants)
-  const myState = useGameStore((state) => state.myState)
-  const hostState = useGameStore((state) => state.hostState)
+  // One route: `/results/:publicId` (D22). The page shows only what
+  // `GET /games/id/{public_id}/results` answers -- never the live store, a
+  // room code or anything in browser storage -- so the same link shows the
+  // same game to anyone, for as long as the record exists.
+  const { publicId = '' } = useParams<{ publicId: string }>()
+  const fetchUrl = `/games/id/${publicId}/results`
 
   /**
-   * The live view, and only when the store's payload belongs to the room in
-   * the URL — a finished game left in the store is not an answer for a
-   * different room code.
-   */
-  const liveView = useMemo<ResultsView | null>(() => {
-    if (!finished || !storeRoomCode) return null
-    const matches = gameId
-      ? gamePublicId === gameId
-      : storeRoomCode === roomCodeParam
-    if (!matches) return null
-    const currency =
-      myState?.currency_symbol ?? hostState?.currency_symbol ?? '$'
-    return viewFromFinished(storeRoomCode, finished, participants, currency)
-  }, [
-    finished,
-    storeRoomCode,
-    gamePublicId,
-    gameId,
-    roomCodeParam,
-    participants,
-    myState,
-    hostState,
-  ])
-
-  /** What this URL asks for, and where the server answers it. */
-  const fetchKey = gameId ? `g/${gameId}` : roomCodeParam
-  const fetchUrl = gameId ? `/games/id/${gameId}/results` : `/games/${roomCodeParam}/results`
-
-  /**
-   * The fetch result, tagged with the room it answers for. Tagging is what
-   * keeps a previous room's payload from flashing up while the next one
+   * The fetch result, tagged with the id it answers for. Tagging is what
+   * keeps a previous game's payload from flashing up while the next one
    * loads, without resetting state from inside the effect.
    */
   const [outcome, setOutcome] = useState<FetchOutcome | null>(null)
 
   useEffect(() => {
-    // The store already holds this room's finished payload: no fetch.
-    if (liveView || fetchKey === '') return
+    if (publicId === '') return
 
     let cancelled = false
 
@@ -310,31 +218,31 @@ export function ResultsPage(): ReactElement {
         if (cancelled) return
         try {
           const response = await http.get<ResultsResponse>(fetchUrl)
-          if (!cancelled) setOutcome({ code: fetchKey, view: resultsViewFromResponse(response.data) })
+          if (!cancelled) setOutcome({ code: publicId, view: resultsViewFromResponse(response.data) })
           return
         } catch (err) {
-          // Persistence is non-blocking (spec §10.2), so a 404 right after the
-          // game ends means "not written yet", not "no such game".
+          // A 404 is retried briefly, then answered as unavailable; any
+          // other failure is answered at once.
           if (!isNotFound(err)) break
         }
       }
-      if (!cancelled) setOutcome({ code: fetchKey, view: null })
+      if (!cancelled) setOutcome({ code: publicId, view: null })
     })()
 
     return () => {
       cancelled = true
     }
-  }, [liveView, fetchKey, fetchUrl])
+  }, [publicId, fetchUrl])
 
-  const current = outcome && outcome.code === fetchKey ? outcome : null
-  const failed = current !== null && current.view === null
-  const view = liveView ?? current?.view ?? null
-  // By game id, the room code is only known once the view is: the live store's
-  // room, or the persisted record's.
-  const roomCode = view?.room_code ?? roomCodeParam
-  const [revealed, setRevealed] = useState(
-    () => !isHostForRoom(roomCodeParam || (liveView?.room_code ?? '')),
-  )
+  const current = outcome && outcome.code === publicId ? outcome : null
+  const failed = publicId === '' || (current !== null && current.view === null)
+  const view = current?.view ?? null
+  const roomCode = view?.room_code ?? ''
+  // Costs start hidden only in the tab that hosted this room (the one
+  // projecting, spec §9.8). That is a presentation choice made once the
+  // payload names the room; it never decides whether the results show.
+  const [revealedChoice, setRevealedChoice] = useState<boolean | null>(null)
+  const revealed = revealedChoice ?? !(roomCode !== '' && isHostForRoom(roomCode))
 
   if (!view) {
     return (
@@ -383,7 +291,7 @@ export function ResultsPage(): ReactElement {
           <CostSummary
             view={view}
             revealed={revealed}
-            onToggle={() => setRevealed((current) => !current)}
+            onToggle={() => setRevealedChoice(!revealed)}
           />
           <ChainCostBar view={view} revealed={revealed} />
         </section>
@@ -450,17 +358,10 @@ export function ResultsPage(): ReactElement {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const route: RouteDescriptor[] = [
-  {
-    path: '/results/:roomCode',
-    guard: 'public',
-    element: <ResultsPage />,
-  },
-  {
-    path: '/results/g/:gameId',
-    guard: 'public',
-    element: <ResultsPage />,
-  },
-]
+export const route: RouteDescriptor = {
+  path: '/results/:publicId',
+  guard: 'public',
+  element: <ResultsPage />,
+}
 
 export default ResultsPage

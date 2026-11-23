@@ -204,16 +204,22 @@ export function rejoinAfterConnect(): void {
     return
   }
 
+  // A player rejoins only with this room's `session_token`. Without one the
+  // browser has never been seated here, and the player still has to choose a
+  // name: `GameRoom` shows the name form and sends the first `join` itself
+  // (spec §4.1). Joining from here would create the seat before the name was
+  // chosen, and the server keeps the name a seat was created with.
+  const sessionToken = getSessionToken(roomCode)
+  if (!sessionToken) return
+
   // The display name goes back out too, so a reconnect does not silently drop
   // the name the player chose. A shell may also emit `join` on mount, so a cold
   // load can produce two: that is intended and harmless, because `join` is
   // idempotent by identity and the alternative — one emitter inferring whether
   // the other has already fired — breaks on a slow connect.
-  const payload: JoinEmit = { room_id: roomCode }
+  const payload: JoinEmit = { room_id: roomCode, session_token: sessionToken }
   const displayName = getDisplayName()
   if (displayName) payload.display_name = displayName
-  const sessionToken = getSessionToken(roomCode)
-  if (sessionToken) payload.session_token = sessionToken
   join(payload)
 }
 

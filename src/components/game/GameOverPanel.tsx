@@ -18,12 +18,13 @@ import { resultsPath } from '../../utils/resultsPath'
  * chain ordered, which is the bullwhip the host is about to walk everyone
  * through (`beer-game-spec.md` section 9.5).
  *
- * The link opens the same results screen the host sees. It reads the room and
- * the persisted game id from the store rather than taking props, so neither
- * board has to thread them through.
+ * The link opens the same results screen the host sees, by the game's
+ * `public_id` (**D22**), which arrives with `game_persisted` once the record is
+ * written. Until then there is no results URL to offer, so the panel says the
+ * results are being saved. It reads the id from the store rather than taking
+ * props, so neither board has to thread it through.
  */
 export function GameOverPanel(): ReactElement {
-  const roomCode = useGameStore((state) => state.roomCode)
   const gamePublicId = useGameStore((state) => state.gamePublicId)
 
   return (
@@ -34,14 +35,18 @@ export function GameOverPanel(): ReactElement {
         between what customers wanted and what the chain ordered is the whole point of
         the debrief.
       </p>
-      {roomCode ? (
+      {gamePublicId ? (
         <Link
-          to={resultsPath(roomCode, gamePublicId)}
+          to={resultsPath(gamePublicId)}
           className="self-start rounded-md border border-brand bg-brand-soft px-4 py-2 text-sm font-semibold text-brand-strong hover:border-ink"
         >
           See the results
         </Link>
-      ) : null}
+      ) : (
+        <p role="status" className="text-sm text-ink-muted">
+          Saving the results… the link appears here when they are saved.
+        </p>
+      )}
     </section>
   )
 }

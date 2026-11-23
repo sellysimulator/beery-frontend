@@ -1220,21 +1220,23 @@ describe('at FINISHED the console shows the final chain, the weeks played and a 
     expect(text).not.toMatch(new RegExp(`${WEEK}\\s*weeks played`, 'i'));
   });
 
-  it('links to the results screen for this room', () => {
+  it('offers no results link, and none by room code, until the game is saved', () => {
     renderFinished();
 
     const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
-    expect(links.map((a) => a.getAttribute('href'))).toContain(`/results/${ROOM}`);
+    const hrefs = links.map((a) => a.getAttribute('href') ?? '');
+    expect(hrefs.filter((href) => href.startsWith('/results'))).toEqual([]);
+    expect(document.body.textContent ?? '').toMatch(/saving the results/i);
   });
 
-  it('links to the permanent game-id URL once game_persisted arrives', () => {
+  it('links to /results/:publicId once game_persisted arrives (D22)', () => {
     renderFinished();
     act(() => {
       dispatch('game_persisted', { seq: nextSeq(), game_id: 'a'.repeat(32) });
     });
 
     const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
-    expect(links.map((a) => a.getAttribute('href'))).toContain(`/results/g/${'a'.repeat(32)}`);
+    expect(links.map((a) => a.getAttribute('href'))).toContain(`/results/${'a'.repeat(32)}`);
   });
 
   it('removes every host control rather than disabling it', () => {

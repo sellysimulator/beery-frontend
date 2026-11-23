@@ -422,14 +422,14 @@ function descriptor(): RouteDescriptor {
   if (!exported) throw new Error('ResultsPage.tsx exports no `route` descriptor.');
   const all = Array.isArray(exported) ? exported : [exported];
   const found = all.find((d) => d.path.startsWith('/results'));
-  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:roomCode` route.');
+  if (!found) throw new Error('ResultsPage.tsx declares no `/results/:publicId` route.');
   return found;
 }
 
 async function renderChart() {
   const route = descriptor();
   const result = render(
-    <MemoryRouter initialEntries={[`/results/${ROOM}`]}>
+    <MemoryRouter initialEntries={[`/results/${'c'.repeat(32)}`]}>
       <Routes>
         <Route path={route.path} element={route.element} />
         <Route path="*" element={<div data-testid="elsewhere" />} />

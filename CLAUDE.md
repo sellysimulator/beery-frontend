@@ -102,11 +102,11 @@ bearing documentation — match that style.
 |---|---|
 | `/` | public |
 | `/player-manual`, `/host-manual` | public |
-| `/results/:roomCode`, `/results/g/:gameId` | public (the second is the permanent URL, by `public_id`) |
+| `/results/:publicId` | public — the one results URL (D22), by the game's `public_id`; never a room code |
 | `/join/:roomCode` | public (redirect into `/game/:roomCode`) |
 | `/home`, `/game/:roomCode`, `/host/:roomCode` | auth+backend |
 | `/multihost/new`, `/multihost` | auth+backend |
-| `/profile`, `/profile/games/:gameId` | auth+backend |
+| `/profile`, `/profile/games/:publicId` | auth+backend |
 
 ## 4. Commands
 
@@ -427,13 +427,32 @@ dashboard card shows a small inline QR and opens it too. `utils/clipboard.ts`'s
 `public_id`), host or player, guest or signed in, and downloads from
 `GET /games/id/{public_id}/export` with no `X-Host-Secret` — the host too. The export is not
 bound to the host because a guest host has no account to fall back on once the room or tab is
-gone (D22). The export by room code stays host-only on the
-server and is not called from here. Each game and format can be downloaded **once per browser
+gone (D22). There is no export or results route by room code on the server. Each game and format can be downloaded **once per browser
 session**: after a success the button is disabled and reads "CSV already downloaded this
 session"; a failure marks nothing. That flag is UX only; the server's per-address limit (100
 exports an hour, both formats) is the real guard, and its 429 arrives through `errorMessage`.
 Don't reintroduce a host check, an expiry warning or "only the host can export" copy, and
 `GuestClaimPrompt` must not sell an account as the way to keep exporting.
+
+### Results are shown only by `public_id` (D22)
+
+The one results URL is `/results/:publicId` (`utils/resultsPath.ts`), and `ResultsPage` renders
+only what `GET /games/id/{public_id}/results` answers: never the live store's `game_finished`
+payload, a room code or anything in browser storage (the host tab's hidden-costs default is the
+one presentation detail storage still decides). The end screens (`GameOverPanel`, the finished
+`HostConsole`) link there once `game_persisted` has put `gamePublicId` in the store and say
+"Saving the results…" until then — never a fallback link by room code. The profile names games
+by `public_id` too: history rows and the best game open `/profile/games/:publicId`
+(`GET /users/me/games/{public_id}`), and no wire field here is an internal `games.id`.
+
+### Games you hosted (D23)
+
+`profile/HostedGamesList.tsx` is the profile's separate "Games you hosted" section, from
+`GET /users/me/hosted-games` (the profile's third request on mount; it pages with
+`?hosted_page=N`). Each entry links to `/results/:publicId`. It is a list only: the match
+history and the stats stay played-only, and `GuestClaimPrompt` is offered only to a guest whose
+browser played a seat in the room (a `session_token`) — a guest host is never recorded, so there
+is no host claim and no "records your account as its host" copy.
 
 ## 7. Storage scopes — not interchangeable
 
@@ -448,7 +467,7 @@ Don't reintroduce a host check, an expiry warning or "only the host can export" 
 | `host_room` | sessionStorage | UI hint only; never trusted by the server |
 | `host_batch` | sessionStorage | The multi-game dashboard's room codes (JSON array; `getHostBatch()` is null when absent or malformed). Codes only — each secret is under `host_secret_<room>` |
 | `export_downloaded_<public_id>_<format>` | sessionStorage | The results screen's once-per-session download flag (`markExportDownloaded` / `wasExportDownloaded`). **UX only**: the server's per-address export budget (100 an hour, backend `core/abuse.py`) is the real guard |
-| `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it) |
+| `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it). Written by `NameForm`'s submit and the host name fields (Home's create form, `/multihost/new`); read to prefill them and by every token-bearing `join` |
 | `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (spec §9.7) |
 
 **D18 host recovery**: closing the tab loses `host_secret`. The host lobby therefore emits
@@ -460,9 +479,23 @@ permanently paused game, not an error.
 `rejoinAfterConnect` runs on every `connect`: it emits `join_waiting` when the route is
 `/host/:roomCode` or the tab holds `host_room` for that room (with the stored secret if any),
 otherwise `join` with the stored `session_token` and display name, so a reconnect keeps the
-chosen name. A shell may also emit `join` on mount, so a cold load can send two; that is
+chosen name — **but only when that room's `session_token` is stored**. Without one it emits
+nothing: the player has not chosen a name yet (below), and a `join` from here would create the
+seat first. A shell may also emit `join` on mount, so a cold load can send two; that is
 intended (`join` is idempotent by identity), and no emitter should try to guess whether the
 other fired.
+
+**Players name themselves on the game screen, right before their first `join`** (spec §4.2,
+`game_stack.md` "Display names"). `GameRoom` reads `getSessionToken(roomCode)` on every
+render. With none it shows `lobby/NameForm` ("Your name", prefilled from `getDisplayName()`
+only, `maxLength` `MAX_DISPLAY_NAME_LENGTH`) and sends no `join`; the submit stores a
+non-empty name with `setDisplayName` and joins with what was stored (an empty submit joins
+with no `display_name`, so the server uses the alias, and leaves storage alone). After the
+submit the lobby shows; a `join_error` while still tokenless brings the form back with the
+reason. With a token it skips the form and joins on mount as before. The server keeps the name
+a seat was created with, so there is no rename. The welcome screen and Home's join form ask for
+no name — don't add one back; Home's create form ("Name to host as") and `/multihost/new` are
+the only other name fields, and they send `host_display_name`.
 
 `store.myAlias` is the alias, the value every broadcast's `player_id` is compared against. The
 `session_token` is read only by the `join` emit (`storage.getSessionToken`) and is never

@@ -25,7 +25,7 @@ function match(
   bullwhip_ratio: number | null,
 ): MatchSummary {
   return {
-    game_id: id,
+    public_id: id.toString(16).padStart(32, "0"),
     room_code: `ROOM${id}XQ`,
     finished_at,
     role,

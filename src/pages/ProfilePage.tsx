@@ -3,12 +3,15 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { errorMessage } from "../api/http";
 import {
   getMyGames,
+  getMyHostedGames,
   getMyStats,
+  type HostedGamesResponse,
   type MatchHistoryResponse,
   type UserStatsResponse,
 } from "../api/users";
 import { useAuth } from "../auth/AuthContext";
 import BullwhipTrend from "../components/profile/BullwhipTrend";
+import HostedGamesList from "../components/profile/HostedGamesList";
 import MatchDetail from "../components/profile/MatchDetail";
 import MatchHistoryTable from "../components/profile/MatchHistoryTable";
 import ProfileClaimPrompt from "../components/profile/ProfileClaimPrompt";
@@ -93,10 +96,10 @@ function SignInPrompt(): ReactElement {
 }
 
 /**
- * The profile proper: two requests on mount, and never one per row.
+ * The profile proper: three requests on mount, and never one per row.
  *
- * `GET /users/me/stats` and page 1 of `GET /users/me/games` are the whole
- * budget. The backend guarantees a bounded statement count for the
+ * `GET /users/me/stats`, page 1 of `GET /users/me/games` and page 1 of
+ * `GET /users/me/hosted-games` (**D23**) are the whole budget. The backend guarantees a bounded statement count for the
  * history, and a client that fetched each game's detail to fill a
  * column would undo that guarantee from this side, which is the expensive
  * mistake this page is shaped to avoid.
@@ -105,6 +108,8 @@ function AuthenticatedProfile(): ReactElement {
   const { firebaseUser, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const page = pageFromQuery(searchParams.get("page"));
+  // The hosted list pages on its own, so paging one list never moves the other.
+  const hostedPage = pageFromQuery(searchParams.get("hosted_page"));
 
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
   const [statsError, setStatsError] = useState("");
@@ -144,6 +149,35 @@ function AuthenticatedProfile(): ReactElement {
     };
   }, []);
 
+  const [hosted, setHosted] = useState<{
+    page: number;
+    data: HostedGamesResponse;
+  } | null>(null);
+  const [hostedError, setHostedError] = useState<{
+    page: number;
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await getMyHostedGames(hostedPage, PAGE_SIZE);
+        if (!cancelled) setHosted({ page: hostedPage, data: response });
+      } catch (err) {
+        if (!cancelled) {
+          setHostedError({
+            page: hostedPage,
+            message: errorMessage(err, "Your hosted games could not be loaded."),
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hostedPage]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -177,11 +211,26 @@ function AuthenticatedProfile(): ReactElement {
     [setSearchParams],
   );
 
+  const goToHostedPage = useCallback(
+    (next: number) => {
+      setSearchParams((previous) => {
+        const params = new URLSearchParams(previous);
+        params.set("hosted_page", String(Math.max(1, next)));
+        return params;
+      });
+    },
+    [setSearchParams],
+  );
+
   const displayName = firebaseUser?.displayName ?? firebaseUser?.email ?? "You";
 
   const shownHistory = history && history.page === page ? history.data : null;
   const shownHistoryError =
     historyError && historyError.page === page ? historyError.message : null;
+  const shownHosted =
+    hosted && hosted.page === hostedPage ? hosted.data : null;
+  const shownHostedError =
+    hostedError && hostedError.page === hostedPage ? hostedError.message : null;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-10">
@@ -239,6 +288,23 @@ function AuthenticatedProfile(): ReactElement {
           />
         </>
       )}
+
+      {/* Separate from the history and the stats, which count only the
+          seats played: hosting is not playing (D23). */}
+      {shownHostedError ? (
+        <p role="alert" className="text-sm text-danger">
+          {shownHostedError}
+        </p>
+      ) : (
+        <HostedGamesList
+          games={shownHosted?.games ?? []}
+          total={shownHosted?.total ?? 0}
+          page={hostedPage}
+          pageSize={shownHosted?.page_size ?? PAGE_SIZE}
+          onPageChange={goToHostedPage}
+          loading={shownHosted === null}
+        />
+      )}
     </div>
   );
 }
@@ -257,22 +323,22 @@ export function ProfilePage(): ReactElement {
 }
 
 /**
- * One of the caller's own games, at `/profile/games/:gameId`.
+ * One of the caller's own games, at `/profile/games/:publicId` (D22).
  *
  * It lives in this module rather than a second file in `src/pages/` because
  * `collectRoutes` accepts an array of descriptors, which is
  * exactly what one page module contributing two paths is for.
  */
 export function MatchDetailPage(): ReactElement {
-  const { gameId } = useParams<{ gameId: string }>();
-  return <MatchDetail gameId={gameId} />;
+  const { publicId } = useParams<{ publicId: string }>();
+  return <MatchDetail publicId={publicId} />;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const route: RouteDescriptor[] = [
   { path: "/profile", guard: "auth+backend", element: <ProfilePage /> },
   {
-    path: "/profile/games/:gameId",
+    path: "/profile/games/:publicId",
     guard: "auth+backend",
     element: <MatchDetailPage />,
   },

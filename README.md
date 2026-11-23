@@ -70,6 +70,7 @@ pure unit suite, and why changing CI or deploy config breaks tests until they ar
 The app covers the whole session: welcome screen, both manuals, the home page (create or join a
 room), multi-game hosting (a batch of games made at once from one full base config, watched
 from one dashboard), the
+name form a player fills in on the game screen right before first joining a room, the
 player and host lobbies with a full-screen join QR code, the host's configuration panel, the
 week-by-week decision panel, the host console, the results screen with its charts and an
 export anyone viewing it can download (once per format per browser session), and the player profile
@@ -81,7 +82,7 @@ boundary that keeps Chart.js, react-hook-form and Zod off the welcome and lobby 
 so they are fetched on the first render that actually shows one.
 
 Without a backend, `/`, `/player-manual` and `/host-manual` still render — they need neither auth
-nor the API. `/results/:roomCode` and `/join/:roomCode` are also unguarded, but they have nothing
+nor the API. `/results/:publicId` and `/join/:roomCode` are also unguarded, but they have nothing
 to show until the API answers. Every other route sits behind a guard that shows the wake-up screen
 while `/api/v1/health` is failing.
 
@@ -143,7 +144,8 @@ src/
 │   │                           Avatar, ErrorBoundary, NotFound, ScreenLoading,
 │   │                           AuthGuard, BackendGuard, Select, JoinQrOverlay (full-screen
 │   │                           join QR, drawn locally by qrcode.react), useMediaQuery
-│   ├── lobby/                  the two lobbies, participant list, role cards, invite panel
+│   ├── lobby/                  the two lobbies, the player's name form (NameForm),
+│   │                           participant list, role cards, invite panel
 │   │                           (copy + Show QR), roomCode.ts (alphabet, inviteUrl)
 │   ├── multihost/              the dashboard's GameCard (with a start refusal on the card),
 │   │                           useRoomsSummary (polls POST /rooms/summary every 5 s, with
@@ -165,7 +167,7 @@ src/
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export (by
 │   │                           public_id, for every viewer)
-│   ├── profile/                match history, stats, role breakdown, guest-claim prompt
+│   ├── profile/                match history, games you hosted, stats, role breakdown, guest-claim prompt
 │   ├── charts/                 chartSetup.ts (results view model + bullwhip builder),
 │   │                           chartTheme.ts (every canvas colour), ChartBox, Legend,
 │   │                           plugins/ (crosshair sync)
@@ -212,7 +214,7 @@ up.
 | `host_room` | `sessionStorage` | UI hint only: which room this tab hosts. Never trusted by the server. |
 | `host_batch` | `sessionStorage` | The multi-game dashboard's room codes (a JSON array). Only codes: each secret is under `host_secret_<room>`. |
 | `export_downloaded_<public_id>_<format>` | `sessionStorage` | The results screen's "already downloaded this session" flag. **UX only**, not a guard: the backend's per-address export limit (100 an hour) is the real one. |
-| display name | `localStorage` | Display data, sanitised on write. |
+| display name | `localStorage` | Display data, sanitised on write. Written by the game screen's name form and the host name fields; it only prefills the next form and rides along on a rejoin. |
 | `board_view` | `localStorage` | Display preference, **not a credential**; browser-wide on purpose, so a second tab keeps the choice. An unrecognised value is treated as unset. |
 
 A host who closes the tab loses the secret, and recovers by verified identity instead — the server

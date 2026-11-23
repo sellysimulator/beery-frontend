@@ -16,14 +16,14 @@ import RoleStatsTable from '../results/RoleStatsTable'
 import LoadingSpinner from '../shared/LoadingSpinner'
 
 export interface MatchDetailProps {
-  /** The `:gameId` path parameter, exactly as the router delivered it. */
-  gameId: string | undefined
+  /** The `:publicId` path parameter, exactly as the router delivered it. */
+  publicId: string | undefined
 }
 
 /**
  * The copy for a game that is not the caller's.
  *
- * `GET /users/me/games/{id}` answers 404 — never 403 — for a game the caller
+ * `GET /users/me/games/{public_id}` answers 404 — never 403 — for a game the caller
  * did not play, precisely so that it is not a game-existence oracle
  * (spec §9.9). Saying "you don't have permission" here would confirm the game
  * exists and hand back exactly what the status code was chosen to withhold.
@@ -35,11 +35,12 @@ function isNotFound(err: unknown): boolean {
   return response?.status === 404
 }
 
-/** `/profile/games/banana` is not a game id, and needs no round trip to say so. */
-function parseGameId(raw: string | undefined): number | null {
-  if (raw === undefined || !/^\d+$/.test(raw)) return null
-  const value = Number(raw)
-  return Number.isSafeInteger(value) && value > 0 ? value : null
+/**
+ * `/profile/games/banana` is not a game's `public_id` (32 hex characters), and
+ * needs no round trip to say so.
+ */
+function parsePublicId(raw: string | undefined): string | null {
+  return raw !== undefined && /^[0-9a-f]{32}$/.test(raw) ? raw : null
 }
 
 /**
@@ -50,8 +51,8 @@ function parseGameId(raw: string | undefined): number | null {
  * is a cascading render, and which React's own lint rule refuses.
  */
 type Outcome =
-  | { kind: 'view'; id: number; view: ResultsView }
-  | { kind: 'error'; id: number; message: string }
+  | { kind: 'view'; id: string; view: ResultsView }
+  | { kind: 'error'; id: string; message: string }
 
 function Message({ text }: { text: string }): ReactElement {
   return (
@@ -71,16 +72,14 @@ function Message({ text }: { text: string }): ReactElement {
  * One of the caller's own games, reopened in full.
  *
  * It renders through the results page's components and normaliser, and
- * owns nothing of its own beyond the fetch: `GET /users/me/games/{id}` returns
- * the identical `ResultsResponse` that `GET /games/{code}/results` does, and a
- * second mapping — or a second renderer — of one contract drifts from the
- * first the moment either changes.
- *
- * This route exists for the case the public one cannot serve: a room code that
- * has been reused, so `/results/{code}` is ambiguous about which game it means.
+ * owns nothing of its own beyond the fetch: `GET /users/me/games/{public_id}`
+ * returns the identical `ResultsResponse` that `GET /games/id/{public_id}/results`
+ * does, and a second mapping — or a second renderer — of one contract drifts
+ * from the first the moment either changes. Both name the game by its
+ * `public_id` (D22); this one answers only for a game the caller played.
  */
-export function MatchDetail({ gameId }: MatchDetailProps): ReactElement {
-  const id = parseGameId(gameId)
+export function MatchDetail({ publicId }: MatchDetailProps): ReactElement {
+  const id = parsePublicId(publicId)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [revealed, setRevealed] = useState(true)
 

@@ -135,7 +135,7 @@ This means you are always ordering for a situation you can't see yet — and it 
 
 ## Joining
 
-Open the link your host sent you. Enter a display name. Sign in if you want your results tracked across games, or continue as a guest if you don't.
+Open the link your host sent you. Sign in if you want your results tracked across games, or continue as a guest if you don't. Then type the name the room should call you and join. It stays for the whole game; leave it empty to be called by your seat number (P1, P2…).
 
 If you drop out mid-game, open the same link again to rejoin. If the host handed your role to a bot meanwhile, press **Take back my role** to play it again.
 

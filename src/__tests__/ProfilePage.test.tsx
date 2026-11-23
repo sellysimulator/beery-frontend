@@ -1,5 +1,5 @@
 /**
- * `/profile` and `/profile/games/:gameId` (spec §9.9).
+ * `/profile` and `/profile/games/:publicId` (spec §9.9).
  *
  * The match history table (rows, paging, its request shape) is in
  * `MatchHistoryTable.test.tsx`.
@@ -30,7 +30,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Component, type ReactNode } from 'react';
-import { render, act, waitFor, fireEvent } from '@testing-library/react';
+import { render, act, waitFor, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -162,6 +162,11 @@ const UID = 'uid-1';
 const DISPLAY_NAME = 'Ada Lovelace';
 const PHOTO_URL = 'https://lh3.googleusercontent.com/a/profile-photo';
 
+/** A game's `public_id`: 32 hex characters, never an internal id (D22). */
+function pid(n: number): string {
+  return n.toString(16).padStart(32, '0');
+}
+
 /** A `UserStatsResponse`. Every figure is distinct from every other. */
 const STATS = {
   games_played: 11,
@@ -169,7 +174,7 @@ const STATS = {
   total_cost: 18342.5,
   avg_cost_per_week: 85.71,
   bullwhip_avg: 2.35,
-  best_game_id: 4007,
+  best_game_public_id: pid(4007) as string | null,
   games_as_retailer: 5,
   games_as_wholesaler: 3,
   games_as_distributor: 2,
@@ -189,7 +194,7 @@ const ZERO_STATS = {
   total_cost: 0,
   avg_cost_per_week: 0,
   bullwhip_avg: null,
-  best_game_id: null,
+  best_game_public_id: null,
   games_as_retailer: 0,
   games_as_wholesaler: 0,
   games_as_distributor: 0,
@@ -216,7 +221,7 @@ function roomCodeFor(index: number): string {
 const PRESETS = ['Classic MIT', 'Volatile demand', 'Long lead times', 'Steady state'];
 
 interface MatchFixture {
-  game_id: number;
+  public_id: string;
   room_code: string;
   finished_at: string;
   role: Role;
@@ -229,7 +234,7 @@ interface MatchFixture {
 
 /** 25 games, newest first — the server orders the history by `finished_at` desc. */
 const MATCHES: MatchFixture[] = Array.from({ length: 25 }, (_, i) => ({
-  game_id: 4000 + i,
+  public_id: pid(4000 + i),
   room_code: roomCodeFor(i),
   // One month apart, so a row is identifiable by its year in any date format.
   finished_at: new Date(Date.UTC(2026, 8 - i, 15, 10, 30)).toISOString(),
@@ -252,8 +257,33 @@ function historyPage(page: number, pageSize = 20) {
   };
 }
 
-/** The game `best_game_id` points at, and the one `MatchDetail` opens. */
-const DETAIL_GAME_ID = STATS.best_game_id;
+/** `GET /users/me/hosted-games`, page 1: two games this account hosted (D23). */
+const HOSTED_GAMES = [
+  {
+    public_id: pid(9001),
+    room_code: 'HSTAAA',
+    finished_at: '2026-10-02T10:00:00Z',
+    player_count: 4,
+    ended_early: false,
+  },
+  {
+    public_id: pid(9002),
+    room_code: 'HSTBBB',
+    finished_at: '2026-09-01T10:00:00Z',
+    player_count: 4,
+    ended_early: true,
+  },
+];
+
+let hostedResponse: {
+  games: typeof HOSTED_GAMES;
+  total: number;
+  page: number;
+  page_size: number;
+} = { games: HOSTED_GAMES, total: 2, page: 1, page_size: 20 };
+
+/** The game `best_game_public_id` points at, and the one `MatchDetail` opens. */
+const DETAIL_GAME_ID = pid(4007);
 const DETAIL_ROOM = 'BEERYX';
 const DETAIL_WEEKS = 6;
 const DETAIL_DEMAND = [4, 4, 12, 12, 12, 12];
@@ -660,7 +690,7 @@ function renderAt(entry: string) {
         <Routes>
           <Route path={profile.path} element={profile.element} />
           {detail ? <Route path={detail.path} element={detail.element} /> : null}
-          <Route path="/results/:roomCode" element={<div data-testid="results" />} />
+          <Route path="/results/:publicId" element={<div data-testid="results" />} />
           <Route path="/home" element={<div data-testid="home" />} />
           <Route path="*" element={<div data-testid="elsewhere" />} />
         </Routes>
@@ -723,7 +753,11 @@ function gamesCalls(): unknown[][] {
 }
 
 function detailCalls(): unknown[][] {
-  return mineCalls().filter((call) => /\/users\/me\/games\/\d+$/.test(pathOf(call)));
+  return mineCalls().filter((call) => /\/users\/me\/games\/[0-9a-f]{32}$/.test(pathOf(call)));
+}
+
+function hostedCalls(): unknown[][] {
+  return mineCalls().filter((call) => /\/users\/me\/hosted-games$/.test(pathOf(call)));
 }
 
 function claimCalls(): unknown[][] {
@@ -793,6 +827,7 @@ async function sweepForClaim(user: ReturnType<typeof userEvent.setup>): Promise<
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  hostedResponse = { games: HOSTED_GAMES, total: 2, page: 1, page_size: 20 };
   seen.length = 0;
   rec.emits.length = 0;
   auth.signIn.mockClear();
@@ -806,12 +841,17 @@ beforeEach(() => {
     const path = String(url).split('?')[0];
     const params = paramsOf([url, config]);
     if (/\/users\/me\/stats$/.test(path)) return { data: { ...STATS }, status: 200 };
-    if (/\/users\/me\/games\/\d+$/.test(path)) return { data: resultsResponse(), status: 200 };
+    if (/\/users\/me\/games\/[0-9a-f]{32}$/.test(path)) return { data: resultsResponse(), status: 200 };
     if (/\/users\/me\/games$/.test(path)) {
       const size = Number(params.page_size ?? 20);
       return { data: historyPage(Number(params.page ?? 1), size), status: 200 };
     }
-    if (/\/games\/[A-Z0-9]+\/results$/.test(path)) return { data: resultsResponse(), status: 200 };
+    if (/\/games\/id\/[0-9a-f]{32}\/results$/.test(path)) {
+      return { data: resultsResponse(), status: 200 };
+    }
+    if (/\/users\/me\/hosted-games$/.test(path)) {
+      return { data: { ...hostedResponse }, status: 200 };
+    }
     if (/health/.test(path)) return { data: { status: 'ok' }, status: 200 };
     throw axiosError(404, `Unexpected GET ${url}`);
   });
@@ -829,10 +869,10 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('the two routes and their guard', () => {
-  it('registers /profile and /profile/games/:gameId from one page module', () => {
+  it('registers /profile and /profile/games/:publicId from one page module', () => {
     const paths = profileDescriptors().map((d) => d.path);
     expect(paths).toContain('/profile');
-    expect(paths).toContain('/profile/games/:gameId');
+    expect(paths).toContain('/profile/games/:publicId');
   });
 
   it('carries the auth+backend guard on both', () => {
@@ -992,10 +1032,10 @@ describe('StatsSummary renders all five figures', () => {
   it('renders the best game as the fifth figure, linked by id', async () => {
     await renderProfileReady();
 
-    const link = linkTo(`/profile/games/${STATS.best_game_id}`);
+    const link = linkTo(`/profile/games/${STATS.best_game_public_id}`);
     expect(
       link,
-      `The best game is linked by id: /profile/games/${STATS.best_game_id}. ` +
+      `The best game is linked by id: /profile/games/${STATS.best_game_public_id}. ` +
         `The screen rendered these links: ${links()
           .map((a) => a.getAttribute('href'))
           .join(', ')}`,
@@ -1075,13 +1115,13 @@ describe('a null average ratio is a dash', () => {
   });
 });
 
-describe('a null best_game_id renders the empty treatment', () => {
+describe('a null best_game_public_id renders the empty treatment', () => {
   beforeEach(() => {
     httpRec.get.mockImplementation(async (url: string, config?: { params?: Record<string, unknown> }) => {
       const path = String(url).split('?')[0];
       const params = paramsOf([url, config]);
       if (/\/users\/me\/stats$/.test(path)) {
-        return { data: { ...STATS, best_game_id: null }, status: 200 };
+        return { data: { ...STATS, best_game_public_id: null }, status: 200 };
       }
       if (/\/users\/me\/games$/.test(path)) {
         return { data: historyPage(Number(params.page ?? 1)), status: 200 };
@@ -1100,7 +1140,7 @@ describe('a null best_game_id renders the empty treatment', () => {
     );
     expect(
       detailLinks.map((a) => a.getAttribute('href')),
-      'the best game linked somewhere although `best_game_id` is null',
+      'the best game linked somewhere although `best_game_public_id` is null',
     ).toEqual([]);
     expect(bodyText()).not.toMatch(/\bnull\b|\bundefined\b|\bNaN\b/);
     expect(document.querySelector('[data-testid="boundary"]')).toBeNull();
@@ -1182,8 +1222,8 @@ describe('RoleBreakdown renders four counts', () => {
 // What the page asks for
 // ---------------------------------------------------------------------------
 
-describe('exactly two /users/me/ requests on mount', () => {
-  it('issues stats and page 1 of games, and nothing else under /users/me/', async () => {
+describe('exactly three /users/me/ requests on mount', () => {
+  it('issues stats, page 1 of games and page 1 of hosted games, and nothing else', async () => {
     // The app's providers are mounted around this page and their
     // traffic is not the page's own. They are simulated here so the count is
     // demonstrably of `/users/me/*` and not of the axios instance.
@@ -1195,10 +1235,11 @@ describe('exactly two /users/me/ requests on mount', () => {
 
     expect(
       mineCalls().map(urlOf),
-      'the page must issue exactly two /users/me/ requests on mount',
-    ).toHaveLength(2);
+      'the page must issue exactly three /users/me/ requests on mount',
+    ).toHaveLength(3);
     expect(statsCalls()).toHaveLength(1);
     expect(gamesCalls()).toHaveLength(1);
+    expect(hostedCalls()).toHaveLength(1);
     expect(detailCalls(), 'no per-row detail fetch belongs on the profile').toHaveLength(0);
   });
 
@@ -1221,7 +1262,7 @@ describe('exactly two /users/me/ requests on mount', () => {
     await flush();
 
     expect(httpRec.get.mock.calls.length).toBeGreaterThan(mineCalls().length);
-    expect(mineCalls()).toHaveLength(2);
+    expect(mineCalls()).toHaveLength(3);
   });
 });
 
@@ -1324,7 +1365,7 @@ describe('the avatar', () => {
 // ---------------------------------------------------------------------------
 
 describe('MatchDetail renders through the results components', () => {
-  async function renderDetail(gameId: number = DETAIL_GAME_ID) {
+  async function renderDetail(gameId: string = DETAIL_GAME_ID) {
     const result = renderAt(`/profile/games/${gameId}`);
     await waitFor(() => {
       expect(detailCalls().length).toBeGreaterThan(0);
@@ -1408,7 +1449,7 @@ describe('MatchDetail renders through the results components', () => {
     ) as RouteDescriptor;
 
     const results = render(
-      <MemoryRouter initialEntries={[`/results/${DETAIL_ROOM}`]}>
+      <MemoryRouter initialEntries={[`/results/${DETAIL_GAME_ID}`]}>
         <Routes>
           <Route path={resultsRoute.path} element={resultsRoute.element} />
         </Routes>
@@ -1439,7 +1480,7 @@ describe('a game that is not the caller’s', () => {
   beforeEach(() => {
     httpRec.get.mockImplementation(async (url: string) => {
       const path = String(url).split('?')[0];
-      if (/\/users\/me\/games\/\d+$/.test(path)) throw axiosError(404, 'Not found');
+      if (/\/users\/me\/games\/[0-9a-f]{32}$/.test(path)) throw axiosError(404, 'Not found');
       if (/\/users\/me\/stats$/.test(path)) return { data: { ...STATS }, status: 200 };
       throw axiosError(404, `Unexpected GET ${url}`);
     });
@@ -1464,5 +1505,67 @@ describe('a game that is not the caller’s', () => {
       /permission|forbidden|not allowed|access denied|aren't allowed|you don't have/i,
     );
     expect(currentPath()).toBe(`/profile/games/${DETAIL_GAME_ID}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Games you hosted (D23)
+// ---------------------------------------------------------------------------
+
+describe('the "Games you hosted" section', () => {
+  function hostedSection(): HTMLElement {
+    return screen.getByRole('region', { name: 'Games you hosted' });
+  }
+
+  it('lists each hosted game linking to its open results page by public_id', async () => {
+    await renderProfileReady();
+    await waitFor(() => {
+      expect(within(hostedSection()).getAllByRole('link')).toHaveLength(2);
+    });
+
+    const hrefs = within(hostedSection())
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(HOSTED_GAMES.map((g) => `/results/${g.public_id}`));
+    for (const game of HOSTED_GAMES) {
+      expect(within(hostedSection()).getByText(game.room_code)).toBeTruthy();
+    }
+    expect(within(hostedSection()).getByText('Ended early')).toBeTruthy();
+    expect(hostedCalls()).toHaveLength(1);
+    expect(Number(paramsOf(hostedCalls()[0]).page ?? 1)).toBe(1);
+  });
+
+  it('is separate from the match history and the stats', async () => {
+    await renderProfileReady();
+    await waitFor(() => {
+      expect(within(hostedSection()).getAllByRole('link')).toHaveLength(2);
+    });
+
+    const history = screen.getByRole('region', { name: 'Your games' });
+    expect(history.contains(hostedSection())).toBe(false);
+    expect(hostedSection().contains(history)).toBe(false);
+    for (const game of HOSTED_GAMES) {
+      expect(within(history).queryByText(game.room_code)).toBeNull();
+    }
+    // The history's rows open the caller's own copy, by public_id too.
+    const historyHrefs = within(history)
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href') ?? '');
+    expect(historyHrefs.every((href) => /^\/profile\/games\/[0-9a-f]{32}$/.test(href))).toBe(
+      true,
+    );
+  });
+
+  it('shows an empty state when the account hosted nothing', async () => {
+    hostedResponse = { games: [], total: 0, page: 1, page_size: 20 };
+
+    await renderProfileReady();
+
+    await waitFor(() => {
+      expect(
+        within(hostedSection()).getByText("You haven't hosted a game while signed in yet."),
+      ).toBeTruthy();
+    });
+    expect(within(hostedSection()).queryAllByRole('link')).toHaveLength(0);
   });
 });

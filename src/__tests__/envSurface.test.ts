@@ -237,9 +237,9 @@ describe('firebase.json declares the SPA rewrite', () => {
     )
   })
 
-  it('a deep path such as /results/ABC123 resolves to index.html, not a 404', () => {
+  it('a deep path such as /results/0123456789abcdef0123456789abcdef resolves to index.html, not a 404', () => {
     const rewrites = config.hosting.rewrites ?? []
-    const match = rewrites.find((r) => matchesRewriteSource(r.source, '/results/ABC123'))
+    const match = rewrites.find((r) => matchesRewriteSource(r.source, '/results/0123456789abcdef0123456789abcdef'))
     expect(match, 'no rewrite in firebase.json matches a deep link').toBeDefined()
     expect(match?.destination).toBe('/index.html')
 
@@ -250,7 +250,7 @@ describe('firebase.json declares the SPA rewrite', () => {
   })
 
   it('the matcher is not vacuous: an unmatched literal source only matches itself', () => {
-    expect(matchesRewriteSource('/health', '/results/ABC123')).toBe(false)
+    expect(matchesRewriteSource('/health', '/results/0123456789abcdef0123456789abcdef')).toBe(false)
     expect(matchesRewriteSource('/health', '/health')).toBe(true)
   })
 })
