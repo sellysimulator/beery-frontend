@@ -128,6 +128,10 @@ export interface Alert {
 
 export interface GameActions {
   // identity and lifecycle
+  /**
+   * The room this tab is in. A different code from the one held starts the
+   * store over (see the implementation); the same code changes nothing.
+   */
   setRoomCode(roomCode: string | null): void
   setIsHost(isHost: boolean): void
   /** Back to the initial state, on leaving a room. */
@@ -327,7 +331,30 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
   return {
     ...initialState,
 
-    setRoomCode: (roomCode) => set({ roomCode }),
+    /**
+     * Moving to another room in the same tab ("Play again", Home's create or
+     * join after a game) must not carry the last room with it: its `lastSeq`
+     * would drop every event of the new room, whose `seq` starts again from 1,
+     * and its FINISHED `roomState` would keep the shell on the old game. So a
+     * different code is a fresh store; only what belongs to the tab rather than
+     * to a room survives (the alert queue, the connection state and the
+     * multi-game dashboard's registration).
+     */
+    setRoomCode: (roomCode) =>
+      set((state) =>
+        state.roomCode === roomCode
+          ? { roomCode }
+          : {
+              ...initialState,
+              roleToAlias: { ...EMPTY_ROLE_TO_ALIAS },
+              roomCode,
+              alerts: state.alerts,
+              connectionError: state.connectionError,
+              reconnecting: state.reconnecting,
+              batchRooms: state.batchRooms,
+              batchStartErrors: state.batchStartErrors,
+            },
+      ),
     setIsHost: (isHost) => set({ isHost }),
     reset: () => set({ ...initialState, roleToAlias: { ...EMPTY_ROLE_TO_ALIAS } }),
 

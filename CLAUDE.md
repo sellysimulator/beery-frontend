@@ -196,6 +196,10 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 3. **Every server→client game event carries a monotonic `seq`.** `applySequenced` drops any
    event with `seq <= lastSeq`, which is also what makes accidental double-application inert.
    `joined`, `join_error`, `host_claimed`, `leave_ack` and `error` carry no `seq`.
+   `seq` is per room, so **`setRoomCode` with a different code starts the store over**
+   (keeping only the alerts, the connection state and the dashboard's batch): "Play again"
+   or Home's create/join in the same tab would otherwise keep the finished room's `lastSeq`
+   and drop every event of the new one. The same code changes nothing.
    Three appliers merge rather than replace: `applyYourState` keeps the held `own_history`
    when the payload omits it (the per-round `your_state`), but only for the same role;
    `applyYourWeekClosed` appends the record unless that week is already held; and

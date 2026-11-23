@@ -719,6 +719,73 @@ describe('identity and lifecycle actions', () => {
     });
   });
 
+  it('moving to another room starts the store over, so the new room\'s events apply', () => {
+    // "Play again" or Home's create/join in the same tab, after a finished game.
+    const store = useGameStore.getState();
+    store.setRoomCode('ROOMAA');
+    store.setIsHost(true);
+    store.applyWeekClosed({ seq: 40, week: 36, next_week: null, awaiting_roles: [] });
+    store.applyGameFinished({
+      seq: 41,
+      weeks_played: 36,
+      stats: {} as never,
+      demand_series: [],
+      orders_by_role: {} as never,
+    });
+    store.applyGamePersisted({ seq: 42, game_id: 'a'.repeat(32) });
+    store.addAlert({ kind: 'info', message: 'kept' });
+    store.setConnectionError('still down');
+    store.setReconnecting(true);
+    store.setBatchRooms(['ROOMZZ']);
+    expect(useGameStore.getState().roomState).toBe('FINISHED');
+
+    useGameStore.getState().setRoomCode('ROOMBB');
+
+    const after = useGameStore.getState();
+    expect(after.roomCode).toBe('ROOMBB');
+    expect(after.lastSeq).toBe(0);
+    expect(after.roomState).toBeNull();
+    expect(after.finished).toBeNull();
+    expect(after.gamePublicId).toBeNull();
+    expect(after.isHost).toBe(false);
+    expect(after.week).toBeNull();
+    // What belongs to the tab, not the room, survives.
+    expect(after.alerts.map((a) => a.message)).toEqual(['kept']);
+    expect(after.connectionError).toBe('still down');
+    expect(after.reconnecting).toBe(true);
+    expect(after.batchRooms).toEqual(['ROOMZZ']);
+
+    // The new room's first events, seq 1 upwards, are applied, not dropped.
+    useGameStore.getState().applyLobbyUpdate({
+      seq: 1,
+      state: 'LOBBY',
+      host_display_name: 'Host',
+      participants: [],
+      role_to_alias: { RETAILER: null, WHOLESALER: null, DISTRIBUTOR: null, FACTORY: null },
+      role_assignment_mode: 'HOST_ASSIGNS',
+      seats_total: 4,
+      config_locked: false,
+      can_start: false,
+      start_blocked_reason: 'Waiting for players.',
+    });
+    expect(useGameStore.getState().roomState).toBe('LOBBY');
+    expect(useGameStore.getState().lastSeq).toBe(1);
+  });
+
+  it('setting the same room again changes nothing', () => {
+    const store = useGameStore.getState();
+    store.setRoomCode('ROOMAA');
+    store.setIsHost(true);
+    store.applyWeekClosed({ seq: 7, week: 2, next_week: 3, awaiting_roles: ['FACTORY'] });
+
+    useGameStore.getState().setRoomCode('ROOMAA');
+
+    const after = useGameStore.getState();
+    expect(after.isHost).toBe(true);
+    expect(after.lastSeq).toBe(7);
+    expect(after.week).toBe(3);
+  });
+
   it('setConnectionError sets and clears', () => {
     useGameStore.getState().setConnectionError('Could not reach the server.');
     expect(useGameStore.getState().connectionError).toBe('Could not reach the server.');
