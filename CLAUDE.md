@@ -231,8 +231,8 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
    elements). `DecisionForm`'s Confirm (and its submit handler) is gated on `store.connected`,
    true only while the socket is connected, never on `reconnecting`, which stays false through
    the page's own `disconnect().connect()`: Socket.IO would buffer the emit and replay it before
-   the rejoin, where the server refuses it. `connected` belongs to the tab: `setRoomCode`,
-   `reset` and `applyLeaveAck` keep it.
+   the rejoin, where the server refuses it. `connected` and `reconnecting` belong to the tab:
+   `setRoomCode`, `reset` and `applyLeaveAck` keep them.
    **A tab that moves off a room reconnects its socket** (`useGameStore.subscribe` in
    `socketHandlers.ts`: `roomCode` changed from a code, socket connected →
    `disconnect().connect()`), synchronously with the store's reset. One late event of the old

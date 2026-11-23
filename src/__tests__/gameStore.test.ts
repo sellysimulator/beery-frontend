@@ -884,3 +884,16 @@ describe('`connected` belongs to the tab, not to a room', () => {
     useGameStore.getState().setConnected(false);
   });
 });
+
+describe('`reconnecting` belongs to the tab, not to a room', () => {
+  it('survives a reset and a leave, so the notice stays up until the socket is back', () => {
+    // The socket is down when the host opens the dashboard (a reset): no new
+    // `disconnect` would set it again, and the next host screen would show nothing.
+    useGameStore.getState().setReconnecting(true);
+    useGameStore.getState().reset();
+    expect(useGameStore.getState().reconnecting).toBe(true);
+    useGameStore.getState().applyLeaveAck();
+    expect(useGameStore.getState().reconnecting).toBe(true);
+    useGameStore.getState().setReconnecting(false);
+  });
+});

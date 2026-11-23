@@ -374,6 +374,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         ...initialState,
         roleToAlias: { ...EMPTY_ROLE_TO_ALIAS },
         connected: state.connected,
+        reconnecting: state.reconnecting,
       })),
 
     /**
@@ -416,6 +417,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
         roleToAlias: { ...EMPTY_ROLE_TO_ALIAS },
         leftRoom: true,
         connected: state.connected,
+        reconnecting: state.reconnecting,
       })),
 
     clearLeftRoom: () => set({ leftRoom: false }),

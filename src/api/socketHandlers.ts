@@ -19,6 +19,7 @@ import {
   clearHostSecret,
   clearSessionToken,
   getDisplayName,
+  getGuestId,
   getHostSecret,
   getSessionToken,
   isHostForRoom,
@@ -129,6 +130,8 @@ function scheduleCapRetry(): boolean {
   capRetryTimer = setTimeout(
     () => {
       capRetryTimer = null
+      // A sign-out while this timer waited leaves no identity: the server would refuse it.
+      if (!auth.currentUser && !getGuestId()) return
       if (!socket.connected && !socket.active) socket.connect()
     },
     delay / 2 + Math.random() * (delay / 2),

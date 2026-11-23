@@ -1122,6 +1122,7 @@ describe('abuse limits: rate-limited events and the socket cap', () => {
 
   it('a client refused at the cap sees the cap message, not the sign-in one, and retries with backoff', async () => {
     vi.useFakeTimers();
+    localStorage.setItem('guest_id', `guest_${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}`);
     try {
       dispatch('connect');
       useGameStore.getState().reset();
@@ -1156,6 +1157,22 @@ describe('abuse limits: rate-limited events and the socket cap', () => {
       );
       expect(after.alerts).toHaveLength(1);
       expect(after.alerts[0].kind).toBe('error');
+    } finally {
+      vi.useRealTimers();
+      dispatch('connect');
+    }
+  });
+
+  it('a cap retry that comes due after sign-out left no identity does not connect', async () => {
+    vi.useFakeTimers();
+    try {
+      dispatch('connect');
+      useGameStore.getState().reset();
+      (await mockSocket()).connected = false;
+      dispatch('connect_error', { message: CAP_REFUSED });
+      // No Firebase user and no guest id (setup clears storage): the server would refuse it.
+      vi.advanceTimersByTime(60_000);
+      expect(rec.connectCalls).toBe(0);
     } finally {
       vi.useRealTimers();
       dispatch('connect');
