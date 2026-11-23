@@ -349,8 +349,11 @@ room and its `seq` filter starts over, but a socket still in the old room's chan
 hearing that room's events: one high-`seq` event from the old room makes the store drop every
 event of the new one, and the player sits in an empty lobby. So when the room code changes the
 client calls `socket.disconnect().connect()` in step with the store reset, and the server's
-room-leave path takes the sid out of the Socket.IO room (and clears its sid maps) *before*
-broadcasting anything about the leave.
+room-leave path takes the sid out of the Socket.IO room (and clears its sid maps, and any sid
+the old room document keeps for direct sends) *before* broadcasting anything about the leave.
+A **Leave** button resets and reconnects only after the server acknowledges the `leave` (its
+`leave_ack`, or an emit ack with a timeout): reconnecting right behind the `leave` lets the
+server's `disconnect` handler win the room lock first, and the seat stays taken.
 
 **Reload once after a deploy.** A tab left open across a deploy asks for lazy chunks that no
 longer exist. `main.tsx` listens for `vite:preloadError` and reloads the page, at most once per
