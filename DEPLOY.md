@@ -34,6 +34,16 @@ immutable`. Hosting serves static files before the SPA rewrite, so the `.glb`
 files are never rewritten to `index.html`. Because the cache is immutable, a
 changed model must ship under a new filename, never overwrite the old one.
 
+The other headers, the same as the catalog site's: `/assets/**` (Vite's
+hashed bundles) immutable for a year; `/index.html` and every extensionless
+path (`{"regex": "^/[^.]*$"}`, the SPA routes) `Cache-Control: no-cache`, so a
+deploy is picked up on the next load; and on everything
+`X-Content-Type-Options: nosniff` and `Referrer-Policy:
+strict-origin-when-cross-origin`. There is deliberately no `X-Frame-Options`
+or CSP: Firebase Auth's iframe and handler on this site could break. A tab
+left open across a deploy that asks for a chunk the deploy removed reloads
+once (`vite:preloadError` in `src/main.tsx`).
+
 ## Environment (build-time, `VITE_*`)
 
 ```

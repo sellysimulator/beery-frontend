@@ -172,7 +172,11 @@ three are strict with `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnl
 `verbatimModuleSyntax` — use `import type` for type-only imports or the build fails.
 
 **Firebase**: `firebase.json` → `public: "dist"`, catch-all rewrite `** → /index.html` (the
-SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site** is `beersim`.
+SPA deep-link fix), and `headers`: `/3dmodels/**` and `/assets/**` immutable for a year,
+`/index.html` and every extensionless path (`^/[^.]*$`) `no-cache`, and `nosniff` +
+`strict-origin-when-cross-origin` on everything. No `X-Frame-Options` or CSP: Firebase Auth's
+iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloads once on
+`vite:preloadError` (a chunk a deploy removed; `claimPreloadReload()` in `utils/storage.ts`). `.firebaserc` default project `beery-30d23`; hosting **site** is `beersim`.
 
 ## 6. Architecture — the rules to not break
 
