@@ -195,7 +195,10 @@ under StrictMode and every event applies twice.
 **`autoConnect` is `false` and `auth` is a callback.** The socket module evaluates before Firebase
 has restored a persisted session, so auto-connecting would hand a returning signed-in user a
 throwaway guest identity. The callback re-runs on every reconnect and picks up a refreshed token
-rather than freezing the first one.
+rather than freezing the first one. A signed-in user whose token cannot be fetched sends no identity
+at all (never the guest id) and is retried every 5 s while still signed in. Reconnection never
+gives up (backing off to 10 s); while it is reconnecting, the player and host screens show
+"Reconnecting…" and the order form will not confirm.
 
 **Pages register themselves.** A page module exports `route: RouteDescriptor` (or an array of
 them) and `discoverRoutes()` finds it — so a new screen is a new file, and `App.tsx` is never

@@ -107,7 +107,9 @@ const BODY: ManualPageSpec[] = [
         </p>
         <p>
           If you drop out mid-game, open the same link again to rejoin. If the host handed your
-          role to a bot meanwhile, press <strong>Take back my role</strong> to play it again.
+          role to a bot meanwhile, press <strong>Take back my role</strong> to play it again. If
+          only your connection blinks, the game says <strong>Reconnecting…</strong> at the top of
+          the screen and comes back by itself; your order can be confirmed again once it does.
         </p>
       </>
     ),

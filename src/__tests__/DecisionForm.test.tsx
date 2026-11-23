@@ -632,6 +632,27 @@ describe('a paused game cannot be submitted into', () => {
   });
 });
 
+describe('no order is confirmed while the socket is down', () => {
+  // Socket.IO would buffer the emit and replay it ahead of the rejoin, where
+  // the server refuses it from a sid it no longer knows, and the order is lost.
+  it('disables the confirm control and says it is reconnecting, then comes back', async () => {
+    const user = userEvent.setup();
+    const { container } = renderForm(viewFor('WHOLESALER'));
+    await typeOrder(user, '37');
+    expect(isDisabled(confirmControl())).toBe(false);
+
+    act(() => useGameStore.getState().setReconnecting(true));
+    expect(isDisabled(confirmControl())).toBe(true);
+    expect(container.textContent).toContain('Reconnecting');
+    await user.click(confirmControl());
+    expect(emitsOf('submit_order')).toHaveLength(0);
+
+    act(() => useGameStore.getState().setReconnecting(false));
+    await user.click(confirmControl());
+    expect(emitsOf('submit_order')).toHaveLength(1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Keyboard alone
 // ---------------------------------------------------------------------------

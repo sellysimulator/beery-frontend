@@ -206,7 +206,17 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 4. **The socket does not auto-connect.** `autoConnect: false`, and `auth` is a **callback**
    so it re-runs with a fresh ID token on every reconnect. `AuthContext` connects it once
    `onAuthStateChanged` resolves (or after an 8s watchdog). Auto-connecting would hand a
-   returning signed-in user a guest identity.
+   returning signed-in user a guest identity. A signed-in user whose `getIdToken()` fails
+   sends `{ idToken: null, guestId: null }`, **never** the guest id (the server refuses a
+   handshake with no identity), and `socketHandlers.ts` retries that refusal with
+   `socket.connect()` every 5 s (`SIGNED_IN_RETRY_DELAY_MS`) while `auth.currentUser` is set.
+   **Reconnection never gives up**: no `reconnectionAttempts` (Socket.IO's default,
+   Infinity), `reconnectionDelayMax: 10000`. A drop after the first connect sets
+   `store.reconnecting` (written by the `connect`/`disconnect` handlers; this page's own
+   `disconnect()` does not count), which shows `shared/ReconnectingNotice` on `/game/:roomCode`
+   and `/host/:roomCode` (mounted in their route elements) and disables `DecisionForm`'s
+   Confirm: Socket.IO would buffer the emit and replay it before the rejoin, where the server
+   refuses it.
 5. **Pages register themselves.** A module in `src/pages/*.tsx` exports
    `route: RouteDescriptor | RouteDescriptor[]`; `discoverRoutes()` globs them. Adding a
    screen is adding a file — **never edit `App.tsx`'s route table** (there isn't one).

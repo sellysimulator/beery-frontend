@@ -88,6 +88,13 @@ export interface GameState {
   alerts: Alert[]
   connectionError: string | null
   /**
+   * True while the socket is down after having connected once: the
+   * "Reconnecting…" notice shows and the decision form will not confirm an
+   * order (Socket.IO would buffer it and replay it before the rejoin, and the
+   * server would refuse it). False before the first connect.
+   */
+  reconnecting: boolean
+  /**
    * The last `error` event's message and code, or null. The code is what a
    * screen needs to map a specific failure to its own copy -- the playing screen's
    * `TOO_MANY_SUBMISSIONS` is the first. It lives here rather than in a
@@ -176,6 +183,7 @@ export interface GameActions {
 
   // ui
   setConnectionError(message: string | null): void
+  setReconnecting(reconnecting: boolean): void
   applyError(p: ServerError): void
   clearLastError(): void
   /** Returns the minted id. */
@@ -223,6 +231,7 @@ const initialState: GameState = {
 
   alerts: [],
   connectionError: null,
+  reconnecting: false,
   lastError: null,
 
   batchRooms: [],
@@ -521,6 +530,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
     setConfig: (config) => set({ config }),
 
     setConnectionError: (message) => set({ connectionError: message }),
+
+    setReconnecting: (reconnecting) => set({ reconnecting }),
 
     applyError: (p) =>
       set({ lastError: { message: p.message, code: p.code } }),

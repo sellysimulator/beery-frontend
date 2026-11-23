@@ -10,6 +10,7 @@
  * `useGameStore.getState()` is safe outside React, so each handler reads the
  * latest state at call time and never closes over a stale snapshot.
  */
+import { auth } from '../../firebase'
 import { socket } from './socket'
 import { join, joinWaiting } from './games'
 import { useGameStore } from '../store/gameStore'
@@ -97,8 +98,8 @@ const CAP_GAVE_UP_MESSAGE =
 
 /**
  * Socket.IO does not retry a refused handshake: a `CONNECT_ERROR` packet
- * destroys the socket (`active` goes false) and `reconnectionAttempts` never
- * comes into play. A cap refusal is temporary — it lifts as soon as someone
+ * destroys the socket (`active` goes false) and Socket.IO's own reconnection
+ * never comes into play. A cap refusal is temporary — it lifts as soon as someone
  * else on the network closes a tab — so it is retried here, with growing
  * delays and jitter so a classroom behind one address does not retry in step.
  */
@@ -129,6 +130,38 @@ function scheduleCapRetry(): boolean {
 }
 
 /**
+ * A signed-in user refused at the handshake (their ID token could not be
+ * fetched, so `socket.ts` sent no identity, or the server could not verify
+ * it) is retried every few seconds for as long as they stay signed in: a
+ * token refresh that failed on a flaky network usually works on the next try,
+ * and falling back to the guest id instead would seat them as someone else.
+ * Socket.IO does not retry a refused handshake itself. A guest's refusal is
+ * not retried here (the cap's own retry above covers the one a guest gets).
+ */
+export const SIGNED_IN_RETRY_DELAY_MS = 5_000
+let signedInRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearSignedInRetry(): void {
+  if (signedInRetryTimer !== null) clearTimeout(signedInRetryTimer)
+  signedInRetryTimer = null
+}
+
+function scheduleSignedInRetry(): void {
+  if (signedInRetryTimer !== null || !auth.currentUser) return
+  signedInRetryTimer = setTimeout(() => {
+    signedInRetryTimer = null
+    if (auth.currentUser && !socket.connected && !socket.active) socket.connect()
+  }, SIGNED_IN_RETRY_DELAY_MS)
+}
+
+/**
+ * Whether this page has had a working connection yet. A disconnect before the
+ * first connect is the cold start (`BackendWakeUp` covers it); after it, the
+ * screens show "Reconnecting…" until the socket is back.
+ */
+let hasConnected = false
+
+/**
  * A rate-limited event (`app/sockets/errors.py`, `@guarded`). The play loop
  * says so with `code: "RATE_LIMITED"`; the lobby's `join_error` has no code,
  * so it is recognised by the backend's one fixed sentence.
@@ -139,8 +172,8 @@ const RATE_LIMITED_MESSAGE =
   'Too many actions from your network in a short time. Please wait a moment and try again.'
 
 /**
- * Suppresses duplicate alerts across the automatic retries
- * (`reconnectionAttempts: 10`). Reset once the socket actually connects, or on
+ * Suppresses duplicate alerts across the automatic retries (Socket.IO's,
+ * which never give up, and this module's own). Reset once the socket actually connects, or on
  * a clean disconnect, so a later failure still gets its own alert.
  */
 let connectErrorAlerted = false
@@ -226,15 +259,21 @@ export function rejoinAfterConnect(): void {
 /* ─── connection lifecycle ─── */
 
 socket.on('connect', () => {
+  hasConnected = true
+  store().setReconnecting(false)
   connectErrorAlerted = false
   clearCapRetry()
+  clearSignedInRetry()
   dismissConnectErrorAlert()
   store().setConnectionError(null)
   rejoinAfterConnect()
 })
 
-socket.on('disconnect', () => {
+socket.on('disconnect', (reason?: string) => {
   connectErrorAlerted = false
+  // `io client disconnect` is this page's own `disconnect()`, which
+  // `AuthContext` follows with a `connect()` at once: nothing to announce.
+  if (hasConnected && reason !== 'io client disconnect') store().setReconnecting(true)
 })
 
 socket.on('connect_error', (error: Error) => {
@@ -249,6 +288,8 @@ socket.on('connect_error', (error: Error) => {
     connectErrorAlertId = store().addAlert({ kind: 'error', message: CAP_GAVE_UP_MESSAGE })
     return
   }
+
+  if (kind === 'auth') scheduleSignedInRetry()
 
   const message = CONNECT_ERROR_MESSAGE[kind]
   store().setConnectionError(message)

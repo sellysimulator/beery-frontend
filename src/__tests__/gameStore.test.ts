@@ -40,6 +40,7 @@ const DECLARED_FIELDS = [
   'week',
   'durationWeeks',
   'lastSeq',
+  'reconnecting',
   'myState',
   'hostState',
   'awaitingRoles',

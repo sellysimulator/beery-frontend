@@ -17,6 +17,12 @@ interface HandshakeAuth {
  * It is a CALLBACK, not an object, so socket.io-client re-invokes it on every
  * reconnection attempt and a freshly refreshed ID token is used instead of
  * whatever was valid the first time the socket connected.
+ *
+ * A signed-in user whose token cannot be fetched sends NO identity rather
+ * than the browser's guest id: falling back would seat them as a stranger
+ * and record their game against nobody. The server refuses an identity-less
+ * handshake, and `socketHandlers.ts` retries it while the user is still
+ * signed in.
  */
 function socketAuth(cb: (data: HandshakeAuth) => void): void {
   const user = auth.currentUser
@@ -26,7 +32,7 @@ function socketAuth(cb: (data: HandshakeAuth) => void): void {
     user
       .getIdToken()
       .then((idToken) => cb({ idToken, guestId: null }))
-      .catch(() => cb({ idToken: null, guestId }))
+      .catch(() => cb({ idToken: null, guestId: null }))
   } else {
     cb({ idToken: null, guestId })
   }
@@ -43,33 +49,23 @@ function socketAuth(cb: (data: HandshakeAuth) => void): void {
  *
  * `rejectUnauthorized: false` is deliberately absent: it is a Node-only option
  * that disables TLS certificate validation and does nothing in a browser.
+ *
+ * Reconnection never gives up (no `reconnectionAttempts`, so Socket.IO's
+ * default of Infinity): a free-tier cold start or a classroom wi-fi drop can
+ * outlast any fixed count, and a socket that stopped trying left every
+ * realtime feature dead behind a screen that said the server was up. The delay
+ * backs off to at most 10 s. A handshake the SERVER refuses is not retried by
+ * Socket.IO at all (`active` goes false); `socketHandlers.ts` retries those.
  */
 export const socket: Socket = io(SOCKET_URL, {
   transports: ['websocket', 'polling'],
   autoConnect: false,
   reconnection: true,
-  reconnectionAttempts: 10,
   reconnectionDelay: 1000,
+  reconnectionDelayMax: 10_000,
   path: '/socket.io',
   auth: socketAuth,
 })
-
-/**
- * Called by `BackendStatusProvider` when the health probe first answers ok.
- *
- * `reconnectionAttempts: 10` can run out inside a 30-60 s free-tier cold
- * start, after which Socket.IO stops trying for good and every realtime
- * feature is dead behind a wake-up screen that says the server is up.
- * `connect()` restarts that; while a retry loop is still running it is a
- * no-op, because the manager does not re-open mid-reconnect.
- *
- * `active` is false until something has called `connect()` (or after a
- * deliberate `disconnect()`), so this never makes the first connection: that
- * belongs to `AuthContext`, once the identity is known.
- */
-export function reconnectIfGaveUp(): void {
-  if (socket.active && !socket.connected) socket.connect()
-}
 
 export function getSocket(): Socket {
   return socket
