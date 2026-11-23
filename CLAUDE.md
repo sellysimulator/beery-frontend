@@ -241,7 +241,8 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
 8. **Types mirror the backend by hand** in `src/types/game.ts` (there is no codegen).
    `X | None` on the Python side is `X | null` here, never `undefined`; `?` means the key can
    be *absent*. Wire-shape changes must land in `Beery_Backend` and here **in the same deploy
-   window, backend first** (DEPLOY.md).
+   window, backend first** (DEPLOY.md). The handoff-hardening release is backend first too: the old
+   frontend connects with no identity on a first visit, which the new backend refuses.
 9. **Data fetching**: no react-query. REST is plain `async` axios calls in `useEffect` /
    handlers; live data is push-only over the socket into the store. The health probe
    (`api/health.ts`) uses bare `fetch` on purpose (no interceptors) and requires

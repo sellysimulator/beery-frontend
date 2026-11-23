@@ -96,6 +96,13 @@ old frontend against a new backend means nobody can play.
 `app/sockets/handlers/`, deploy `Beery_Backend` and `Beery_Frontend` in the
 same window, backend first.**
 
+**The handoff-hardening release (branch `fix/handoff-hardening`) ships backend
+first, then the frontend in the same window.** The new backend accepts the old
+frontend's signed-in and guest handshakes, but refuses one with no identity at
+all, which the old frontend still sends on a first visit (no sign-in, no guest
+id yet) and then shows a "Sign-in could not be verified" alert until the new
+frontend is live; the new frontend never connects without an identity.
+
 **A REST route the live frontend still calls is removed frontend first**, for the
 same reason: the new frontend must stop calling it before the backend drops it.
 The public_id-only results change (spec D22) is one: the previous frontend fetched
