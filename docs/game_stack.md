@@ -340,6 +340,17 @@ screen that still looked live. While the socket is down after having connected o
 and host screens show a small non-blocking "Reconnecting…" notice, and the decision's Submit
 button is disabled: socket.io buffers an emit made while offline and sends it on reconnect
 *before* the `connect` handler re-joins, so the server refuses it and the decision is lost.
+Gate Submit on a store `connected` flag that is true only between `connect` and `disconnect`,
+not on a "reconnecting" flag: the app's own `disconnect().connect()` never sets the latter.
+The notice text is the same in every game: "Connection lost. Reconnecting…".
+
+**A tab that changes room reconnects its socket.** **[HARD-WON]** The store resets for the new
+room and its `seq` filter starts over, but a socket still in the old room's channel keeps
+hearing that room's events: one high-`seq` event from the old room makes the store drop every
+event of the new one, and the player sits in an empty lobby. So when the room code changes the
+client calls `socket.disconnect().connect()` in step with the store reset, and the server's
+room-leave path takes the sid out of the Socket.IO room (and clears its sid maps) *before*
+broadcasting anything about the leave.
 
 **Reload once after a deploy.** A tab left open across a deploy asks for lazy chunks that no
 longer exist. `main.tsx` listens for `vite:preloadError` and reloads the page, at most once per
