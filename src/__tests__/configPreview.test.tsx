@@ -19,12 +19,12 @@ const GOOD = {
   lead_times: { RETAILER: 2, WHOLESALER: 2, DISTRIBUTOR: 2, FACTORY: 2 },
 } as unknown as ConfigPreview;
 
-const rateLimited = () =>
+const rateLimited = (retryAfter = '60') =>
   Object.assign(new Error('Request failed with status code 429'), {
     isAxiosError: true,
     response: {
       status: 429,
-      headers: { 'retry-after': '60' },
+      headers: { 'retry-after': retryAfter },
       data: { detail: 'Too many requests. Please slow down and try again.' },
     },
   });
@@ -60,6 +60,18 @@ describe('useConfigPreview — a rate-limited preview fails quietly', () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.preview).toBeNull();
+  });
+
+  it('asks again after Retry-After, so the placeholder does not stay up for good', async () => {
+    previewConfig.mockRejectedValueOnce(rateLimited('1')).mockResolvedValueOnce(GOOD);
+
+    const { result } = renderHook(() => useConfigPreview({ weeks: 31 }));
+    await waitFor(() => expect(previewConfig).toHaveBeenCalledTimes(1));
+    expect(result.current.preview).toBeNull();
+
+    await waitFor(() => expect(result.current.preview).toEqual(GOOD), { timeout: 3000 });
+    expect(previewConfig).toHaveBeenCalledTimes(2);
+    expect(result.current.error).toBeNull();
   });
 
   it('a refused draft (422) still shows the server text', async () => {

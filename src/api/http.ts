@@ -82,6 +82,20 @@ export function isRateLimited(err: unknown): boolean {
 }
 
 /**
+ * How long to wait before asking again after a 429: its `Retry-After`, held
+ * between 1 s and a minute (every limit a form hits counts over a minute), or
+ * `fallbackMs` when the header is hidden or unreadable. For a request the UI
+ * waits on, so a rate limit delays it instead of leaving the screen stuck.
+ */
+export function retryAfterMs(err: unknown, fallbackMs = 5_000): number {
+  const headers = (err as { response?: { headers?: unknown } } | null | undefined)?.response
+    ?.headers
+  const seconds = retryAfterSeconds(headers)
+  if (seconds === null) return fallbackMs
+  return Math.min(60_000, Math.max(1_000, seconds * 1_000))
+}
+
+/**
  * `Retry-After` as whole seconds, or null when it is absent or not a plain
  * number (the backend only ever sends seconds). Axios lower-cases header
  * names. The browser hides the header unless CORS exposes it, so a null here

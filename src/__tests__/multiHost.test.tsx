@@ -68,14 +68,18 @@ function serverSends(event: string, payload: unknown): void {
   });
 }
 
-vi.mock('../api/http', () => ({
-  default: {},
-  errorMessage: (err: unknown, fallback: string) => {
-    const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-    return typeof detail === 'string' ? detail : fallback;
-  },
-  isRateLimited: () => false,
-}));
+vi.mock('../api/http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/http')>();
+  return {
+    default: {},
+    errorMessage: (err: unknown, fallback: string) => {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      return typeof detail === 'string' ? detail : fallback;
+    },
+    isRateLimited: actual.isRateLimited,
+    retryAfterMs: actual.retryAfterMs,
+  };
+});
 
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({ firebaseUser: null, mode: 'guest', logout: async () => {} }),
@@ -493,6 +497,38 @@ describe('MultiHostSetupPage', () => {
     await user.type(symbol, '€');
     await user.tab();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Create 2 games' })).toBeEnabled());
+  });
+
+  it('a rate-limited edit is sent again after Retry-After, so Create comes back with no error', async () => {
+    let refused = false;
+    api.previewConfig.mockImplementation((config: unknown, patch?: unknown) => {
+      if (!refused && patch && JSON.stringify(patch).includes('currency_symbol')) {
+        refused = true;
+        return Promise.reject({
+          isAxiosError: true,
+          response: { status: 429, headers: { 'retry-after': '1' }, data: { detail: 'Too many requests.' } },
+        });
+      }
+      return fakePreview(config as never, patch as never);
+    });
+    const user = userEvent.setup();
+    renderAt('/multihost/new');
+
+    const settings = await settingsReady();
+    const symbol = settings.getByLabelText('Currency symbol');
+    await user.clear(symbol);
+    await user.type(symbol, '€');
+    await user.tab();
+
+    await waitFor(() => expect(refused).toBe(true));
+    expect(screen.getByRole('button', { name: 'Create games' })).toBeDisabled();
+    expect(screen.queryByText(/Too many requests/)).toBeNull();
+
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Create 2 games' })).toBeEnabled(),
+      { timeout: 3000 },
+    );
+    expect(screen.queryByText(/Too many requests/)).toBeNull();
   });
 
   it('reads the field out of a preview 422 and nothing else', () => {

@@ -258,7 +258,11 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     your network. Try again in a minute."), which `classifyConnectError` calls `cap` and
     retries with bounded jittered backoff because Socket.IO never retries a `CONNECT_ERROR`
     itself; any other refusal (the generic `Connection rejected by server`, a failed ID token)
-    is `auth`: the sign-in message, no retry.
+    is `auth`: the sign-in message, retried every 5 s only while signed in (rule 4).
+    A 429 that would leave the UI stuck is retried after its `Retry-After`
+    (`retryAfterMs(err)` in `http.ts`, 1–60 s, 5 s when hidden): `useConfigPreview` asks for
+    the same draft again, and `useDraftConfig` resends the edit (it stays in flight, so
+    `/multihost/new`'s Create comes back by itself instead of sitting behind an error).
 11. **Styling is Tailwind v4, CSS-first.** All design tokens are `@theme` variables in
     `src/index.css` (surface/ink/brand/role/quantity colours, `--text-figure`). Use the
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.

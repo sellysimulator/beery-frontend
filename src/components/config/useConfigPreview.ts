@@ -14,11 +14,12 @@
  * by draft, so the lead-time row and the demand chart share one request and
  * switching a value back is instant. Until a draft has an answer the caller
  * shows a placeholder, never a guessed series. A preview the server's rate
- * limit refuses (429) fails quietly: the last answer stays on screen and no
- * error is shown.
+ * limit refuses (429) fails quietly: the last answer stays on screen, no
+ * error is shown, and the same draft is asked again after the 429's
+ * `Retry-After`, so the preview never stays stuck on its placeholder.
  */
 import { useEffect, useState } from 'react'
-import { errorMessage, isRateLimited } from '../../api/http'
+import { errorMessage, isRateLimited, retryAfterMs } from '../../api/http'
 import { previewConfig } from '../../api/rooms'
 import type { ConfigPreview } from '../../types/game'
 
@@ -96,31 +97,37 @@ export function useConfigPreview(draft: object | null): ConfigPreviewState {
 
   useEffect(() => {
     if (key === null || answers.has(key)) return
+    const draftKey = key
     let cancelled = false
-    const timer = setTimeout(() => {
-      requestPreview(key)
+    let timer: ReturnType<typeof setTimeout>
+
+    function attempt(): void {
+      requestPreview(draftKey)
         .then((preview) => {
-          if (!cancelled) setSettled({ key, preview, error: null })
+          if (!cancelled) setSettled({ key: draftKey, preview, error: null })
         })
         .catch((err: unknown) => {
           if (cancelled) return
           // A rate-limited preview is not a problem with the draft, and a host
           // typing fast would otherwise see an error flash per keystroke. Keep
-          // the last answer on screen, say nothing; the next edit asks again.
-          // With no answer yet, the placeholder stays.
+          // the last answer on screen, say nothing, and ask again once the
+          // limit allows. With no answer yet, the placeholder stays meanwhile.
           if (isRateLimited(err)) {
             setSettled((last) =>
-              last?.preview ? { key, preview: last.preview, error: null } : last,
+              last?.preview ? { key: draftKey, preview: last.preview, error: null } : last,
             )
+            timer = setTimeout(attempt, retryAfterMs(err))
             return
           }
           setSettled({
-            key,
+            key: draftKey,
             preview: null,
             error: errorMessage(err, 'Could not draw the preview.'),
           })
         })
-    }, PREVIEW_DEBOUNCE_MS)
+    }
+
+    timer = setTimeout(attempt, PREVIEW_DEBOUNCE_MS)
     return () => {
       cancelled = true
       clearTimeout(timer)
