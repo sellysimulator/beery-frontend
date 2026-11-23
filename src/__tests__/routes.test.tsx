@@ -967,14 +967,44 @@ describe('AuthContext drives the socket connection', () => {
     expect(rec.authCallbacks.length).toBeGreaterThan(0);
     expect(rec.connectCalls).toBe(0); // autoConnect is false; nothing has connected yet
 
-    // First resolution — a returning visitor with no Firebase session.
-    resolveAuthState(null);
+    // First resolution — a returning signed-in visitor.
+    resolveAuthState({ uid: 'uid-1', displayName: 'Ana', getIdToken: async () => 'tok' });
     expect(rec.connectCalls).toBeGreaterThanOrEqual(1);
     const afterFirst = rec.connectCalls;
 
     // Later resolution — the identity changed, so the handshake must be redone.
-    resolveAuthState({ uid: 'uid-1', displayName: 'Ana', getIdToken: async () => 'tok' });
+    resolveAuthState({ uid: 'uid-2', displayName: 'Bea', getIdToken: async () => 'tok-2' });
     expect(rec.connectCalls).toBeGreaterThan(afterFirst);
+    expect(rec.disconnectCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  it('never connects with no identity: a first visit, the watchdog, or after logout', async () => {
+    // The server refuses a handshake with neither a token nor a guest id, and
+    // the refusal is a red alert over the welcome screen, a manual or a
+    // results page, none of which needs the socket.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      mountAuth();
+      act(() => {
+        vi.advanceTimersByTime(8000); // Firebase never answered: the watchdog
+      });
+      expect(captured.value?.loading).toBe(false);
+      resolveAuthState(null); // and then it says nobody is signed in
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(rec.connectCalls).toBe(0);
+    expect(getGuestId()).toBeNull();
+
+    act(() => {
+      captured.value?.continueAsGuest();
+    });
+    expect(rec.connectCalls).toBe(1);
+
+    await act(async () => {
+      await captured.value?.logout();
+    });
+    expect(rec.connectCalls).toBe(1);
     expect(rec.disconnectCalls).toBeGreaterThanOrEqual(1);
   });
 
@@ -1014,7 +1044,7 @@ describe('AuthContext drives the socket connection', () => {
     expect(captured.value?.mode).toBe('authenticated');
   });
 
-  it('logout forgets the guest id, keeps every session_token and reconnects', async () => {
+  it('logout forgets the guest id, keeps every session_token and disconnects', async () => {
     mountAuth();
     resolveAuthState(null);
     act(() => {
@@ -1033,7 +1063,9 @@ describe('AuthContext drives the socket connection', () => {
     expect(getGuestId()).toBeNull();
     expect(getSessionToken('ABC234')).toBe('tok-seat');
     expect(captured.value?.mode).toBeNull();
-    expect(rec.connectCalls).toBeGreaterThan(before);
+    // Nobody to connect as any more: the socket stays down.
+    expect(rec.connectCalls).toBe(before);
+    expect(rec.disconnectCalls).toBeGreaterThanOrEqual(1);
   });
 });
 

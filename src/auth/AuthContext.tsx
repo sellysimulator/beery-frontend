@@ -62,8 +62,19 @@ const AUTH_INIT_TIMEOUT_MS = 8000
  * Re-runs the socket handshake so `socket.ts`'s `auth` callback is invoked
  * again with the now-current ID token or guest id. The socket never
  * auto-connects, so the first call here is also the initial connect.
+ *
+ * With no identity at all (not signed in and no guest id: a first visit, the
+ * watchdog firing before Firebase answers, or just after logout, which forgets
+ * the guest id) there is nothing to connect as. The server refuses a handshake
+ * without an identity, and the refusal would put a red alert over the welcome
+ * screen, a manual or a results page, none of which needs the socket. So the
+ * socket stays down until the visitor signs in or continues as a guest.
  */
-function reconnectSocket(): void {
+function reconnectSocket(user: User | null): void {
+  if (!user && !getGuestId()) {
+    socket.disconnect()
+    return
+  }
   if (socket.connected) {
     socket.disconnect().connect()
   } else {
@@ -112,7 +123,7 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
       setLoading(false)
       // The first resolution starts the connection; a later one means the
       // identity changed underneath it, so the handshake is re-run.
-      reconnectSocket()
+      reconnectSocket(user)
     })
 
     const watchdog = setTimeout(() => {
@@ -122,7 +133,7 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
       setLoading(false)
       // Without this the socket is never connected at all: the only call site
       // is the listener above, which has not run.
-      reconnectSocket()
+      reconnectSocket(auth.currentUser)
     }, AUTH_INIT_TIMEOUT_MS)
 
     return () => {
@@ -149,7 +160,7 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
     setMode('guest')
     // Choosing guest mode fires no Firebase auth event, so the socket has to
     // be reconnected explicitly for the handshake to pick the guest id up.
-    reconnectSocket()
+    reconnectSocket(auth.currentUser)
   }, [])
 
   const logout = useCallback(async () => {
@@ -157,7 +168,7 @@ export function AuthProvider(props: { children: ReactNode }): ReactElement {
     clearGuestId()
     setFirebaseUser(null)
     setMode(null)
-    reconnectSocket()
+    reconnectSocket(null)
   }, [])
 
   const value = useMemo<AuthContextValue>(
