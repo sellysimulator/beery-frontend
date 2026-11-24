@@ -13,10 +13,12 @@
  * The draft only ever holds a config the server accepted. A refused edit
  * leaves it as it was and surfaces as `serverError`; the setup page must not
  * create games while one is showing or while an edit is still on its way
- * (`settled`).
+ * (`settled`). An edit the rate limit refuses (429) is not a refusal of the
+ * edit: it stays on its way and is sent again after the 429's `Retry-After`,
+ * so Create comes back by itself instead of staying disabled behind an error.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { errorMessage } from '../../api/http'
+import { errorMessage, isRateLimited, retryAfterMs } from '../../api/http'
 import { previewConfig } from '../../api/rooms'
 import type { ConfigPreview, GameConfig } from '../../types/game'
 import { mergePatch, type ConfigPatch } from './configPatch'
@@ -105,10 +107,21 @@ export function useDraftConfig(): DraftConfigApi {
     setServerError(null)
 
     chain.current = chain.current.then(async () => {
-      const base = latest.current
-      if (base === null) return
       try {
-        const answer: unknown = await previewConfig(base, payload)
+        let answer: unknown
+        for (;;) {
+          const base = latest.current
+          if (base === null) return
+          try {
+            answer = await previewConfig(base, payload)
+            break
+          } catch (err) {
+            if (!isRateLimited(err) || !mounted.current) throw err
+            const wait = retryAfterMs(err)
+            await new Promise((resolve) => setTimeout(resolve, wait))
+            if (!mounted.current) return
+          }
+        }
         if (!isConfigPreview(answer)) throw new Error('The server sent no config.')
         const config = answer.config
         latest.current = config

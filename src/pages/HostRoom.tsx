@@ -7,6 +7,7 @@ import HostLobby from '../components/lobby/HostLobby'
 import ScreenUnavailable from '../components/lobby/ScreenUnavailable'
 import WaitingNotice from '../components/lobby/WaitingNotice'
 import NotFound from '../components/shared/NotFound'
+import ReconnectingNotice from '../components/shared/ReconnectingNotice'
 import ScreenLoading from '../components/shared/ScreenLoading'
 import type { RoomState } from '../types/game'
 import type { RouteDescriptor } from '../routes/registry'
@@ -113,7 +114,12 @@ export function HostRoom(): ReactElement {
 export const route: RouteDescriptor = {
   path: '/host/:roomCode',
   guard: 'auth+backend',
-  element: <HostRoom />,
+  element: (
+    <>
+      <HostRoom />
+      <ReconnectingNotice />
+    </>
+  ),
 }
 
 export default HostRoom

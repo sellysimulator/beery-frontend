@@ -92,8 +92,12 @@ geometry (stacking, drawing below the axis) instead of a computed number. The re
      token over 4096 characters is rejected first. A route that does sync DB or CPU work is
      a plain `def`, never `async def`. `/health/deep` reuses its answer for 15 s.
 
-   Size limits for a classroom behind one NAT (30–40 students, one public IP), never for one
-   user.
+   Size per-IP limits for a whole school behind one NAT (several classes, one public IP),
+   never for one user; the per-sid limits are the real guard against one bad client. Floors
+   every game meets: 400 open sockets, 3,000 REST requests and 15,000 socket events per IP per
+   minute (where the game has those limiters), and 600 a minute per IP for lookups and config
+   previews. Room creation and export budgets stay per game. A client action that a 429 would
+   block (a config preview gating Start) retries after `Retry-After` instead of staying stuck.
 
 ---
 
@@ -301,11 +305,20 @@ export const socket = io(SOCKET_URL, {
   auth: (cb) => {
     const user = auth.currentUser
     if (user) user.getIdToken().then((idToken) => cb({ idToken, guestId: null }))
-                               .catch(() => cb({ idToken: null, guestId: getGuestId() }))
+                               // never fall back to the guest id while signed in
+                               .catch(() => cb({ idToken: null, guestId: null }))
     else cb({ idToken: null, guestId: getGuestId() })
   },
 })
 ```
+
+**Never play as a guest while signed in.** If a signed-in user's `getIdToken()` fails (a school
+firewall blocking `securetoken.googleapis.com`, a flaky network), falling back to the stored
+guest id would seat them under another identity and lose their game. The client sends no
+identity instead, the server refuses the handshake, and the client shows its "could not reach
+the game server" notice and calls `socket.connect()` again every 5 s while still signed in (a
+server refusal is not retried by socket.io on its own). A visitor with neither a sign-in nor a
+guest id does not connect at all.
 
 `AuthContext` then calls `socket.disconnect().connect()` on every `onAuthStateChanged`
 resolution (first resolution = initial connect; later ones = identity changed), and explicitly
@@ -319,6 +332,34 @@ certificate validation and does nothing useful in a browser.
 On `connect`, re-emit `join_waiting` (host, with `host_secret`) or `join` (player, with the
 stored `session_token`). Socket.IO issues a new `sid` on every reconnect, so identity must be
 re-asserted; the server replies with a full state resync event.
+
+**Never give up.** **[HARD-WON]** Leave `reconnectionAttempts` at socket.io's default
+(Infinity) and set `reconnectionDelayMax: 10000`. A cap of 10 gave up after about 40 s, so a
+closed lid, a Wi-Fi drop or a mid-class deploy left a student disconnected for good behind a
+screen that still looked live. While the socket is down after having connected once, the play
+and host screens show a small non-blocking "Reconnecting…" notice, and the decision's Submit
+button is disabled: socket.io buffers an emit made while offline and sends it on reconnect
+*before* the `connect` handler re-joins, so the server refuses it and the decision is lost.
+Gate Submit on a store `connected` flag that is true only between `connect` and `disconnect`,
+not on a "reconnecting" flag: the app's own `disconnect().connect()` never sets the latter.
+The notice text is the same in every game: "Connection lost. Reconnecting…", and it ignores the
+app's own disconnects (reason `io client disconnect`, e.g. the room-switch reconnect below).
+
+**A tab that changes room reconnects its socket.** **[HARD-WON]** The store resets for the new
+room and its `seq` filter starts over, but a socket still in the old room's channel keeps
+hearing that room's events: one high-`seq` event from the old room makes the store drop every
+event of the new one, and the player sits in an empty lobby. So when the room code changes the
+client calls `socket.disconnect().connect()` in step with the store reset, and the server's
+room-leave path takes the sid out of the Socket.IO room (and clears its sid maps, and any sid
+the old room document keeps for direct sends) *before* broadcasting anything about the leave.
+A **Leave** button resets and reconnects only after the server acknowledges the `leave` (its
+`leave_ack`, or an emit ack with a timeout): reconnecting right behind the `leave` lets the
+server's `disconnect` handler win the room lock first, and the seat stays taken.
+
+**Reload once after a deploy.** A tab left open across a deploy asks for lazy chunks that no
+longer exist. `main.tsx` listens for `vite:preloadError` and reloads the page, at most once per
+session (`sessionStorage['vite_preload_reloaded']`, through the storage module where a repo
+keeps Web Storage in one file).
 
 ### Rendering API errors **[HARD-WON]**
 
@@ -470,6 +511,11 @@ A finished game is shown in exactly one way, in every game:
   end-of-game screen goes there once the game's `public_id` arrives, and the profile history,
   the "Games you hosted" list and any share link point there. The signed-in profile detail
   (`/profile/games/:publicId`) also keys on the public id.
+- **Stored even when the database blinks.** The end-of-game write runs off the event loop and
+  outside the room lock. If it fails it is retried in the background after 2, 10 and 30 s, one
+  write in flight per game, and a host or player who (re)joins or asks for state in a finished,
+  unstored room starts it again. The write is idempotent (keyed per game), so a retry never
+  stores a game twice; the `public_id` reaches the clients when it finally succeeds.
 - **Never expires.** The app never deletes a stored game, and nothing on the way to its results
   reads the live room, a room code, browser storage or a session, so a link copied today still
   opens years later.
@@ -660,7 +706,15 @@ curl -s https://<site>.web.app/assets/index-*.js | grep -c <backend-host>
 npm run build
 firebase deploy --only hosting
 ```
-`firebase.json`: `public: "dist"`, SPA rewrite `**` → `/index.html`. Firebase Hosting does
+`firebase.json`: `public: "dist"`, SPA rewrite `**` → `/index.html`, and these `headers` in
+every game (a test pins them): `/assets/**` `Cache-Control: public, max-age=31536000,
+immutable`; `/index.html` and `{"regex": "^/[^.]*$"}` `Cache-Control: no-cache`, so a deploy
+is never hidden behind a cached page that asks for deleted chunks; and on `**`
+`X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`. No
+X-Frame-Options or CSP yet: Firebase Auth's `/__/auth/*` handler is served by the same site
+and must be tested first. **Deploy the backend before the frontend** whenever a release
+changes the wire contract (handshake, health, events): a new backend must keep accepting tabs
+still running the old frontend, while a new frontend may rely on the new backend. Firebase Hosting does
 **not** proxy WebSocket upgrades — the socket client must point directly at the backend host in
 production; REST can go through either.
 
@@ -926,10 +980,13 @@ async def connect(sid, environ, auth=None):
         if not decoded:
             return False                      # reject — do not silently downgrade to guest
         identity = decoded["uid"]
-    elif guest_id and GUEST_RE.match(guest_id):   # ^guest_[0-9a-f-]{36}$
+    elif not guest_id:
+        return False                          # no identity at all: refuse (a signed-in
+                                              # client whose token failed sends none)
+    elif GUEST_RE.match(guest_id):            # ^guest_[0-9a-f-]{36}$
         identity = guest_id                   # a guest can never claim a Firebase UID
     else:
-        identity = f"guest_{uuid.uuid4()}"
+        identity = f"guest_{uuid.uuid4()}"    # malformed guest id: a fresh guest
     socket_manager.sid_to_identity[sid] = identity
 ```
 
@@ -1175,7 +1232,9 @@ to `pool_timeout` and then fails that one request, rather than exhausting the se
 other games.
 
 `db_connect_args` always carries `options="-c timezone=UTC"`, so every session runs in UTC
-without a connect listener. With a CA it adds `sslmode="verify-full"` and
+without a connect listener, and `connect_timeout=10`: libpq otherwise waits forever, so one
+stalled connection to Neon could hang a save, a route or the deep health probe. (No
+`statement_timeout` in the startup options: Neon's pooled endpoint may refuse it.) With a CA it adds `sslmode="verify-full"` and
 `sslrootcert=<file>`. psycopg needs a **file path**, so `DB_SSL_CA` (PEM text or a path) is
 written once to a temp file when it holds PEM text. Without a CA and with `DB_REQUIRE_SSL` it
 adds `sslmode="require"`, which encrypts the connection but does not verify the server. For
@@ -1431,10 +1490,11 @@ FIREBASE_SERVICE_ACCOUNT_JSON=
 ## 3. Explicitly excluded
 
 - **OpenRouter / any AI feedback provider** — cleanly separable; add per-game if wanted. If you
-  do: send each player's output with `emit_to_sid`, not `emit_to_room`; put a hard per-room call
-  budget behind a setting (`AI_MAX_CALLS_PER_ROOM`), because an uncapped round count plus a
-  paid model is an unauthenticated route to unbounded spend on your API key; and make a provider
-  failure degrade to a neutral message rather than blocking the round.
+  do: send each player's output with `emit_to_sid`, not `emit_to_room`; put a hard daily call
+  budget across every room behind a setting (`AI_MAX_CALLS_PER_DAY`, sized to the provider's
+  quota), because anyone can open rooms and a paid model is an unauthenticated route to
+  unbounded spend on your API key (a per-room cap stops neither, and cuts long games short);
+  and make a provider failure degrade to a neutral message rather than blocking the round.
 - **Gunicorn** — plain uvicorn only.
 
 ---

@@ -279,3 +279,27 @@ export function getBoardView(): BoardViewChoice | null {
 export function setBoardView(choice: BoardViewChoice): void {
   localStorage.setItem(BOARD_VIEW_KEY, choice)
 }
+
+/* ─── stale chunk after a deploy — one reload per tab session ─── */
+//
+// After a deploy, an open tab may ask for a code-split chunk whose hashed
+// file no longer exists, and Vite fires `vite:preloadError`. `main.tsx` then
+// reloads the page once to pick up the new build. The flag is what stops a
+// chunk that is missing for some other reason from reloading forever. The key
+// is the same in every Novus game.
+
+const PRELOAD_RELOADED_KEY = 'vite_preload_reloaded'
+
+/**
+ * True, and remembered for this tab, the first time it is asked; false after
+ * that, and false when storage is refused (no flag, no reload loop).
+ */
+export function claimPreloadReload(): boolean {
+  try {
+    if (sessionStorage.getItem(PRELOAD_RELOADED_KEY)) return false
+    sessionStorage.setItem(PRELOAD_RELOADED_KEY, '1')
+    return true
+  } catch {
+    return false
+  }
+}

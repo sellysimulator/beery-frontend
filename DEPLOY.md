@@ -34,6 +34,16 @@ immutable`. Hosting serves static files before the SPA rewrite, so the `.glb`
 files are never rewritten to `index.html`. Because the cache is immutable, a
 changed model must ship under a new filename, never overwrite the old one.
 
+The other headers, the same as the catalog site's: `/assets/**` (Vite's
+hashed bundles) immutable for a year; `/index.html` and every extensionless
+path (`{"regex": "^/[^.]*$"}`, the SPA routes) `Cache-Control: no-cache`, so a
+deploy is picked up on the next load; and on everything
+`X-Content-Type-Options: nosniff` and `Referrer-Policy:
+strict-origin-when-cross-origin`. There is deliberately no `X-Frame-Options`
+or CSP: Firebase Auth's iframe and handler on this site could break. A tab
+left open across a deploy that asks for a chunk the deploy removed reloads
+once (`vite:preloadError` in `src/main.tsx`).
+
 ## Environment (build-time, `VITE_*`)
 
 ```
@@ -85,6 +95,13 @@ old frontend against a new backend means nobody can play.
 **When a change touches `src/api/socketHandlers.ts` or the backend's
 `app/sockets/handlers/`, deploy `Beery_Backend` and `Beery_Frontend` in the
 same window, backend first.**
+
+**The handoff-hardening release (branch `fix/handoff-hardening`) ships backend
+first, then the frontend in the same window.** The new backend accepts the old
+frontend's signed-in and guest handshakes, but refuses one with no identity at
+all, which the old frontend still sends on a first visit (no sign-in, no guest
+id yet) and then shows a "Sign-in could not be verified" alert until the new
+frontend is live; the new frontend never connects without an identity.
 
 **A REST route the live frontend still calls is removed frontend first**, for the
 same reason: the new frontend must stop calling it before the backend drops it.

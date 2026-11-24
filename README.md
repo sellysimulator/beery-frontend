@@ -195,7 +195,14 @@ under StrictMode and every event applies twice.
 **`autoConnect` is `false` and `auth` is a callback.** The socket module evaluates before Firebase
 has restored a persisted session, so auto-connecting would hand a returning signed-in user a
 throwaway guest identity. The callback re-runs on every reconnect and picks up a refreshed token
-rather than freezing the first one.
+rather than freezing the first one. A signed-in user whose token cannot be fetched sends no identity
+at all (never the guest id) and is retried every 5 s while still signed in, saying "Could not
+reach the game server. Retrying…". With no identity at all (a first visit, the auth watchdog,
+after logout) the socket is not connected: the welcome screen, the manuals and the results page
+need none. Reconnection never gives up (backing off to 10 s); while it is reconnecting, the player
+and host screens show "Connection lost. Reconnecting…", and the order form confirms nothing while
+the socket is not connected. A tab that moves off a room reconnects its socket at once, so no late
+event of the old room reaches the new room's store.
 
 **Pages register themselves.** A page module exports `route: RouteDescriptor` (or an array of
 them) and `discoverRoutes()` finds it — so a new screen is a new file, and `App.tsx` is never
@@ -215,6 +222,7 @@ up.
 | `host_batch` | `sessionStorage` | The multi-game dashboard's room codes (a JSON array). Only codes: each secret is under `host_secret_<room>`. |
 | `export_downloaded_<public_id>_<format>` | `sessionStorage` | The results screen's "already downloaded this session" flag. **UX only**, not a guard: the backend's per-address export limit (100 an hour) is the real one. |
 | display name | `localStorage` | Display data, sanitised on write. Written by the game screen's name form and the host name fields; it only prefills the next form and rides along on a rejoin. |
+| `vite_preload_reloaded` | `sessionStorage` | Set when the page reloads once after a deploy removed a code-split chunk it asked for (`vite:preloadError` in `main.tsx`), so it never reloads in a loop. |
 | `board_view` | `localStorage` | Display preference, **not a credential**; browser-wide on purpose, so a second tab keeps the choice. An unrecognised value is treated as unset. |
 
 A host who closes the tab loses the secret, and recovers by verified identity instead — the server

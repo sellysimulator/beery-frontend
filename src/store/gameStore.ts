@@ -88,6 +88,20 @@ export interface GameState {
   alerts: Alert[]
   connectionError: string | null
   /**
+   * True while the socket is down after having connected once (and not by
+   * this page's own `disconnect()`): the "Connection lost. Reconnecting…"
+   * notice shows. False before the first connect.
+   */
+  reconnecting: boolean
+  /**
+   * True only while the socket is connected (written by the `connect` and
+   * `disconnect` handlers). The decision form confirms an order only then:
+   * Socket.IO would buffer an emit made while down and replay it before the
+   * rejoin, where the server refuses it. Unlike `reconnecting` it is also
+   * false during the page's own `disconnect().connect()`.
+   */
+  connected: boolean
+  /**
    * The last `error` event's message and code, or null. The code is what a
    * screen needs to map a specific failure to its own copy -- the playing screen's
    * `TOO_MANY_SUBMISSIONS` is the first. It lives here rather than in a
@@ -121,6 +135,10 @@ export interface Alert {
 
 export interface GameActions {
   // identity and lifecycle
+  /**
+   * The room this tab is in. A different code from the one held starts the
+   * store over (see the implementation); the same code changes nothing.
+   */
   setRoomCode(roomCode: string | null): void
   setIsHost(isHost: boolean): void
   /** Back to the initial state, on leaving a room. */
@@ -176,6 +194,8 @@ export interface GameActions {
 
   // ui
   setConnectionError(message: string | null): void
+  setReconnecting(reconnecting: boolean): void
+  setConnected(connected: boolean): void
   applyError(p: ServerError): void
   clearLastError(): void
   /** Returns the minted id. */
@@ -223,6 +243,8 @@ const initialState: GameState = {
 
   alerts: [],
   connectionError: null,
+  reconnecting: false,
+  connected: false,
   lastError: null,
 
   batchRooms: [],
@@ -318,9 +340,42 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
   return {
     ...initialState,
 
-    setRoomCode: (roomCode) => set({ roomCode }),
+    /**
+     * Moving to another room in the same tab ("Play again", Home's create or
+     * join after a game) must not carry the last room with it: its `lastSeq`
+     * would drop every event of the new room, whose `seq` starts again from 1,
+     * and its FINISHED `roomState` would keep the shell on the old game. So a
+     * different code is a fresh store; only what belongs to the tab rather than
+     * to a room survives (the alert queue, the connection state and the
+     * multi-game dashboard's registration). The socket leaves the old room
+     * too: `socketHandlers.ts` reconnects it when `roomCode` moves off a code,
+     * so no late event of the old room lands in this fresh store.
+     */
+    setRoomCode: (roomCode) =>
+      set((state) =>
+        state.roomCode === roomCode
+          ? { roomCode }
+          : {
+              ...initialState,
+              roleToAlias: { ...EMPTY_ROLE_TO_ALIAS },
+              roomCode,
+              alerts: state.alerts,
+              connectionError: state.connectionError,
+              reconnecting: state.reconnecting,
+              connected: state.connected,
+              batchRooms: state.batchRooms,
+              batchStartErrors: state.batchStartErrors,
+            },
+      ),
     setIsHost: (isHost) => set({ isHost }),
-    reset: () => set({ ...initialState, roleToAlias: { ...EMPTY_ROLE_TO_ALIAS } }),
+    // The socket's state belongs to the tab, not to a room: a reset leaves it.
+    reset: () =>
+      set((state) => ({
+        ...initialState,
+        roleToAlias: { ...EMPTY_ROLE_TO_ALIAS },
+        connected: state.connected,
+        reconnecting: state.reconnecting,
+      })),
 
     /**
      * A successful join makes any earlier refusal stale, so it clears
@@ -357,7 +412,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
      * top of the reset, which is why this cannot just call `reset()`.
      */
     applyLeaveAck: () =>
-      set({ ...initialState, roleToAlias: { ...EMPTY_ROLE_TO_ALIAS }, leftRoom: true }),
+      set((state) => ({
+        ...initialState,
+        roleToAlias: { ...EMPTY_ROLE_TO_ALIAS },
+        leftRoom: true,
+        connected: state.connected,
+        reconnecting: state.reconnecting,
+      })),
 
     clearLeftRoom: () => set({ leftRoom: false }),
 
@@ -521,6 +582,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => {
     setConfig: (config) => set({ config }),
 
     setConnectionError: (message) => set({ connectionError: message }),
+
+    setReconnecting: (reconnecting) => set({ reconnecting }),
+    setConnected: (connected) => set({ connected }),
 
     applyError: (p) =>
       set({ lastError: { message: p.message, code: p.code } }),

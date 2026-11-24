@@ -8,6 +8,7 @@ import NameForm from '../components/lobby/NameForm'
 import PlayerLobby from '../components/lobby/PlayerLobby'
 import ScreenUnavailable from '../components/lobby/ScreenUnavailable'
 import NotFound from '../components/shared/NotFound'
+import ReconnectingNotice from '../components/shared/ReconnectingNotice'
 import ScreenLoading from '../components/shared/ScreenLoading'
 import type { JoinEmit, RoomState } from '../types/game'
 import type { RouteDescriptor } from '../routes/registry'
@@ -160,7 +161,16 @@ function JoinRedirect(): ReactElement {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const route: RouteDescriptor[] = [
-  { path: '/game/:roomCode', guard: 'auth+backend', element: <GameRoom /> },
+  {
+    path: '/game/:roomCode',
+    guard: 'auth+backend',
+    element: (
+      <>
+        <GameRoom />
+        <ReconnectingNotice />
+      </>
+    ),
+  },
   { path: '/join/:roomCode', guard: 'public', element: <JoinRedirect /> },
 ]
 

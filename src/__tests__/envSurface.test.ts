@@ -200,6 +200,11 @@ interface FirebaseHostingConfig {
     public: string
     ignore?: string[]
     rewrites?: Array<{ source: string; destination: string }>
+    headers?: Array<{
+      source?: string
+      regex?: string
+      headers: Array<{ key: string; value: string }>
+    }>
   }
 }
 
@@ -252,6 +257,55 @@ describe('firebase.json declares the SPA rewrite', () => {
   it('the matcher is not vacuous: an unmatched literal source only matches itself', () => {
     expect(matchesRewriteSource('/health', '/results/0123456789abcdef0123456789abcdef')).toBe(false)
     expect(matchesRewriteSource('/health', '/health')).toBe(true)
+  })
+})
+
+describe('index.html names the game', () => {
+  const html = readRoot('index.html')
+
+  it('the page title is exactly the game name', () => {
+    expect(html).toMatch(/<title>Beer Game<\/title>/)
+  })
+
+  it('carries a one-sentence description', () => {
+    expect(html).toMatch(/<meta\s+name="description"\s+content="[^"]+\."/)
+  })
+})
+
+describe('firebase.json caching and security headers', () => {
+  const rules = readFirebaseJson().hosting.headers ?? []
+
+  function header(rule: { source?: string; regex?: string }, key: string): string | undefined {
+    const found = rules.find((r) => r.source === rule.source && r.regex === rule.regex)
+    return found?.headers.find((h) => h.key === key)?.value
+  }
+
+  it('hashed build assets are cached for a year, immutable', () => {
+    expect(header({ source: '/assets/**' }, 'Cache-Control')).toBe(
+      'public, max-age=31536000, immutable',
+    )
+  })
+
+  it('index.html and every extensionless SPA path are revalidated, so a deploy is picked up', () => {
+    expect(header({ source: '/index.html' }, 'Cache-Control')).toBe('no-cache')
+    expect(header({ regex: '^/[^.]*$' }, 'Cache-Control')).toBe('no-cache')
+    const spaPath = new RegExp('^/[^.]*$')
+    expect(spaPath.test('/host/ABC123')).toBe(true)
+    expect(spaPath.test('/assets/index-abc.js')).toBe(false)
+  })
+
+  it('every response says nosniff and a strict referrer policy, and nothing that could break the auth iframe', () => {
+    expect(header({ source: '**' }, 'X-Content-Type-Options')).toBe('nosniff')
+    expect(header({ source: '**' }, 'Referrer-Policy')).toBe('strict-origin-when-cross-origin')
+    const keys = rules.flatMap((r) => r.headers.map((h) => h.key.toLowerCase()))
+    expect(keys).not.toContain('x-frame-options')
+    expect(keys).not.toContain('content-security-policy')
+  })
+
+  it('the 3D models keep their immutable cache', () => {
+    expect(header({ source: '/3dmodels/**' }, 'Cache-Control')).toBe(
+      'public, max-age=31536000, immutable',
+    )
   })
 })
 

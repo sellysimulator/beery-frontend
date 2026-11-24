@@ -10,6 +10,7 @@
  * `useGameStore.getState()` is safe outside React, so each handler reads the
  * latest state at call time and never closes over a stale snapshot.
  */
+import { auth } from '../../firebase'
 import { socket } from './socket'
 import { join, joinWaiting } from './games'
 import { useGameStore } from '../store/gameStore'
@@ -18,6 +19,7 @@ import {
   clearHostSecret,
   clearSessionToken,
   getDisplayName,
+  getGuestId,
   getHostSecret,
   getSessionToken,
   isHostForRoom,
@@ -92,13 +94,20 @@ const CONNECT_ERROR_MESSAGE = {
   cap: 'Too many connections from your network. Retrying…',
 } as const
 
+/**
+ * A signed-in user's refusal is retried every few seconds (below), so it says
+ * what is happening rather than asking them to sign out: most often their ID
+ * token could not be fetched on a flaky network, and the next try works.
+ */
+const SIGNED_IN_REFUSAL_MESSAGE = CONNECT_ERROR_MESSAGE.network
+
 const CAP_GAVE_UP_MESSAGE =
   'Too many connections from your network. Please reload the page in a few minutes.'
 
 /**
  * Socket.IO does not retry a refused handshake: a `CONNECT_ERROR` packet
- * destroys the socket (`active` goes false) and `reconnectionAttempts` never
- * comes into play. A cap refusal is temporary — it lifts as soon as someone
+ * destroys the socket (`active` goes false) and Socket.IO's own reconnection
+ * never comes into play. A cap refusal is temporary — it lifts as soon as someone
  * else on the network closes a tab — so it is retried here, with growing
  * delays and jitter so a classroom behind one address does not retry in step.
  */
@@ -121,12 +130,46 @@ function scheduleCapRetry(): boolean {
   capRetryTimer = setTimeout(
     () => {
       capRetryTimer = null
+      // A sign-out while this timer waited leaves no identity: the server would refuse it.
+      if (!auth.currentUser && !getGuestId()) return
       if (!socket.connected && !socket.active) socket.connect()
     },
     delay / 2 + Math.random() * (delay / 2),
   )
   return true
 }
+
+/**
+ * A signed-in user refused at the handshake (their ID token could not be
+ * fetched, so `socket.ts` sent no identity, or the server could not verify
+ * it) is retried every few seconds for as long as they stay signed in: a
+ * token refresh that failed on a flaky network usually works on the next try,
+ * and falling back to the guest id instead would seat them as someone else.
+ * Socket.IO does not retry a refused handshake itself. A guest's refusal is
+ * not retried here (the cap's own retry above covers the one a guest gets).
+ */
+export const SIGNED_IN_RETRY_DELAY_MS = 5_000
+let signedInRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearSignedInRetry(): void {
+  if (signedInRetryTimer !== null) clearTimeout(signedInRetryTimer)
+  signedInRetryTimer = null
+}
+
+function scheduleSignedInRetry(): void {
+  if (signedInRetryTimer !== null || !auth.currentUser) return
+  signedInRetryTimer = setTimeout(() => {
+    signedInRetryTimer = null
+    if (auth.currentUser && !socket.connected && !socket.active) socket.connect()
+  }, SIGNED_IN_RETRY_DELAY_MS)
+}
+
+/**
+ * Whether this page has had a working connection yet. A disconnect before the
+ * first connect is the cold start (`BackendWakeUp` covers it); after it, the
+ * screens show "Connection lost. Reconnecting…" until the socket is back.
+ */
+let hasConnected = false
 
 /**
  * A rate-limited event (`app/sockets/errors.py`, `@guarded`). The play loop
@@ -139,8 +182,8 @@ const RATE_LIMITED_MESSAGE =
   'Too many actions from your network in a short time. Please wait a moment and try again.'
 
 /**
- * Suppresses duplicate alerts across the automatic retries
- * (`reconnectionAttempts: 10`). Reset once the socket actually connects, or on
+ * Suppresses duplicate alerts across the automatic retries (Socket.IO's,
+ * which never give up, and this module's own). Reset once the socket actually connects, or on
  * a clean disconnect, so a later failure still gets its own alert.
  */
 let connectErrorAlerted = false
@@ -226,15 +269,24 @@ export function rejoinAfterConnect(): void {
 /* ─── connection lifecycle ─── */
 
 socket.on('connect', () => {
+  hasConnected = true
+  store().setConnected(true)
+  store().setReconnecting(false)
   connectErrorAlerted = false
   clearCapRetry()
+  clearSignedInRetry()
   dismissConnectErrorAlert()
   store().setConnectionError(null)
   rejoinAfterConnect()
 })
 
-socket.on('disconnect', () => {
+socket.on('disconnect', (reason?: string) => {
   connectErrorAlerted = false
+  store().setConnected(false)
+  // `io client disconnect` is this page's own `disconnect()` (a new identity
+  // or a new room, followed by a `connect()` at once, or no identity left at
+  // all): nothing to announce.
+  if (hasConnected && reason !== 'io client disconnect') store().setReconnecting(true)
 })
 
 socket.on('connect_error', (error: Error) => {
@@ -250,13 +302,34 @@ socket.on('connect_error', (error: Error) => {
     return
   }
 
-  const message = CONNECT_ERROR_MESSAGE[kind]
+  const signedInRefusal = kind === 'auth' && auth.currentUser !== null
+  if (signedInRefusal) scheduleSignedInRetry()
+
+  const message = signedInRefusal ? SIGNED_IN_REFUSAL_MESSAGE : CONNECT_ERROR_MESSAGE[kind]
   store().setConnectionError(message)
 
   // One alert per failed retry cycle, not one per attempt.
   if (connectErrorAlerted) return
   connectErrorAlerted = true
-  connectErrorAlertId = store().addAlert({ kind: kind === 'auth' ? 'error' : 'info', message })
+  const alertKind = kind === 'auth' && !signedInRefusal ? 'error' : 'info'
+  connectErrorAlertId = store().addAlert({ kind: alertKind, message })
+})
+
+/**
+ * A tab that moves off a room (to another room, or to none: "Play again",
+ * Home's create or join, the dashboard, a leave) takes its socket out of the
+ * old room at once by reconnecting it; the server treats the old connection's
+ * drop as leaving that room. The store has just started over for the new
+ * room, and one late event of the old room, with that room's higher `seq`,
+ * would make it drop every event of the new one. Joining the new room is not
+ * enough on its own: a first-time player sends no `join` until they have
+ * named themselves, and until then the old room's events kept arriving. The
+ * `connect` handler's `rejoinAfterConnect` joins the new room, and a join a
+ * screen emits meanwhile is buffered until the new connection is up.
+ */
+useGameStore.subscribe((state, previous) => {
+  if (previous.roomCode === null || state.roomCode === previous.roomCode) return
+  if (socket.connected) socket.disconnect().connect()
 })
 
 /* ─── lobby ─── */

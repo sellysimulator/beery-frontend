@@ -172,7 +172,11 @@ three are strict with `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnl
 `verbatimModuleSyntax` — use `import type` for type-only imports or the build fails.
 
 **Firebase**: `firebase.json` → `public: "dist"`, catch-all rewrite `** → /index.html` (the
-SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site** is `beersim`.
+SPA deep-link fix), and `headers`: `/3dmodels/**` and `/assets/**` immutable for a year,
+`/index.html` and every extensionless path (`^/[^.]*$`) `no-cache`, and `nosniff` +
+`strict-origin-when-cross-origin` on everything. No `X-Frame-Options` or CSP: Firebase Auth's
+iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloads once on
+`vite:preloadError` (a chunk a deploy removed; `claimPreloadReload()` in `utils/storage.ts`). `.firebaserc` default project `beery-30d23`; hosting **site** is `beersim`.
 
 ## 6. Architecture — the rules to not break
 
@@ -196,6 +200,10 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 3. **Every server→client game event carries a monotonic `seq`.** `applySequenced` drops any
    event with `seq <= lastSeq`, which is also what makes accidental double-application inert.
    `joined`, `join_error`, `host_claimed`, `leave_ack` and `error` carry no `seq`.
+   `seq` is per room, so **`setRoomCode` with a different code starts the store over**
+   (keeping only the alerts, the connection state and the dashboard's batch): "Play again"
+   or Home's create/join in the same tab would otherwise keep the finished room's `lastSeq`
+   and drop every event of the new one. The same code changes nothing.
    Three appliers merge rather than replace: `applyYourState` keeps the held `own_history`
    when the payload omits it (the per-round `your_state`), but only for the same role;
    `applyYourWeekClosed` appends the record unless that week is already held; and
@@ -205,8 +213,32 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
    look identical) and raises an alert; `applyJoined` clears it.
 4. **The socket does not auto-connect.** `autoConnect: false`, and `auth` is a **callback**
    so it re-runs with a fresh ID token on every reconnect. `AuthContext` connects it once
-   `onAuthStateChanged` resolves (or after an 8s watchdog). Auto-connecting would hand a
-   returning signed-in user a guest identity.
+   `onAuthStateChanged` resolves (or after an 8s watchdog), but **never with no identity**:
+   with no Firebase user and no stored guest id (a first visit, the watchdog, after logout)
+   `reconnectSocket` calls `socket.disconnect()` and returns, because the server would refuse
+   the handshake and the refusal is an alert over the welcome screen, manuals or results page,
+   which need no socket. Auto-connecting would hand a
+   returning signed-in user a guest identity. A signed-in user whose `getIdToken()` fails
+   sends `{ idToken: null, guestId: null }`, **never** the guest id (the server refuses a
+   handshake with no identity), and `socketHandlers.ts` retries that refusal with
+   `socket.connect()` every 5 s (`SIGNED_IN_RETRY_DELAY_MS`) while `auth.currentUser` is set,
+   saying "Could not reach the game server. Retrying…" (an info alert, no sign-out advice).
+   **Reconnection never gives up**: no `reconnectionAttempts` (Socket.IO's default,
+   Infinity), `reconnectionDelayMax: 10000`. A drop after the first connect sets
+   `store.reconnecting` (written by the `connect`/`disconnect` handlers; this page's own
+   `disconnect()` does not count), which shows `shared/ReconnectingNotice` ("Connection lost.
+   Reconnecting…") on `/game/:roomCode` and `/host/:roomCode` (mounted in their route
+   elements). `DecisionForm`'s Confirm (and its submit handler) is gated on `store.connected`,
+   true only while the socket is connected, never on `reconnecting`, which stays false through
+   the page's own `disconnect().connect()`: Socket.IO would buffer the emit and replay it before
+   the rejoin, where the server refuses it. `connected` and `reconnecting` belong to the tab:
+   `setRoomCode`, `reset` and `applyLeaveAck` keep them.
+   **A tab that moves off a room reconnects its socket** (`useGameStore.subscribe` in
+   `socketHandlers.ts`: `roomCode` changed from a code, socket connected →
+   `disconnect().connect()`), synchronously with the store's reset. One late event of the old
+   room, with its higher `seq`, would otherwise make the fresh store drop every event of the
+   new one, and a player on the new room's name form sends no `join` that could move the
+   socket. The server treats the old connection's drop as leaving that room.
 5. **Pages register themselves.** A module in `src/pages/*.tsx` exports
    `route: RouteDescriptor | RouteDescriptor[]`; `discoverRoutes()` globs them. Adding a
    screen is adding a file — **never edit `App.tsx`'s route table** (there isn't one).
@@ -223,7 +255,8 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
 8. **Types mirror the backend by hand** in `src/types/game.ts` (there is no codegen).
    `X | None` on the Python side is `X | null` here, never `undefined`; `?` means the key can
    be *absent*. Wire-shape changes must land in `Beery_Backend` and here **in the same deploy
-   window, backend first** (DEPLOY.md).
+   window, backend first** (DEPLOY.md). The handoff-hardening release is backend first too: the old
+   frontend connects with no identity on a first visit, which the new backend refuses.
 9. **Data fetching**: no react-query. REST is plain `async` axios calls in `useEffect` /
    handlers; live data is push-only over the socket into the store. The health probe
    (`api/health.ts`) uses bare `fetch` on purpose (no interceptors) and requires
@@ -244,7 +277,12 @@ SPA deep-link fix). `.firebaserc` default project `beery-30d23`; hosting **site*
     your network. Try again in a minute."), which `classifyConnectError` calls `cap` and
     retries with bounded jittered backoff because Socket.IO never retries a `CONNECT_ERROR`
     itself; any other refusal (the generic `Connection rejected by server`, a failed ID token)
-    is `auth`: the sign-in message, no retry.
+    is `auth`: while signed in it says "Could not reach the game server. Retrying…" and is
+    retried every 5 s (rule 4); otherwise the sign-in message, not retried.
+    A 429 that would leave the UI stuck is retried after its `Retry-After`
+    (`retryAfterMs(err)` in `http.ts`, 1–60 s, 5 s when hidden): `useConfigPreview` asks for
+    the same draft again, and `useDraftConfig` resends the edit (it stays in flight, so
+    `/multihost/new`'s Create comes back by itself instead of sitting behind an error).
 11. **Styling is Tailwind v4, CSS-first.** All design tokens are `@theme` variables in
     `src/index.css` (surface/ink/brand/role/quantity colours, `--text-figure`). Use the
     semantic tokens (`bg-surface`, `text-ink-muted`, `text-role-retailer`), not raw hexes.
@@ -468,6 +506,7 @@ is no host claim and no "records your account as its host" copy.
 | `host_batch` | sessionStorage | The multi-game dashboard's room codes (JSON array; `getHostBatch()` is null when absent or malformed). Codes only — each secret is under `host_secret_<room>` |
 | `export_downloaded_<public_id>_<format>` | sessionStorage | The results screen's once-per-session download flag (`markExportDownloaded` / `wasExportDownloaded`). **UX only**: the server's per-address export budget (100 an hour, backend `core/abuse.py`) is the real guard |
 | `display_name` | localStorage | Display data, sanitised on write (max 24, control chars handled two different ways — read the comment before touching it). Written by `NameForm`'s submit and the host name fields (Home's create form, `/multihost/new`); read to prefill them and by every token-bearing `join` |
+| `vite_preload_reloaded` | sessionStorage | Set by `claimPreloadReload()` when `main.tsx` reloads after a `vite:preloadError` (a stale chunk after a deploy), so it reloads once per tab, never in a loop. Same key in every Novus game |
 | `board_view` (`'2D'` \| `'3D'`) | localStorage | Display preference, **not a credential**, and deliberately browser-wide rather than tab-scoped: it is the one choice a player should not have to re-make in a second tab, and it grants nothing. Unrecognised → treated as unset, never an error (spec §9.7) |
 
 **D18 host recovery**: closing the tab loses `host_secret`. The host lobby therefore emits
