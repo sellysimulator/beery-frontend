@@ -8,7 +8,6 @@
  * parent Chart.js knows about.
  */
 import type { Chart, ChartOptions, Plugin } from 'chart.js'
-import { Chart as ChartJS } from 'chart.js'
 import { CHART_TOKENS } from '../chartTheme'
 
 export const CROSSHAIR_SYNC_ID = 'crosshairSync'
@@ -175,5 +174,3 @@ export const crosshairSync: Plugin = {
     leave(chart)
   },
 }
-
-ChartJS.register(crosshairSync)

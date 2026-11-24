@@ -75,7 +75,7 @@ src/
   pages/                 one module per route; each exports `route`
   components/
     shared/  lobby/  config/  game/  host/  results/  profile/  manual/  multihost/
-    charts/              chartSetup.ts (results view model + bullwhip builder),
+    charts/              chartSetup.ts (the registration, results view model + bullwhip builder),
                          chartTheme.ts (every canvas colour), ChartBox.tsx, Legend.tsx,
                          plugins/crosshairSync.ts + plugins/CrosshairGroup.tsx
     results/resultsChartsConfig.ts, game/ownHistoryConfig.ts,
@@ -328,9 +328,12 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
     path (`roles.RETAILER.initial_inventory`, `bot.beta`) and its `id` is `config-` + the path
     with dots as dashes; a server-rejected field gets `aria-invalid` with its message via
     `aria-describedby`. Tests find fields by these.
-13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal (each chart module
-    registers what it uses; `ChartJS.register` is idempotent). `components/charts/chartSetup.ts`
-    owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
+13. **Charts**: Chart.js + react-chartjs-2, registered once by `registerCharts()` in
+    `components/charts/chartSetup.ts`, which every chart pulls in with a side-effect import.
+    It also sets the global defaults: point `hitRadius` 12 (24 px), canvas legend off, and a
+    300 ms animation that is off under `prefers-reduced-motion`; so no chart sets its own
+    `animation` (`BullwhipTrend`'s is `false`). A new element, scale or plugin is registered
+    there. `chartSetup.ts` also owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
     builder** whose output the component passes straight through: a canvas is opaque to
     jsdom, so the *config object* is what tests assert, and tests never mock `chart.js` or
     `react-chartjs-2`. The kit (the charts themselves are spec §9.8):

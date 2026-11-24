@@ -27,7 +27,6 @@ function baseOptions(
   return {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 300 },
     interaction: { mode: 'index', intersect: false },
     plugins: {
       // The legend is DOM (`charts/Legend.tsx`), so the canvas draws none.

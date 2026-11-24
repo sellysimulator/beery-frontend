@@ -1,19 +1,9 @@
 import { useMemo, type ReactElement } from 'react'
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Tooltip,
-} from 'chart.js'
 import { Line } from 'react-chartjs-2'
+import '../charts/chartSetup'
 import { BRAND_SOFT_COLOUR, DEMAND_COLOUR } from '../charts/chartTheme'
 import { EXAMPLE_DRAW_NOTE, PREVIEW_LOADING } from './copy'
 import type { ConfigPreviewState } from './useConfigPreview'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler)
 
 /**
  * Whether a 2D canvas context can actually be acquired.

@@ -16,7 +16,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
-import { Chart as ChartJS } from 'chart.js'
+import { Animation, Chart as ChartJS } from 'chart.js'
+import { registerCharts } from '../components/charts/chartSetup'
 import Legend, { Legend as NamedLegend, type LegendItem } from '../components/charts/Legend'
 import ChartBox, { ChartBox as NamedChartBox } from '../components/charts/ChartBox'
 import {
@@ -456,7 +457,7 @@ afterEach(() => {
 })
 
 describe('crosshairSync registration', () => {
-  it('is the plugin with id "crosshairSync", registered with Chart.js on import', () => {
+  it('is the plugin with id "crosshairSync", registered by chartSetup', () => {
     expect(CROSSHAIR_SYNC_ID).toBe('crosshairSync')
     expect(crosshairSync.id).toBe(CROSSHAIR_SYNC_ID)
     expect(ChartJS.registry.getPlugin(CROSSHAIR_SYNC_ID)).toBe(crosshairSync)
@@ -699,5 +700,66 @@ describe('CrosshairGroup and useCrosshairGroup', () => {
       fireEvent.keyDown(wrapper, { key: 'a' })
       expect(ruleXs(chart)).toEqual([30])
     })
+  })
+})
+
+/* ─── The one registration ─── */
+
+describe('registerCharts', () => {
+  const REAL_MATCH_MEDIA = window.matchMedia
+
+  function stubReducedMotion(reduce: boolean): void {
+    window.matchMedia = ((query: string) => ({
+      matches: reduce && query === '(prefers-reduced-motion: reduce)',
+    })) as unknown as typeof window.matchMedia
+  }
+
+  afterEach(() => {
+    window.matchMedia = REAL_MATCH_MEDIA
+    registerCharts()
+  })
+
+  it('switches every animation off under prefers-reduced-motion, and back on', () => {
+    stubReducedMotion(true)
+    registerCharts()
+    expect(ChartJS.defaults.animation).toBe(false)
+
+    stubReducedMotion(false)
+    registerCharts()
+    expect(ChartJS.defaults.animation).toMatchObject({ duration: 300 })
+  })
+
+  it('keeps every animation key Chart.js reads, so colour animations have an interpolator', () => {
+    registerCharts()
+    const keys = Object.keys(ChartJS.defaults.animation as object)
+    expect(keys).toEqual(expect.arrayContaining(['type', 'fn', 'from', 'to', 'easing']))
+
+    // What Animations.configure keeps for a colour property.
+    const colors = { ...(ChartJS.defaults.animations.colors as object) } as Record<string, unknown>
+    const kept = Object.fromEntries(keys.map((key) => [key, colors[key]]))
+    const animation = new Animation(kept, { backgroundColor: '#000000' }, 'backgroundColor', '#ffffff')
+    expect(() => animation.cancel()).not.toThrow()
+  })
+
+  it('gives every point a hit area of at least 24 px and draws no canvas legend', () => {
+    expect(ChartJS.defaults.elements.point.hitRadius).toBe(12)
+    expect(ChartJS.defaults.plugins.legend.display).toBe(false)
+  })
+
+  it('is the only registration, and no chart sets an animation that ignores reduced motion', () => {
+    const sources = import.meta.glob<string>('../components/**/*.{ts,tsx}', {
+      eager: true,
+      query: '?raw',
+      import: 'default',
+    })
+    const registering = Object.entries(sources)
+      .filter(([, text]) => /ChartJS\.register\(|Chart\.register\(/.test(text))
+      .map(([path]) => path)
+    expect(registering).toEqual(['../components/charts/chartSetup.ts'])
+
+    const animating = Object.entries(sources)
+      .filter(([, text]) => /^\s*animation: \{/m.test(text))
+      .map(([path]) => path)
+    expect(animating).toEqual([])
   })
 })
