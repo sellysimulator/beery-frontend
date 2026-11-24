@@ -263,6 +263,12 @@ never compared.
   Store it per-room in `sessionStorage` and send it with `join_waiting`, `config_update` and
   `start_game`. A `sessionStorage` "am I the host" boolean is a **UI hint only** — anyone can
   set it in devtools, so the server must never trust it.
+- **The last host claim wins.** A second host tab takes over as the room's one host connection.
+  The old tab is not told: it stops getting host-only events, still gets room broadcasts (so its
+  screen is part current, part stale), and the server still accepts its host actions, because it
+  holds the host secret. When the new tab closes, host-only events reach no one until a host tab
+  reconnects or reloads; an old tab that reconnects takes the role back. The same in Tequila,
+  Beer and Pulque; decided November 2026.
 - **Create/host flow**: `POST /rooms/create` → persist `host_secret` for that room id →
   navigate to the waiting room.
 - **Join flow**: navigate to `/game/:roomId`, guarded by an auth/backend-ready guard.
@@ -565,7 +571,8 @@ return typeof body === 'object' && body !== null &&
 Chrome and Edge step a focused `<input type="number">` under the mouse wheel, so scrolling the
 page silently changes a config value or an order. React's wheel listeners are passive, so
 `preventDefault()` cannot stop it: put `onWheel={(e) => e.currentTarget.blur()}` on every
-number input.
+number input. Keep the raw text in state and never clamp or refill while typing: an empty or
+out-of-range value stays in the field, shows its own message and disables the button.
 
 ### Charts
 
@@ -594,8 +601,9 @@ type must be registered there), never registers the Title plugin (titles are HTM
 in the `ChartBox`) and turns the canvas legend off (legends are DOM). Global defaults:
 tooltip style, a hairline grid from a token, linear scales starting at zero, the game's
 body font, `interaction: { mode: 'index', intersect: false }` on line charts, and animation
-off under `prefers-reduced-motion: reduce`. Beery is the exception: it registers per module
-and sets these options per chart.
+off under `prefers-reduced-motion: reduce`. Change an object default with
+`Chart.defaults.set(…)`, never `Chart.defaults.x = {…}`: assigning drops the keys Chart.js reads
+and crashes on the first data update. `hitRadius: 12` is set once there, never per chart.
 
 **`ChartBox`.** Every chart sits in one. Props: `title`, `caption?`, `ariaLabel`, `height`,
 `controls?`, `legend?`, `table`, `children`. The title is an HTML heading; the canvas
@@ -735,8 +743,8 @@ the **site** id. Hosting serves the app on both `<site>.web.app` and
 
 **Core**: Python 3.11, FastAPI, plain **uvicorn** (`--http h11 --proxy-headers` needed for a
 correct WebSocket upgrade behind a reverse proxy), `python-socketio`, SQLAlchemy 2.0 (sync,
-declarative), psycopg 3 driver (PostgreSQL), Alembic migrations, Redis (`redis.asyncio`), `firebase-admin`,
-Pydantic Settings.
+declarative), psycopg 3 driver (PostgreSQL), Alembic migrations, a room-state store (Redis only
+where the game needs it, see "Live state" below), `firebase-admin`, Pydantic Settings.
 
 > Database note: every game persists to **PostgreSQL 18** (its own managed Neon project, one
 > per game) through **psycopg 3** (`psycopg[binary]`, URL scheme `postgresql+psycopg://`). The
@@ -834,10 +842,10 @@ app/
 │   └── game.py             domain models — game-specific
 ├── schemas/                Pydantic request/response models
 ├── services/
-│   ├── state_service.py    Redis-backed room state + distributed lock + schema guard
+│   ├── state_service.py    live room state + room lock + schema guard (store per "Live state")
 │   ├── db_service.py, game_service.py, user_service.py
 ├── sockets/
-│   ├── manager.py          AsyncServer + AsyncRedisManager + SocketManager
+│   ├── manager.py          AsyncServer (+ AsyncRedisManager when Redis is on) + SocketManager
 │   └── handlers.py         all @sio.event handlers — the room-lifecycle logic
 └── tests/
 alembic/
@@ -956,8 +964,10 @@ application = socket_app   # uvicorn app.main:application
 ```python
 sio = AsyncServer(
     async_mode="asgi",
-    client_manager=AsyncRedisManager(settings.REDIS_URL),
+    # Tequila Game: always Redis. The other games: only when REDIS_ENABLED.
+    client_manager=AsyncRedisManager(settings.REDIS_URL) if settings.REDIS_ENABLED else None,
     cors_allowed_origins=settings.CORS_ORIGINS,   # same list as the REST CORS middleware
+    ping_timeout=120, ping_interval=25,           # the same in every game
     logger=settings.DEBUG,          # NOT True — see below
     engineio_logger=settings.DEBUG,
 )
@@ -1099,7 +1109,7 @@ null, and only a claim authorised by `host_secret` may record that identity. Oth
 recovery path hands a fresh room to the first stranger who asks.
 
 **Two maps will exist, and only one is authoritative.** A `SocketManager` holding
-`sid_to_alias` in process memory is convenient, and the room document in Redis holds the same
+`sid_to_alias` in process memory is convenient, and the room document holds the same
 mapping. The moment `AsyncRedisManager` is configured, a second uvicorn process exists, and
 the in-process map is a **cache of one worker's connections** — a handler that reads it
 instead of the room document answers correctly on the worker that took the join and wrongly
@@ -1129,11 +1139,36 @@ Host-supplied config needs **upper** bounds and cross-field checks, not just flo
   on that game.
 - Reject `config_update` once `started`.
 
+### Game maths and round events **[HARD-WON]**
+
+Rules every game's core follows, each learned from a bug:
+
+- **Round quantities half-up, never with Python's `round()`** (banker's rounding). Guard a
+  `floor` of a computed fraction against float noise: `60 × (0.3 ÷ 3)` is `5.999…`, so use
+  `floor(x + 1e-9)`.
+- **Round each money line to cents when the round's record is written**, and build totals from
+  the rounded lines, so the closing balance equals opening plus profit to the cent.
+- **Every draw comes from the room's seed.** A test scans the core for module-level
+  `random.*()` calls.
+- **Ties never depend on dict order.** An explicit chain, then a seeded draw. Say how a null
+  ratio compares, and sort aliases numerically (P2 before P10).
+- **An affordability check never blocks a round.** "Do nothing" is always accepted, and costs
+  already committed stay out of the check, or one broke player stalls everyone.
+- **A balance identity counts the free starting units.** Units shipped, lost, delivered and in
+  transit only balance if the starting stock and the pre-filled pipeline are in it.
+- **A round sends the new record, not the whole history.** The client appends it and skips a
+  round it already holds; full history goes at game start, on reconnect and on request.
+- **A room broadcast skips the host's socket** when the host has a fuller version of the same
+  payload (the config with its hidden keys), and the host gets its own copy.
+- **Each resync event has its own, higher `seq`**; the client drops `seq` it has already passed.
+- **"Play again" creates a new room** with the same settings, and results open from a "See the
+  results" button, never an automatic redirect.
+
 ### Per-round submit **[HARD-WON]**
 
 Reject a second submission for the same round (`if player["last"] is not None: return`).
-Without it, each call appends another history entry *and* re-serialises the whole room through
-Redis — O(n²) work that one client can trigger in a loop.
+Without it, each call appends another history entry *and* re-serialises the whole room into
+the state store — O(n²) work that one client can trigger in a loop.
 
 ### The host's "who has submitted" tracker, through the last round
 
@@ -1157,17 +1192,28 @@ no entry for the bot seats, and anything rendered from that list — names, a Bo
 live results' cost cards — comes out blank for exactly those seats. Emit the lobby /
 participant-list payload again after the seats are filled. (Found in Beery.)
 
-### Redis — three distinct roles
+### Live state: Redis only in the Tequila Game
+
+| Game | Live state | A restart or deploy |
+|---|---|---|
+| Tequila | Redis, always (`REDIS_URL` required) | games in progress survive |
+| Beer, Pulque | the process's memory (`REDIS_ENABLED=false`) | games in progress are lost |
+| Lemonade | the `live_games` table in PostgreSQL (`REDIS_ENABLED=false`) | games in progress survive |
+
+With `REDIS_ENABLED=false` the service runs **one instance** (`numInstances: 1`), because the
+room locks, the socket maps and Socket.IO's rooms live in that process. `REDIS_ENABLED=true`
+needs `REDIS_URL`; it is one switch for all three roles Redis has:
 
 1. **Room/game state store** (`services/state_service.py`): rooms as JSON blobs under
    `room:{room_id}` with a TTL.
 2. **Distributed lock**: `redis_client.lock(f"lock:room:{room_id}")` around every mutation.
+   Without Redis it is an in-process lock per room, used the same way.
 3. **Socket.IO cross-instance pub/sub**: `AsyncRedisManager(REDIS_URL)` — required the moment
    you run more than one uvicorn process.
 
-**Version the room schema. [HARD-WON]** Room state outlives a deploy (it sits on a 24h TTL), so
-after a release that changes the room dict, Redis still holds rooms in the *old* shape. Detect
-them on read and discard them:
+**Version the room schema. [HARD-WON]** Stored room state outlives a deploy (in Redis it sits on
+a 24h TTL), so after a release that changes the room dict, the store still holds rooms in the
+*old* shape. Detect them on read and discard them:
 
 ```python
 def _is_current_schema(room) -> bool:
@@ -1332,7 +1378,7 @@ any migration.
 once per session, and `TRUNCATE ... RESTART IDENTITY CASCADE` between tests. CI runs them as
 their own job.
 
-**Store facts, derive the rest. [HARD-WON]** (`pulky-findings.md` item 15) A stored game must
+**Store facts, derive the rest. [HARD-WON]** A stored game must
 read back exactly as it was played, and the schema stays normalized: nothing the database can
 compute is stored.
 
@@ -1377,7 +1423,8 @@ class Settings(BaseSettings):
 
     # NEVER ["*"] — the app sets allow_credentials=True, and the two together are an
     # invalid, permissive combination. Keep in sync with sockets/manager.py.
-    CORS_ORIGINS: list[str] = ["https://<game>.web.app", "http://localhost:5173"]
+    # Local default; production sets only the site's two origins (below).
+    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
@@ -1389,6 +1436,7 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 7          # see "Size the pools to the game's connection budget"
     DB_MAX_OVERFLOW: int = 2
 
+    REDIS_ENABLED: bool = False    # not in the Tequila Game, which always uses Redis
     REDIS_URL: str = ""
     FIREBASE_SERVICE_ACCOUNT_JSON: str = ""
 
@@ -1437,8 +1485,9 @@ only reachable through their proxy. Ensure `.dockerignore` excludes `.env`.
 repo's root (leave Root Directory blank), Health Check Path `/api/v1/health`. Do not set
 `PORT`: Render injects it and the CMD's `${PORT:-8080}` picks it up. Each backend's
 `render.yaml` records these settings (it is not Blueprint-linked; the dashboard is the source).
-`CORS_ORIGINS` on the platform is a JSON array, `["https://<site>.web.app","http://localhost:5173"]`,
-never a bare comma list and never `["*"]`.
+`CORS_ORIGINS` on the platform is a JSON array of the site's two origins,
+`["https://<site>.web.app","https://<site>.firebaseapp.com"]`: never a bare comma list, never
+`["*"]`, and no `localhost` in production.
 
 > The image bakes in a **code snapshot** — there is no bind mount. A source change needs a
 > rebuild, and a running container will happily keep serving the old code (which looks exactly
@@ -1458,12 +1507,26 @@ DB_REQUIRE_SSL=
 DB_SSL_CA=
 DB_POOL_SIZE=
 DB_MAX_OVERFLOW=
-REDIS_URL=
+REDIS_ENABLED=      # Beer, Lemonade, Pulque
+REDIS_URL=          # Tequila, or REDIS_ENABLED=true
 FIREBASE_SERVICE_ACCOUNT_JSON=
 ```
 
+### Tooling, the same in every game
+
+- Backend: the `[tool.black]` and `[tool.ruff]` blocks of `pyproject.toml` are identical (88
+  columns, Python 3.11, rules `E F I B UP`). A `noqa` carries its reason.
+- Frontend: `npm test` is `vitest run`, `npm run test:watch` watches, and CI calls `npm test`.
+- The build fails when the entry chunk statically reaches three.js
+  (`<game>:forbid-three-in-entry-graph` in `vite.config.ts`).
+- A 3D model's bytes never change under the same name: `/3dmodels/**` is cached as immutable, so a
+  changed model gets a new file name.
+- `.gitignore` ignores every dotenv file except `.env.example`.
+
 ### Tests **[HARD-WON]**
 
+- **Wait for the work, not for a number of loop turns.** Code that runs in a thread
+  (`asyncio.to_thread`) is not finished after N `sleep(0)`s on a slow CI runner: await the task.
 - **A concurrency test needs a forced suspension point.** Against an in-memory store or
   FakeRedis, a lock test proves nothing unless the critical section yields
   (`await asyncio.sleep(0)`) between read and write. Confirm the test goes red with the lock
@@ -1514,8 +1577,8 @@ The plumbing is the point of this file, and a per-game specification does not ge
 re-decide it. Specifically: the **real-time transport** (Socket.IO — see §2), the identity
 model (verified Firebase ID token or guest id, established at the handshake), the
 authority model (`host_secret` compared with `hmac.compare_digest`), the three identifiers
-(`alias` / `session_token` / `identity`), Redis as the live room store and lock, and the
-deploy shape. Likewise, a user's game history and stats count only the games they
+(`alias` / `session_token` / `identity`), one server-side store and lock for live rooms (see
+"Live state"), and the deploy shape. Likewise, a user's game history and stats count only the games they
 **played**; games they hosted appear only in the profile's separate "Games you hosted" list
 (see "Host records" in §1).
 
@@ -1536,8 +1599,8 @@ be written down in that game's spec rather than silently resolved in code.
       frontend silently never deploys while the backend auto-deploys on push — the worst
       possible split. **[HARD-WON]**
 - [ ] Backend env set on the platform (not only in local `.env`):
-      `FIREBASE_SERVICE_ACCOUNT_JSON`, `CORS_ORIGINS`, `REDIS_URL`, DB vars.
-- [ ] **`REDIS_URL` points at a live instance.** Managed free-tier Redis databases get reclaimed
+      `FIREBASE_SERVICE_ACCOUNT_JSON`, `CORS_ORIGINS`, DB vars, and `REDIS_URL` (Tequila).
+- [ ] **Tequila: `REDIS_URL` points at a live instance.** Managed free-tier Redis databases get reclaimed
       when idle; the hostname then returns `NXDOMAIN` and every room operation fails. All room
       state lives there — this takes the whole game down.
 - [ ] Schema: the Dockerfile CMD runs `alembic upgrade head` before uvicorn, and
