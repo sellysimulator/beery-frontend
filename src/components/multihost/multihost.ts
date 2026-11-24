@@ -42,7 +42,6 @@ export function openHostScreen(roomCode: string): void {
 export function statusLabel(summary: RoomSummary | undefined): string {
   if (!summary) return 'Loading…'
   if (!summary.exists) return 'Expired or not found'
-  if (summary.state === 'ABANDONED') return 'Ended'
   if (summary.finished) return 'Finished'
   if (summary.state === 'PAUSED') return `Paused in week ${summary.week} of ${summary.duration_weeks}`
   if (summary.state === 'RUNNING') return `Week ${summary.week} of ${summary.duration_weeks}`

@@ -60,11 +60,18 @@ export function collectRoutes(modules: Record<string, unknown>): RouteDescriptor
 }
 
 /**
- * Every `route` export found in `src/pages/`, in module-name order.
+ * Every `route` export found in `src/pages/`, in module-name order. The two
+ * screens `shellScreens.ts` loads lazily export no `route` and are left out:
+ * an eager glob over them would put them in the entry chunk.
  *
  * `import.meta.glob` yields `{}` when the directory is empty or absent, so the
  * registry works before any page exists.
  */
 export function discoverRoutes(): RouteDescriptor[] {
-  return collectRoutes(import.meta.glob('../pages/*.tsx', { eager: true }))
+  return collectRoutes(
+    import.meta.glob(
+      ['../pages/*.tsx', '!../pages/GameRoomPlaying.tsx', '!../pages/HostConsole.tsx'],
+      { eager: true },
+    ),
+  )
 }

@@ -5,7 +5,7 @@ import { getHostSecret } from '../../utils/storage'
 import { ROLE_ORDER, type Role, type RoleAssignmentMode } from '../../types/game'
 import ManualLink from '../manual/ManualLink'
 import Select from '../shared/Select'
-import { configPanelScreen } from '../../pages/shellScreens'
+import { ConfigPanelScreen } from '../../pages/shellScreens'
 import InvitePanel from './InvitePanel'
 import { inviteUrl } from './roomCode'
 import ParticipantList from './ParticipantList'
@@ -18,16 +18,11 @@ export interface HostLobbyProps {
 
 const MODES: RoleAssignmentMode[] = ['HOST_ASSIGNS', 'PLAYER_CHOOSES', 'RANDOM']
 
-// Resolved once, at module load: the glob is static, and a component value
-// created during render would remount the panel on every keystroke.
-const ConfigPanel = configPanelScreen()
-
 /**
  * What a host sees while the room is filling up.
  *
  * The configuration panel's fields live in `ConfigPanel`; this screen owns the
- * slot they go in and resolves the panel through the same discovery seam the
- * shells use.
+ * slot they go in and loads the panel on first use, through `shellScreens.ts`.
  *
  * Every privileged emit carries `host_secret` and nothing else. A client-side
  * "I am the host" boolean is a UI hint and is never sent (**D3**).
@@ -145,21 +140,15 @@ export function HostLobby({ roomCode }: HostLobbyProps): ReactElement {
 
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold">Game settings</h2>
-          {ConfigPanel ? (
-            <Suspense
-              fallback={
-                <p className="rounded-lg border border-border px-4 py-6 text-sm text-ink-muted">
-                  Loading the settings panel…
-                </p>
-              }
-            >
-              <ConfigPanel />
-            </Suspense>
-          ) : (
-            <p className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-ink-muted">
-              The settings panel is not available yet. The game will run on its defaults.
-            </p>
-          )}
+          <Suspense
+            fallback={
+              <p className="rounded-lg border border-border px-4 py-6 text-sm text-ink-muted">
+                Loading the settings panel…
+              </p>
+            }
+          >
+            <ConfigPanelScreen />
+          </Suspense>
         </section>
 
         <StartControl blockedReason={blockedReason} onStart={handleStart} />

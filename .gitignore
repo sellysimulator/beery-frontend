@@ -24,4 +24,12 @@ dist-ssr
 *.sw?
 
 .env
+.env.*
+!.env.example
 .firebase/
+
+# Bundled agent skills (.claude/skills links into .agents)
+.agent/
+.agents/
+.claude/skills/
+skills-lock.json

@@ -1,8 +1,9 @@
 /**
- * The results chart's Chart.js registration and its one pure builder.
+ * The one Chart.js registration, and the bullwhip chart's pure builder.
  *
- * Two things live here, and the split is deliberate: a Chart.js canvas is
- * opaque to jsdom, so the configuration the
+ * `registerCharts()` runs once, when this module loads: a chart pulls it in
+ * with a side-effect import. The builder is apart from any component because
+ * a Chart.js canvas is opaque to jsdom, so the configuration the
  * chart is handed has to be assertable without a canvas. `buildBullwhipConfig`
  * returns **exactly** what `BullwhipChart` renders — the component adds
  * nothing to it — which is what lets the chart's tests be
@@ -29,22 +30,46 @@ import {
 import { ROLE_ORDER, type Role } from '../../types/game'
 import { ROLE_LABEL } from '../lobby/roleCopy'
 import { AXIS_COLOUR, DEMAND_COLOUR, GRID_COLOUR, roleStyle, withAlpha } from './chartTheme'
+import { crosshairSync } from './plugins/crosshairSync'
+
+/** Read before anything changes it: `registerCharts` rebuilds from this. */
+const CHARTJS_ANIMATION = ChartJS.defaults.animation
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false
+}
 
 /**
- * Only the controllers, elements, scales and plugins the results charts use.
- * Bars and the log axis serve the ratio bars, `Filler` the net-inventory areas.
+ * Registers only the elements, scales and plugins the game's charts use, and
+ * sets the global defaults. Safe to call again.
  */
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  LogarithmicScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Filler,
-  Tooltip,
-  Legend,
-)
+export function registerCharts(): void {
+  ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    LogarithmicScale,
+    PointElement,
+    LineElement,
+    BarElement,
+    Filler,
+    Tooltip,
+    Legend,
+    crosshairSync,
+  )
+  // The legend is DOM (`Legend.tsx`), so the canvas draws none.
+  ChartJS.defaults.plugins.legend.display = false
+  // A point's hit area is at least 24 px across, whatever its drawn radius.
+  ChartJS.defaults.elements.point.hitRadius = 12
+  // Every key of Chart.js's own animation stays: an object without `type`
+  // leaves colour animations with no interpolator. No chart sets its own
+  // duration, which would animate under reduced motion too.
+  ChartJS.defaults.animation =
+    prefersReducedMotion() || !CHARTJS_ANIMATION ? false : { ...CHARTJS_ANIMATION, duration: 300 }
+}
+
+registerCharts()
 
 /* ─── The one view model ─── */
 
@@ -306,7 +331,6 @@ export function buildBullwhipConfig(
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 300 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },

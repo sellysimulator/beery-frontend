@@ -75,7 +75,6 @@ export function buildNetInventoryConfig(
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 300 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
@@ -137,7 +136,6 @@ export function buildCumulativeCostConfig(view: ResultsView): ChartConfiguration
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 300 },
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: { enabled: true } },
       scales: {
@@ -214,7 +212,6 @@ export function buildBullwhipRatioConfig(
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 300 },
       plugins: { legend: { display: false }, tooltip: { enabled: true } },
       scales: {
         x: {

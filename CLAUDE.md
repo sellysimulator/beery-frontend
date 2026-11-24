@@ -54,7 +54,8 @@ index.html               preconnects to Google's auth hosts; title/description l
 public/                  favicon.svg, icons.svg (sprite), and 3dmodels/
 public/3dmodels/         box/truck/person/money .glb + ATTRIBUTION.txt. CC-BY-4.0, credited
                          in README and in-app; each .glb carries its record in asset.extras
-                         — never strip it. Served by Hosting before rewrites; no road.glb
+                         — never strip it. Cached immutable for a year: never change a
+                         model's bytes, ship it under a new file name. No road.glb
 docs/                    product docs (above)
 src/
   main.tsx               imports ./api/socketHandlers for side effect, THEN mounts:
@@ -75,7 +76,7 @@ src/
   pages/                 one module per route; each exports `route`
   components/
     shared/  lobby/  config/  game/  host/  results/  profile/  manual/  multihost/
-    charts/              chartSetup.ts (results view model + bullwhip builder),
+    charts/              chartSetup.ts (the registration, results view model + bullwhip builder),
                          chartTheme.ts (every canvas colour), ChartBox.tsx, Legend.tsx,
                          plugins/crosshairSync.ts + plugins/CrosshairGroup.tsx
     results/resultsChartsConfig.ts, game/ownHistoryConfig.ts,
@@ -116,8 +117,8 @@ npm run dev            # vite, http://localhost:5173, proxies /api + /socket.io 
 npm run build          # tsc -b (all three TS projects) && vite build -> dist/
 npm run preview        # serve the built bundle
 npm run lint           # eslint .
-npm test               # vitest, watch
-npm run test:run       # vitest run
+npm test               # vitest run, once (what CI runs)
+npm run test:watch     # vitest, watch
 npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
@@ -126,7 +127,7 @@ firebase deploy --only hosting     # manual deploy; CI normally does it
 
 CI (`.github/workflows/firebase-hosting-{merge,pull-request}.yml`) runs, on push to `main`
 and on PRs: `setup-node` from `.nvmrc` → `npm ci` → `npx tsc -b` → `npx eslint .` →
-`npx vitest run` → `npm run build` (with `VITE_*` from repo *variables* and
+`npm test` → `npm run build` (with `VITE_*` from repo *variables* and
 `REQUIRE_BACKEND_ENV: '1'`) → `FirebaseExtended/action-hosting-deploy`.
 
 ## 5. Configuration that matters
@@ -243,10 +244,11 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
    `route: RouteDescriptor | RouteDescriptor[]`; `discoverRoutes()` globs them. Adding a
    screen is adding a file — **never edit `App.tsx`'s route table** (there isn't one).
    Guards compose auth-outside-backend via the descriptor's `guard` field.
-6. **`pages/shellScreens.ts` is a lazy, non-eager glob seam.** `GameRoomPlaying`,
-   `HostConsole` and `ConfigPanel` are resolved by path+name into `React.lazy`, so they are
-   code-split away from the welcome/lobby path. Those three modules therefore export **no**
-   `route` — the registry's glob must not pick them up.
+6. **`pages/shellScreens.ts` holds the three `React.lazy` screens**: `GameRoomPlaying`,
+   `HostConsole` and `ConfigPanel`, loaded on first use from their default exports. Those
+   three modules therefore export **no** `route`, and `discoverRoutes()` excludes the two
+   pages from its eager glob (a new lazy page must be excluded too, or it lands in the entry
+   chunk; the build then warns "dynamically imported by").
 7. **Emits go through `api/games.ts`, REST through `api/rooms.ts` / `users.ts` / `http.ts`.**
    One function per wire event. Authority is always the `host_secret` (socket payload, or
    `X-Host-Secret` header); the store's `isHost` is a UI hint and is never sent. No payload
@@ -329,9 +331,12 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
     path (`roles.RETAILER.initial_inventory`, `bot.beta`) and its `id` is `config-` + the path
     with dots as dashes; a server-rejected field gets `aria-invalid` with its message via
     `aria-describedby`. Tests find fields by these.
-13. **Charts**: Chart.js + react-chartjs-2, registered piecemeal (each chart module
-    registers what it uses; `ChartJS.register` is idempotent). `components/charts/chartSetup.ts`
-    owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
+13. **Charts**: Chart.js + react-chartjs-2, registered once by `registerCharts()` in
+    `components/charts/chartSetup.ts`, which every chart pulls in with a side-effect import.
+    It also sets the global defaults: point `hitRadius` 12 (24 px), canvas legend off, and a
+    300 ms animation that is off under `prefers-reduced-motion`; so no chart sets its own
+    `animation` (`BullwhipTrend`'s is `false`). A new element, scale or plugin is registered
+    there. `chartSetup.ts` also owns the `ResultsView` view model and `buildBullwhipConfig`. Every chart has a **pure
     builder** whose output the component passes straight through: a canvas is opaque to
     jsdom, so the *config object* is what tests assert, and tests never mock `chart.js` or
     `react-chartjs-2`. The kit (the charts themselves are spec §9.8):
@@ -576,9 +581,8 @@ displayed or compared.
 - Without a backend, only `/`, `/player-manual` and `/host-manual` render; everything else
   sits behind `BackendGuard`'s wake-up screen (Render free tier cold-starts in 30–60s).
 - **Test the empty case of a glob against an explicit record.** `import.meta.glob` is
-  expanded at transform time, so the live `discoverRoutes()` and the `shellScreens.ts`
-  resolvers can never be empty once the files exist. Test the empty or missing case through
-  `collectRoutes(record)` / `resolveShellScreen(record, path, name)` with an explicit module
+  expanded at transform time, so the live `discoverRoutes()` can never be empty once the
+  files exist. Test the empty case through `collectRoutes(record)` with an explicit module
   record, never against the live glob (that assertion holds until the file lands, then fails
   for good).
 - **Every numeric input blurs on wheel** (`onWheel={(e) => e.currentTarget.blur()}`): Chrome

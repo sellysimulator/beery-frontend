@@ -1,5 +1,5 @@
 /**
- * The host demand curve's Chart.js registration and its one pure builder.
+ * The host demand curve's one pure builder.
  *
  * A Chart.js canvas is opaque to jsdom, so the configuration the chart is
  * handed has to be assertable without one. `buildDemandCurveConfig` returns
@@ -7,22 +7,9 @@
  * through and adds nothing — which is what lets the chart's tests
  * be checked against an object rather than against a mocked library.
  *
- * Registration lives here as well as in the results charts' `chartSetup.ts`;
- * `ChartJS.register` is idempotent, so registering twice is harmless.
+ * The Chart.js registration comes with the `chartSetup.ts` import below.
  */
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Tooltip,
-  type ChartConfiguration,
-  type ChartDataset,
-  type ChartType,
-  type Plugin,
-} from 'chart.js'
+import type { ChartConfiguration, ChartDataset, ChartType, Plugin } from 'chart.js'
 import { ROLE_ORDER, type Role } from '../../types/game'
 import {
   AXIS_COLOUR,
@@ -41,9 +28,6 @@ declare module 'chart.js' {
     __currentWeekBandType?: TType
   }
 }
-
-/** Only the controllers, elements, scales and plugins this chart uses. */
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
 /** The one dataset's label, shared with the chart's hidden table. */
 export const DEMAND_CURVE_LABEL = 'True customer demand'
@@ -208,7 +192,6 @@ export function buildDemandCurveConfig(
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 300 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },

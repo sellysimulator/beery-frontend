@@ -413,11 +413,9 @@ const ROLE_ASSIGNMENT_MODE_MEMBERS: Record<RoleAssignmentMode, true> = {
 const ROOM_STATE_MEMBERS: Record<RoomState, true> = {
   LOBBY: true,
   CONFIGURING: true,
-  READY: true,
   RUNNING: true,
   PAUSED: true,
   FINISHED: true,
-  ABANDONED: true,
 };
 
 const DEMAND_KIND_MEMBERS: Record<DemandKind, true> = {
@@ -439,11 +437,7 @@ describe('the frozen string unions of src/types/game.ts', () => {
   const cases: Array<[string, Record<string, true>, string[]]> = [
     ['Role', ROLE_MEMBERS, ['RETAILER', 'WHOLESALER', 'DISTRIBUTOR', 'FACTORY']],
     ['RoleAssignmentMode', ROLE_ASSIGNMENT_MODE_MEMBERS, ['HOST_ASSIGNS', 'PLAYER_CHOOSES', 'RANDOM']],
-    [
-      'RoomState',
-      ROOM_STATE_MEMBERS,
-      ['LOBBY', 'CONFIGURING', 'READY', 'RUNNING', 'PAUSED', 'FINISHED', 'ABANDONED'],
-    ],
+    ['RoomState', ROOM_STATE_MEMBERS, ['LOBBY', 'CONFIGURING', 'RUNNING', 'PAUSED', 'FINISHED']],
     ['DemandKind', DEMAND_KIND_MEMBERS, ['CONSTANT', 'STEP', 'RAMP', 'SEASONAL', 'STOCHASTIC', 'CUSTOM']],
     ['Distribution', DISTRIBUTION_MEMBERS, ['NORMAL', 'POISSON', 'UNIFORM']],
   ];
@@ -454,10 +448,9 @@ describe('the frozen string unions of src/types/game.ts', () => {
     });
   }
 
-  it('names the two members a port from the Tequila enums gets wrong', () => {
-    // The room lifecycle ends in ABANDONED, and the sixth demand generator is
-    // STOCHASTIC — not RANDOM, which is a RoleAssignmentMode member instead.
-    expect(Object.keys(ROOM_STATE_MEMBERS)).toContain('ABANDONED');
+  it('names the member a port from the Tequila enums gets wrong', () => {
+    // The sixth demand generator is STOCHASTIC — not RANDOM, which is a
+    // RoleAssignmentMode member instead.
     expect(Object.keys(DEMAND_KIND_MEMBERS)).toContain('STOCHASTIC');
     expect(Object.keys(DEMAND_KIND_MEMBERS)).not.toContain('RANDOM');
     expect(Object.keys(ROLE_ASSIGNMENT_MODE_MEMBERS)).toContain('RANDOM');

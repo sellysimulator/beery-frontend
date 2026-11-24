@@ -1,24 +1,10 @@
 import { useMemo, type ReactElement } from 'react'
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  LineElement,
-  LogarithmicScale,
-  PointElement,
-  Tooltip,
-} from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import type { MatchSummary } from '../../api/users'
 import ChartBox from '../charts/ChartBox'
+import '../charts/chartSetup'
 import { ROLE_LABEL } from '../lobby/roleCopy'
 import { buildBullwhipTrendConfig, selectTrendGames } from './bullwhipTrendConfig'
-
-/**
- * Registered here, not borrowed from `chartSetup.ts`: that file is edited by
- * another package in the same wave, and this chart needs a logarithmic scale
- * which it does not register.
- */
-ChartJS.register(CategoryScale, LogarithmicScale, PointElement, LineElement, Tooltip)
 
 export interface BullwhipTrendProps {
   matches: readonly MatchSummary[]

@@ -286,7 +286,7 @@ describe('lobby appliers', () => {
 
   it('applyLobbyUpdate flips canStart, and the reason is null exactly when it is true', () => {
     const base = {
-      state: 'READY' as const,
+      state: 'CONFIGURING' as const,
       host_display_name: 'Host',
       participants: [],
       role_to_alias: { RETAILER: 'P1', WHOLESALER: 'P2', DISTRIBUTOR: 'P3', FACTORY: 'P4' },
@@ -689,7 +689,7 @@ describe('identity and lifecycle actions', () => {
     useGameStore.getState().applyJoinError({ message: 'Not the host.' });
     useGameStore.getState().applyLobbyUpdate({
       seq: 10,
-      state: 'READY',
+      state: 'CONFIGURING',
       host_display_name: 'Host',
       participants: [],
       role_to_alias: { RETAILER: 'P1', WHOLESALER: 'P2', DISTRIBUTOR: 'P3', FACTORY: 'P4' },

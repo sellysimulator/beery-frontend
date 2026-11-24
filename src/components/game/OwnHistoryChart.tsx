@@ -1,20 +1,11 @@
 import type { ReactElement } from 'react'
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Tooltip,
-} from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import type { WeekRecord } from '../../types/game'
 import ChartBox from '../charts/ChartBox'
+import '../charts/chartSetup'
 import Legend, { type LegendItem } from '../charts/Legend'
 import { QUANTITY_COLOUR } from '../charts/chartTheme'
 import { CrosshairGroup, useCrosshairGroup } from '../charts/plugins/CrosshairGroup'
-import '../charts/plugins/crosshairSync'
 import {
   BACKLOG_LABEL,
   ON_HAND_LABEL,
@@ -24,8 +15,6 @@ import {
   buildOwnOrdersConfig,
   buildOwnStockConfig,
 } from './ownHistoryConfig'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip)
 
 export interface OwnHistoryChartProps {
   /** `your_state.own_history` — this player's own weeks, and nobody else's. */

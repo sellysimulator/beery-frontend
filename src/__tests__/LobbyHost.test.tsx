@@ -24,7 +24,6 @@ import { getHostSecret, setHostSecret, setHostRoom } from '../utils/storage';
 import type { Role } from '../types/game';
 import type { RouteDescriptor } from '../routes/registry';
 import * as HostRoomModule from '../pages/HostRoom';
-import { configPanelScreen, hostConsoleScreen, resolveShellScreen } from '../pages/shellScreens';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -215,7 +214,7 @@ function lobbyUpdate(overrides: Record<string, unknown> = {}): Record<string, un
 
 function startable(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return lobbyUpdate({
-    state: 'READY',
+    state: 'CONFIGURING',
     role_to_alias: { ...ALL_ROLES },
     participants: FOUR_PLAYERS,
     can_start: true,
@@ -392,12 +391,14 @@ async function placeInRole(user: ReturnType<typeof userEvent.setup>, displayName
 
 const RECOVERY = /isn.?t the host of that room/i;
 const IN_FLIGHT = /reconnecting as host/i;
-const SHELL_PLACEHOLDER = 'This screen is not available yet.';
 
 /** The Suspense fallbacks the shells show while a lazily fetched screen arrives. */
 const CONSOLE_LOADING = 'Loading the host console';
 const PANEL_LOADING = 'Loading the settings panel';
-const CONFIG_PLACEHOLDER = 'The settings panel is not available yet.';
+
+/** What each loaded screen itself shows with nothing in the store. */
+const CONSOLE_WAITING = "Waiting for the room's state";
+const PANEL_OWN_TEXT = /Loading the current settings|Could not load/;
 
 beforeAll(async () => {
   await import('../api/socket');
@@ -1067,44 +1068,17 @@ describe('the host participant list badges bots', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Three resolvers, two distinct placeholders
+// The screens the host shell loads on first use
 // ---------------------------------------------------------------------------
 
-describe('the host shell resolves the host console by discovery', () => {
-  const CONSOLE = './HostConsole.tsx';
-
-  it('resolves an absent console to null rather than a compile error', () => {
-    // Asserted against an explicit module record, never against the live
-    // `hostConsoleScreen()`: `import.meta.glob` is expanded at transform time,
-    // so with the console's file in the tree the live resolver can never
-    // return null. The record maps a path to the module's LOADER, because the
-    // console is fetched on first use rather than shipped in the initial
-    // bundle; "is it built?" is still answered synchronously, from whether a
-    // loader is there at all.
-    expect(resolveShellScreen({}, CONSOLE, 'HostConsole')).toBeNull();
-    expect(resolveShellScreen({ [CONSOLE]: undefined }, CONSOLE, 'HostConsole')).toBeNull();
-  });
-
-  it('renders the resolved console once the room is RUNNING, not the placeholder', async () => {
-    // `not.toBeNull()` rather than `toBeTypeOf('function')`: the console is
-    // fetched on first use, and `React.lazy` hands back an exotic component
-    // object rather than a function. What the shell needs to know is only
-    // whether the console is there at all.
-    expect(hostConsoleScreen()).not.toBeNull();
-
+describe('the host shell loads the host console', () => {
+  it('renders the console once the room is RUNNING', async () => {
     armedTab();
-    act(() => {
-      useGameStore.setState({ roomState: 'RUNNING' });
-    });
-
     renderHostRoom();
+    settleClaim(lobbyUpdate({ state: 'RUNNING' }));
 
-    // The fetch means the shell shows its Suspense fallback first, so waiting
-    // for that to go is what makes the assertion below about the real console
-    // rather than about the fallback standing in for it.
-    await waitFor(() => expect(bodyText()).not.toContain(CONSOLE_LOADING));
-
-    expect(bodyText()).not.toContain(SHELL_PLACEHOLDER);
+    // The console's own first screen, with no `host_state` in the store yet.
+    expect(await screen.findByText(CONSOLE_WAITING)).toBeInTheDocument();
   });
 
   it('still claims the room in a state it cannot yet render', () => {
@@ -1119,48 +1093,34 @@ describe('the host shell resolves the host console by discovery', () => {
     expect(emitsOf('join')).toHaveLength(0);
   });
 
-  it('renders the host lobby, not the shell placeholder, before the game starts', () => {
+  it('renders the host lobby, not the console, before the game starts', () => {
     armedTab();
     renderHostRoom();
     settleClaim(lobbyUpdate({ state: 'CONFIGURING' }));
 
-    expect(bodyText()).not.toContain(SHELL_PLACEHOLDER);
+    expect(bodyText()).toContain('Setting up your game');
+    expect(bodyText()).not.toContain(CONSOLE_LOADING);
   });
 });
 
-describe('the host lobby resolves the config panel by discovery too', () => {
-  const PANEL = '../components/config/ConfigPanel.tsx';
-
-  it('resolves an absent panel to null rather than a compile error', () => {
-    // The settings panel had the same static-import problem as the two shells,
-    // so the host lobby resolves it too. Asserted against an explicit loader
-    // record, because the live glob can never yield null while the panel's
-    // file is in the tree.
-    expect(resolveShellScreen({}, PANEL, 'ConfigPanel')).toBeNull();
-    expect(resolveShellScreen({ [PANEL]: undefined }, PANEL, 'ConfigPanel')).toBeNull();
-  });
-
-  it('renders the resolved panel in the lobby, not its placeholder', async () => {
-    expect(configPanelScreen()).not.toBeNull();
-
+describe('the host lobby loads the config panel', () => {
+  it('renders the panel in the lobby', async () => {
     armedTab();
     renderHostRoom();
     settleClaim();
 
-    await waitFor(() => expect(bodyText()).not.toContain(PANEL_LOADING));
-
-    expect(bodyText()).not.toContain(CONFIG_PLACEHOLDER);
-    expect(bodyText()).not.toContain(SHELL_PLACEHOLDER);
+    // Whatever the panel itself shows (here its own loading line, with no
+    // config in the store), in place of the Suspense fallback.
+    expect(await screen.findByText(PANEL_OWN_TEXT)).toBeInTheDocument();
+    expect(bodyText()).not.toContain(PANEL_LOADING);
   });
 
   it('does not render the settings panel once the game is running', () => {
     armedTab();
-    act(() => {
-      useGameStore.setState({ roomState: 'RUNNING' });
-    });
-
     renderHostRoom();
+    settleClaim(lobbyUpdate({ state: 'RUNNING' }));
 
-    expect(bodyText()).not.toContain(CONFIG_PLACEHOLDER);
+    expect(bodyText()).not.toContain(PANEL_LOADING);
+    expect(bodyText()).not.toContain('Game settings');
   });
 });

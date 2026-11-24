@@ -21,7 +21,7 @@
  *  - The store is the real one, and is read through its public appliers only.
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { StrictMode, Suspense } from 'react';
+import { StrictMode } from 'react';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -31,7 +31,6 @@ import { getDisplayName, getSessionToken, setDisplayName, setSessionToken } from
 import type { GameConfig, Role } from '../types/game';
 import type { RouteDescriptor } from '../routes/registry';
 import * as GameRoomModule from '../pages/GameRoom';
-import { playingScreen, resolveShellScreen } from '../pages/shellScreens';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -843,89 +842,18 @@ describe('the claim is never optimistic', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The shellScreens seam, with the playing screen absent
+// The playing screen, loaded on first use
 // ---------------------------------------------------------------------------
 
-describe('the player shell resolves the playing screen by discovery', () => {
-  const PLAYING = './GameRoomPlaying.tsx';
-
-  it('resolves an absent screen to null rather than a compile error', () => {
-    // The analogue of an empty route registry, and asserted the same
-    // way: against an explicit loader record, never the live glob. The glob is
-    // expanded at transform time, so once the playing screen's file exists
-    // `playingScreen()` can never return null again -- an assertion against it
-    // would be false forever after.
-    expect(resolveShellScreen({}, PLAYING, 'GameRoomPlaying')).toBeNull();
-  });
-
-  it('treats an entry that is not a loader as absent, without importing anything', () => {
-    // The record maps a path to the module's LOADER, because the screen is
-    // fetched on first use rather than shipped in the initial bundle. "Is the
-    // section built?" is still answered synchronously -- no key, or a key
-    // holding something uncallable, is absent -- so the shell still gets its
-    // `null` before it renders anything.
-    expect(resolveShellScreen({ [PLAYING]: undefined }, PLAYING, 'GameRoomPlaying')).toBeNull();
-    expect(
-      resolveShellScreen(
-        { [PLAYING]: 'not a loader' as unknown as () => Promise<Record<string, unknown>> },
-        PLAYING,
-        'GameRoomPlaying',
-      ),
-    ).toBeNull();
-  });
-
-  it('prefers the named export and falls back to the default', async () => {
-    const Named = () => <div data-testid="from-named" />;
-    const Fallback = () => <div data-testid="from-default" />;
-
-    // Both shapes in one tree: the first proves the named export wins over a
-    // default sitting beside it, the second that a module with only a default
-    // still resolves. Asserted by rendering, because `lazy()` keeps the
-    // resolved component behind its own payload and there is nothing to
-    // compare with `toBe`.
-    const Preferred = resolveShellScreen(
-      { [PLAYING]: async () => ({ GameRoomPlaying: Named, default: Fallback }) },
-      PLAYING,
-      'GameRoomPlaying',
-    )!;
-    const OnlyDefault = resolveShellScreen(
-      { [PLAYING]: async () => ({ default: Fallback }) },
-      PLAYING,
-      'GameRoomPlaying',
-    )!;
-
-    expect(Preferred).not.toBeNull();
-    expect(OnlyDefault).not.toBeNull();
-
-    render(
-      <Suspense fallback={null}>
-        <Preferred />
-        <OnlyDefault />
-      </Suspense>,
-    );
-
-    expect(await screen.findByTestId('from-named')).toBeInTheDocument();
-    expect(await screen.findByTestId('from-default')).toBeInTheDocument();
-  });
-
-  it('renders the delegated screen, not the placeholder, once the room is RUNNING', async () => {
-    // `not.toBeNull()` rather than `toBeTypeOf('function')`: the playing screen
-    // is fetched on first use, and `React.lazy` hands back an exotic component
-    // object rather than a function. Whether the playing screen exists at all is still
-    // decided synchronously, which is all the shell asks.
-    expect(playingScreen()).not.toBeNull();
-
-    act(() => {
-      useGameStore.setState({ roomState: 'RUNNING' });
-    });
-
+describe('the player shell loads the playing screen', () => {
+  it('renders the playing screen once the room is RUNNING', async () => {
     renderPlayerRoom();
+    dispatch('lobby_update', lobbyUpdate({ state: 'RUNNING' }));
 
-    // Waiting out the Suspense fallback is what keeps the assertion below about
-    // the real screen rather than about the fallback standing in for it.
-    await waitFor(() => expect(bodyText()).not.toContain('Loading the game screen'));
-
-    expect(bodyText()).not.toMatch(/This screen is not available yet/i);
+    // The screen's own first view, with no position in the store yet.
+    expect(
+      await screen.findByText('Waiting for the server to send your position'),
+    ).toBeInTheDocument();
   });
 
   it('still joins the room in a state it cannot yet render', () => {
@@ -939,11 +867,11 @@ describe('the player shell resolves the playing screen by discovery', () => {
     expect(emitsOf('join')).toHaveLength(1);
   });
 
-  it('renders the lobby, not the placeholder, while the room has not started', () => {
+  it('renders the lobby, not the playing screen, while the room has not started', () => {
     renderPlayerRoom();
     dispatch('lobby_update', lobbyUpdate({ state: 'CONFIGURING' }));
 
-    expect(bodyText()).not.toMatch(/This screen is not available yet/i);
+    expect(bodyText()).not.toContain('Loading the game screen');
     expect(bodyText()).toContain(ROOM);
   });
 });

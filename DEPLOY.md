@@ -21,7 +21,7 @@ backend host in production, e.g. `https://beery-backend.onrender.com` --
 `.github/workflows/firebase-hosting-merge.yml` (push to `main`) and
 `firebase-hosting-pull-request.yml` (PRs, preview channel) run, in order:
 `actions/setup-node` (reading `.nvmrc`), `npm ci`, `tsc -b`, `eslint .`,
-`vitest run`, `npm run build`, then the owner-created
+`npm test`, `npm run build`, then the owner-created
 `FirebaseExtended/action-hosting-deploy` step.
 
 `firebase.json` declares `public: "dist"` and a catch-all SPA rewrite to

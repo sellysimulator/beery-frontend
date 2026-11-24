@@ -329,7 +329,6 @@ describe('statusLabel', () => {
       'Paused in week 3 of 20',
     );
     expect(statusLabel(summary('x', { state: 'FINISHED', finished: true }))).toBe('Finished');
-    expect(statusLabel(summary('x', { state: 'ABANDONED', finished: true }))).toBe('Ended');
   });
 });
 

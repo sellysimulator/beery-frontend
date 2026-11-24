@@ -46,8 +46,8 @@ The dev server proxies `/api` and `/socket.io` to `http://localhost:8080`, so st
 npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
-npm test                # vitest, watch mode
-npm run test:run        # vitest run
+npm test                # vitest run, once (what CI runs)
+npm run test:watch      # vitest, watch mode
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
@@ -76,10 +76,10 @@ week-by-week decision panel, the host console, the results screen with its chart
 export anyone viewing it can download (once per format per browser session), and the player profile
 with match history.
 
-The two game shells and the configuration panel resolve their screens through
-`pages/shellScreens.ts` rather than importing them directly. That seam is the code-split
-boundary that keeps Chart.js, react-hook-form and Zod off the welcome and lobby path. The screens are lazy,
-so they are fetched on the first render that actually shows one.
+The two game shells and the host lobby load the playing screen, the host console and the
+configuration panel through `pages/shellScreens.ts` (`React.lazy`), so each is fetched on the first
+render that shows it. `routes/registry.ts` leaves the two pages out of its eager glob. Chart.js and
+the form libraries still load up front: the results and multi-game pages use them eagerly.
 
 Without a backend, `/`, `/player-manual` and `/host-manual` still render — they need neither auth
 nor the API. `/results/:publicId` and `/join/:roomCode` are also unguarded, but they have nothing
@@ -138,7 +138,7 @@ src/
 │   ├── MultiHostSetupPage (/multihost/new)  MultiHostDashboard (/multihost)
 │   ├── GameRoomPlaying  HostConsole  ResultsPage  ProfilePage
 │   ├── PlayerManualPage  HostManualPage
-│   └── shellScreens.ts         lazy seam; the three screens it resolves export no `route`
+│   └── shellScreens.ts         the three `lazy()` screens, which export no `route`
 ├── components/
 │   ├── shared/                 LoadingSpinner, Tooltip, AlertContainer, BackendWakeUp,
 │   │                           Avatar, ErrorBoundary, NotFound, ScreenLoading,
@@ -232,7 +232,8 @@ before the server has answered.
 
 ## Third-party 3D assets
 
-The 3D board loads four models from `public/3dmodels/`. All four are **CC-BY-4.0**
+The 3D board loads four models from `public/3dmodels/`, served with a one-year immutable
+cache: never change a model's bytes in place, give a changed model a new file name. All four are **CC-BY-4.0**
 (<https://creativecommons.org/licenses/by/4.0/>), which is an *attribution* licence: shipping
 the meshes without visible credit is a licence breach, not a polish item. The credits are
 reachable in the running app behind the 3D board's "3D model credits" disclosure, and the same
