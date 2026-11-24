@@ -214,7 +214,7 @@ function lobbyUpdate(overrides: Record<string, unknown> = {}): Record<string, un
 
 function startable(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return lobbyUpdate({
-    state: 'READY',
+    state: 'CONFIGURING',
     role_to_alias: { ...ALL_ROLES },
     participants: FOUR_PLAYERS,
     can_start: true,

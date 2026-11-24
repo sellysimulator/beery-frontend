@@ -29,11 +29,9 @@ export type RoleAssignmentMode = 'HOST_ASSIGNS' | 'PLAYER_CHOOSES' | 'RANDOM'
 export type RoomState =
   | 'LOBBY'
   | 'CONFIGURING'
-  | 'READY'
   | 'RUNNING'
   | 'PAUSED'
   | 'FINISHED'
-  | 'ABANDONED'
 
 export type DemandKind = 'CONSTANT' | 'STEP' | 'RAMP' | 'SEASONAL' | 'STOCHASTIC' | 'CUSTOM'
 
@@ -539,7 +537,7 @@ export interface RoomSummaryRequest {
  * One room on the multi-game dashboard. `exists: false`, with every other
  * field null, means the room is gone or the secret is wrong — the server does
  * not say which. `week` is the open week and is null before the game starts;
- * `finished` is true once the room is FINISHED or ABANDONED. `can_start` and
+ * `finished` is true once the room is FINISHED. `can_start` and
  * `start_blocked_reason` are the server's `RoomService.can_start`, the rule
  * `start_game` applies.
  */

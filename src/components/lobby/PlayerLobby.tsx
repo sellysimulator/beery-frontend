@@ -32,7 +32,6 @@ export function PlayerLobby({ roomCode }: PlayerLobbyProps): ReactElement {
   const roleAssignmentMode = useGameStore((state) => state.roleAssignmentMode)
   const myAlias = useGameStore((state) => state.myAlias)
   const myRole = useGameStore((state) => state.myRole)
-  const roomState = useGameStore((state) => state.roomState)
   // `join_error` is read from the store, not from a listener of this screen's
   // own: the store is the single reader of the wire.
   const joinError = useGameStore((state) => state.joinError)
@@ -72,11 +71,7 @@ export function PlayerLobby({ roomCode }: PlayerLobbyProps): ReactElement {
         </header>
 
         <WaitingNotice
-          title={
-            roomState === 'READY'
-              ? `${host} is about to start the game.`
-              : `${host} is setting up the game.`
-          }
+          title={`${host} is setting up the game.`}
           detail="You will not see the settings — that is deliberate. The game starts on the host's signal, and your screen changes by itself."
         />
 
