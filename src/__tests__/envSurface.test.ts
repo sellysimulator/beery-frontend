@@ -88,7 +88,7 @@ describe('CI can build the frontend', () => {
       'npm ci',
       'tsc -b',
       'eslint .',
-      'vitest run',
+      'npm test',
       'npm run build',
     ])
   })
@@ -100,7 +100,7 @@ describe('CI can build the frontend', () => {
       'npm ci',
       'tsc -b',
       'eslint .',
-      'vitest run',
+      'npm test',
       'npm run build',
     ])
   })

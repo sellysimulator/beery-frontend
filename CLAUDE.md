@@ -116,8 +116,8 @@ npm run dev            # vite, http://localhost:5173, proxies /api + /socket.io 
 npm run build          # tsc -b (all three TS projects) && vite build -> dist/
 npm run preview        # serve the built bundle
 npm run lint           # eslint .
-npm test               # vitest, watch
-npm run test:run       # vitest run
+npm test               # vitest run, once (what CI runs)
+npm run test:watch     # vitest, watch
 npx tsc -b             # typecheck only (what CI runs)
 firebase deploy --only hosting     # manual deploy; CI normally does it
 ```
@@ -126,7 +126,7 @@ firebase deploy --only hosting     # manual deploy; CI normally does it
 
 CI (`.github/workflows/firebase-hosting-{merge,pull-request}.yml`) runs, on push to `main`
 and on PRs: `setup-node` from `.nvmrc` → `npm ci` → `npx tsc -b` → `npx eslint .` →
-`npx vitest run` → `npm run build` (with `VITE_*` from repo *variables* and
+`npm test` → `npm run build` (with `VITE_*` from repo *variables* and
 `REQUIRE_BACKEND_ENV: '1'`) → `FirebaseExtended/action-hosting-deploy`.
 
 ## 5. Configuration that matters

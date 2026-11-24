@@ -46,8 +46,8 @@ The dev server proxies `/api` and `/socket.io` to `http://localhost:8080`, so st
 npm run build           # tsc -b && vite build -> dist/
 npm run preview         # serve the built bundle
 npm run lint            # eslint .
-npm test                # vitest, watch mode
-npm run test:run        # vitest run
+npm test                # vitest run, once (what CI runs)
+npm run test:watch      # vitest, watch mode
 npx tsc -b              # typecheck only, which is what CI runs first
 ```
 
