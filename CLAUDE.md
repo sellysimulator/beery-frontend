@@ -243,10 +243,9 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
    `route: RouteDescriptor | RouteDescriptor[]`; `discoverRoutes()` globs them. Adding a
    screen is adding a file — **never edit `App.tsx`'s route table** (there isn't one).
    Guards compose auth-outside-backend via the descriptor's `guard` field.
-6. **`pages/shellScreens.ts` is a lazy, non-eager glob seam.** `GameRoomPlaying`,
-   `HostConsole` and `ConfigPanel` are resolved by path+name into `React.lazy`, so they are
-   code-split away from the welcome/lobby path. Those three modules therefore export **no**
-   `route` — the registry's glob must not pick them up.
+6. **`pages/shellScreens.ts` holds the three `React.lazy` screens**: `GameRoomPlaying`,
+   `HostConsole` and `ConfigPanel`, loaded on first use from their default exports. Those
+   three modules therefore export **no** `route` — the registry must not pick them up.
 7. **Emits go through `api/games.ts`, REST through `api/rooms.ts` / `users.ts` / `http.ts`.**
    One function per wire event. Authority is always the `host_secret` (socket payload, or
    `X-Host-Secret` header); the store's `isHost` is a UI hint and is never sent. No payload
@@ -576,9 +575,8 @@ displayed or compared.
 - Without a backend, only `/`, `/player-manual` and `/host-manual` render; everything else
   sits behind `BackendGuard`'s wake-up screen (Render free tier cold-starts in 30–60s).
 - **Test the empty case of a glob against an explicit record.** `import.meta.glob` is
-  expanded at transform time, so the live `discoverRoutes()` and the `shellScreens.ts`
-  resolvers can never be empty once the files exist. Test the empty or missing case through
-  `collectRoutes(record)` / `resolveShellScreen(record, path, name)` with an explicit module
+  expanded at transform time, so the live `discoverRoutes()` can never be empty once the
+  files exist. Test the empty case through `collectRoutes(record)` with an explicit module
   record, never against the live glob (that assertion holds until the file lands, then fails
   for good).
 - **Every numeric input blurs on wheel** (`onWheel={(e) => e.currentTarget.blur()}`): Chrome

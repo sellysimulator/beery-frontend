@@ -76,8 +76,8 @@ week-by-week decision panel, the host console, the results screen with its chart
 export anyone viewing it can download (once per format per browser session), and the player profile
 with match history.
 
-The two game shells and the configuration panel resolve their screens through
-`pages/shellScreens.ts` rather than importing them directly. That seam is the code-split
+The two game shells and the host lobby load the playing screen, the host console and the
+configuration panel through `pages/shellScreens.ts` (`React.lazy`). That is the code-split
 boundary that keeps Chart.js, react-hook-form and Zod off the welcome and lobby path. The screens are lazy,
 so they are fetched on the first render that actually shows one.
 
@@ -138,7 +138,7 @@ src/
 │   ├── MultiHostSetupPage (/multihost/new)  MultiHostDashboard (/multihost)
 │   ├── GameRoomPlaying  HostConsole  ResultsPage  ProfilePage
 │   ├── PlayerManualPage  HostManualPage
-│   └── shellScreens.ts         lazy seam; the three screens it resolves export no `route`
+│   └── shellScreens.ts         the three `lazy()` screens, which export no `route`
 ├── components/
 │   ├── shared/                 LoadingSpinner, Tooltip, AlertContainer, BackendWakeUp,
 │   │                           Avatar, ErrorBoundary, NotFound, ScreenLoading,

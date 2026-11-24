@@ -4,19 +4,15 @@ import { joinWaiting } from '../api/games'
 import { useGameStore } from '../store/gameStore'
 import { getHostSecret } from '../utils/storage'
 import HostLobby from '../components/lobby/HostLobby'
-import ScreenUnavailable from '../components/lobby/ScreenUnavailable'
 import WaitingNotice from '../components/lobby/WaitingNotice'
 import NotFound from '../components/shared/NotFound'
 import ReconnectingNotice from '../components/shared/ReconnectingNotice'
 import ScreenLoading from '../components/shared/ScreenLoading'
 import type { RoomState } from '../types/game'
 import type { RouteDescriptor } from '../routes/registry'
-import { hostConsoleScreen } from './shellScreens'
+import { ConsoleScreen } from './shellScreens'
 
 const STARTED: RoomState[] = ['RUNNING', 'PAUSED', 'FINISHED']
-
-/** Resolved once, at module load; `null` while `HostConsole.tsx` is absent. */
-const ConsoleScreen = hostConsoleScreen()
 
 /** Shown only after the server has actually refused the claim. */
 function HostRecovery({ message }: { message: string }): ReactElement {
@@ -99,7 +95,6 @@ export function HostRoom(): ReactElement {
   }
 
   if (STARTED.includes(roomState as RoomState)) {
-    if (!ConsoleScreen) return <ScreenUnavailable />
     return (
       <Suspense fallback={<ScreenLoading label="Loading the host console" />}>
         <ConsoleScreen />

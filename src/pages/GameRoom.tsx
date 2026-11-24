@@ -6,19 +6,15 @@ import { getDisplayName, getSessionToken, setDisplayName } from '../utils/storag
 import ManualLink from '../components/manual/ManualLink'
 import NameForm from '../components/lobby/NameForm'
 import PlayerLobby from '../components/lobby/PlayerLobby'
-import ScreenUnavailable from '../components/lobby/ScreenUnavailable'
 import NotFound from '../components/shared/NotFound'
 import ReconnectingNotice from '../components/shared/ReconnectingNotice'
 import ScreenLoading from '../components/shared/ScreenLoading'
 import type { JoinEmit, RoomState } from '../types/game'
 import type { RouteDescriptor } from '../routes/registry'
-import { playingScreen } from './shellScreens'
+import { PlayingScreen } from './shellScreens'
 
 /** Room states in which the game has started and the play screen takes over. */
 const STARTED: RoomState[] = ['RUNNING', 'PAUSED', 'FINISHED']
-
-/** Resolved once, at module load; `null` while `GameRoomPlaying.tsx` is absent. */
-const PlayingScreen = playingScreen()
 
 /**
  * The player's shell.
@@ -120,7 +116,6 @@ export function GameRoom(): ReactElement {
   }
 
   if (STARTED.includes(roomState as RoomState)) {
-    if (!PlayingScreen) return <ScreenUnavailable />
     return (
       <Suspense fallback={<ScreenLoading label="Loading the game screen" />}>
         <PlayingScreen />

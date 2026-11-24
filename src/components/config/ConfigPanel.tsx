@@ -13,7 +13,7 @@ import { useConfigSave } from './useConfigSave'
  * game.
  *
  * It takes no props and reads the store directly, like every screen. The host
- * lobby resolves this module by path and name through `shellScreens.ts`.
+ * lobby loads this module's default export through `shellScreens.ts`.
  *
  * Three rules shape everything below:
  *
