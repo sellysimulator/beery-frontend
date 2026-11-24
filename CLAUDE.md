@@ -54,7 +54,8 @@ index.html               preconnects to Google's auth hosts; title/description l
 public/                  favicon.svg, icons.svg (sprite), and 3dmodels/
 public/3dmodels/         box/truck/person/money .glb + ATTRIBUTION.txt. CC-BY-4.0, credited
                          in README and in-app; each .glb carries its record in asset.extras
-                         — never strip it. Served by Hosting before rewrites; no road.glb
+                         — never strip it. Cached immutable for a year: never change a
+                         model's bytes, ship it under a new file name. No road.glb
 docs/                    product docs (above)
 src/
   main.tsx               imports ./api/socketHandlers for side effect, THEN mounts:

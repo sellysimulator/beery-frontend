@@ -232,7 +232,8 @@ before the server has answered.
 
 ## Third-party 3D assets
 
-The 3D board loads four models from `public/3dmodels/`. All four are **CC-BY-4.0**
+The 3D board loads four models from `public/3dmodels/`, served with a one-year immutable
+cache: never change a model's bytes in place, give a changed model a new file name. All four are **CC-BY-4.0**
 (<https://creativecommons.org/licenses/by/4.0/>), which is an *attribution* licence: shipping
 the meshes without visible credit is a licence breach, not a polish item. The credits are
 reachable in the running app behind the 3D board's "3D model credits" disclosure, and the same
