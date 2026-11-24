@@ -246,7 +246,9 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
    Guards compose auth-outside-backend via the descriptor's `guard` field.
 6. **`pages/shellScreens.ts` holds the three `React.lazy` screens**: `GameRoomPlaying`,
    `HostConsole` and `ConfigPanel`, loaded on first use from their default exports. Those
-   three modules therefore export **no** `route` — the registry must not pick them up.
+   three modules therefore export **no** `route`, and `discoverRoutes()` excludes the two
+   pages from its eager glob (a new lazy page must be excluded too, or it lands in the entry
+   chunk; the build then warns "dynamically imported by").
 7. **Emits go through `api/games.ts`, REST through `api/rooms.ts` / `users.ts` / `http.ts`.**
    One function per wire event. Authority is always the `host_secret` (socket payload, or
    `X-Host-Secret` header); the store's `isHost` is a UI hint and is never sent. No payload

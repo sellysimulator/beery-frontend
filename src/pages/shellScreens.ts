@@ -2,9 +2,9 @@
  * The three heavy screens the shells and the host lobby delegate to, each
  * fetched on the first render that shows it.
  *
- * The host console and the playing screen draw Chart.js canvases and the
- * configuration panel pulls in `react-hook-form` and `zod`. None of it is
- * needed to render the welcome screen or a lobby, where every session starts.
+ * None of them is needed to render the welcome screen or a lobby, where every
+ * session starts. `routes/registry.ts` leaves the two pages out of its eager
+ * glob, which would otherwise put them in the entry chunk.
  *
  * The values are module constants: a `lazy()` created during render would
  * remount its screen on every render.

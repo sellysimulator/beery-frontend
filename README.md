@@ -77,9 +77,9 @@ export anyone viewing it can download (once per format per browser session), and
 with match history.
 
 The two game shells and the host lobby load the playing screen, the host console and the
-configuration panel through `pages/shellScreens.ts` (`React.lazy`). That is the code-split
-boundary that keeps Chart.js, react-hook-form and Zod off the welcome and lobby path. The screens are lazy,
-so they are fetched on the first render that actually shows one.
+configuration panel through `pages/shellScreens.ts` (`React.lazy`), so each is fetched on the first
+render that shows it. `routes/registry.ts` leaves the two pages out of its eager glob. Chart.js and
+the form libraries still load up front: the results and multi-game pages use them eagerly.
 
 Without a backend, `/`, `/player-manual` and `/host-manual` still render — they need neither auth
 nor the API. `/results/:publicId` and `/join/:roomCode` are also unguarded, but they have nothing
