@@ -48,6 +48,7 @@ import type {
   OrderSubmittedPayload,
   ParticipantEventPayload,
   RolesAssignedPayload,
+  RoomState,
   SeatReclaimedPayload,
   WeekClosedPayload,
   YourStatePayload,
@@ -260,6 +261,10 @@ export function rejoinAfterConnect(): void {
   // load can produce two: that is intended and harmless, because `join` is
   // idempotent by identity and the alternative — one emitter inferring whether
   // the other has already fired — breaks on a slow connect.
+  rejoin(roomCode, sessionToken)
+}
+
+function rejoin(roomCode: string, sessionToken: string): void {
   const payload: JoinEmit = { room_id: roomCode, session_token: sessionToken }
   const displayName = getDisplayName()
   if (displayName) payload.display_name = displayName
@@ -354,30 +359,46 @@ socket.on('host_claimed', (payload: HostClaimedPayload) => {
 })
 
 /**
- * A host tab that missed its resync claims the room again: nothing the server
- * sends later brings it once the game is over, and the console would wait on
- * "Waiting for the room's state" (or "Saving the results…"). The server sends
- * after releasing the room's lock, so when several pages load at once another
- * page's room event, with a higher `seq`, can overtake this claim's events,
- * and the seq gate drops them. A tab whose host role a second tab took in the
- * lobby never got any. An answer can be overtaken too, so it may take a few;
- * the limit is there so no answer can make it endless.
+ * A page that missed its resync asks for it again: a host tab claims the room
+ * again, a player's rejoins. Without it the host waits on "Waiting for the
+ * room's state" (or "Saving the results…") and the player on "Waiting for the
+ * server to send your position". The server sends a room's events in the order
+ * of their `seq`, so this is for what that does not cover: a host tab displaced
+ * in the lobby never got a resync, and an event that was overtaken anyway is
+ * dropped by the seq gate. The limit is there so no answer can make it endless.
  */
-function claimAgainIf(missing: boolean): void {
-  const { roomCode, isHost } = store()
+function resyncAgainIf(missing: boolean): void {
   if (!missing) {
-    claimsAgain = 0
+    asksAgain = 0
     return
   }
-  if (!isHost || !roomCode || claimsAgain >= CLAIM_AGAIN_LIMIT) return
-  claimsAgain += 1
-  const hostSecret = getHostSecret(roomCode)
-  joinWaiting(hostSecret ? { room_id: roomCode, host_secret: hostSecret } : { room_id: roomCode })
+  const { roomCode, isHost } = store()
+  if (!roomCode || asksAgain >= ASK_AGAIN_LIMIT) return
+  if (isHost) {
+    asksAgain += 1
+    const hostSecret = getHostSecret(roomCode)
+    joinWaiting(hostSecret ? { room_id: roomCode, host_secret: hostSecret } : { room_id: roomCode })
+    return
+  }
+  const sessionToken = getSessionToken(roomCode)
+  if (!sessionToken) return
+  asksAgain += 1
+  rejoin(roomCode, sessionToken)
 }
 
-const CLAIM_AGAIN_LIMIT = 5
-/** Claims sent in a row without the answer landing. */
-let claimsAgain = 0
+const ASK_AGAIN_LIMIT = 5
+/** Resyncs asked for in a row without the answer landing. */
+let asksAgain = 0
+
+/** The states whose player screen is the board. */
+const STARTED_STATES: ReadonlySet<RoomState> = new Set(['RUNNING', 'PAUSED', 'FINISHED'])
+
+/** What the page of a started game cannot show without: the host's state, or the player's and the room's. */
+function viewMissing(): boolean {
+  const { isHost, hostState, myState, roomState } = store()
+  if (isHost) return hostState === null
+  return myState === null || roomState === null || !STARTED_STATES.has(roomState)
+}
 
 socket.on('join_error', (payload: JoinErrorPayload) => {
   // A `start_game` refusal names its room. For a room of the
@@ -447,11 +468,12 @@ socket.on('game_started', (payload: GameStartedPayload) => {
 
 socket.on('your_state', (payload: YourStatePayload) => {
   store().applyYourState(payload)
+  resyncAgainIf(viewMissing())
 })
 
 socket.on('host_state', (payload: HostStatePayload) => {
   store().applyHostState(payload)
-  claimAgainIf(store().hostState === null)
+  resyncAgainIf(viewMissing())
 })
 
 socket.on('order_submitted', (payload: OrderSubmittedPayload) => {
@@ -500,12 +522,14 @@ socket.on('seat_reclaimed', (payload: SeatReclaimedPayload) => {
 
 socket.on('game_finished', (payload: GameFinishedPayload) => {
   store().applyGameFinished(payload)
-  claimAgainIf(store().hostState === null)
+  resyncAgainIf(viewMissing())
 })
 
 socket.on('game_persisted', (payload: GamePersistedPayload) => {
   store().applyGamePersisted(payload)
-  claimAgainIf(store().gamePublicId === null)
+  // With the id but no view, the resync's `host_state` or `your_state` has already asked again.
+  const missing = store().gamePublicId === null
+  if (missing || !viewMissing()) resyncAgainIf(missing)
 })
 
 /**

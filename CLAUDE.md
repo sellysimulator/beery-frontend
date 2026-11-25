@@ -540,11 +540,12 @@ verified identity and replies `host_claimed` with a fresh one. Guarding that emi
 `getHostSecret() !== null` silently disables the whole recovery path — the symptom is a
 permanently paused game, not an error.
 
-**A host tab that missed its resync claims again** (`claimAgainIf` in `socketHandlers.ts`, at most
-five times in a row): after `host_state` or `game_finished` with no `hostState`, and after
-`game_persisted` with no `gamePublicId`. The server sends after the room's lock, so a later
-broadcast can overtake a claim's events and the seq gate drops them; a tab displaced in the lobby
-never gets a `host_state`. In a finished room nothing else would come.
+**A page that missed its resync asks for it again** (`resyncAgainIf` in `socketHandlers.ts`, at
+most five times in a row): a host tab claims again, a player's page rejoins. After `your_state`,
+`host_state` or `game_finished` with no state to show (the host's; the player's and a started
+room), and after `game_persisted` with no `gamePublicId`. The server sends a room's events in the
+order of their `seq`; this is the net for a host tab displaced in the lobby and for an event that
+was overtaken anyway. `game_persisted` never starts the count over while the state is missing.
 
 `rejoinAfterConnect` runs on every `connect`: it emits `join_waiting` when the route is
 `/host/:roomCode` or the tab holds `host_room` for that room (with the stored secret if any),

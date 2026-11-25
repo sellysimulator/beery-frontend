@@ -24,7 +24,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
-import { render, act, waitFor } from '@testing-library/react';
+import { render, act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -38,7 +38,9 @@ import type {
   WeekRecord,
   WeekSettlement,
 } from '../types/game';
+import GameRoom from '../pages/GameRoom';
 import * as GameRoomPlayingModule from '../pages/GameRoomPlaying';
+import { clearSessionToken, setDisplayName, setSessionToken } from '../utils/storage';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -1296,5 +1298,151 @@ describe('A player the host swapped for a bot can take the role back', () => {
 
     expect(bodyText()).not.toMatch(/handed your role to a bot/i);
     expect(orderInput()).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A player's page whose resync never landed
+// ---------------------------------------------------------------------------
+
+/**
+ * The sequences and their `seq`s are as the backend sends them to a page that
+ * rejoins, with a later event of another page between them, which makes the
+ * page drop the rest.
+ */
+describe('a player page that missed its resync rejoins', () => {
+  const WAITING = 'Waiting for the server to send your position';
+  const PUBLIC_ID = 'a'.repeat(32);
+  const ALIASES = { RETAILER: 'P1', WHOLESALER: 'P2', DISTRIBUTOR: 'P3', FACTORY: 'P4' };
+
+  beforeEach(() => {
+    setSessionToken(ROOM, 'tok-1');
+    setDisplayName('Ana');
+  });
+
+  function openPage(): void {
+    render(
+      <MemoryRouter initialEntries={[`/game/${ROOM}`]}>
+        <Routes>
+          <Route path="/game/:roomCode" element={<GameRoom />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  const joins = () => emitsOf('join');
+  const joined = () =>
+    dispatch('joined', { alias: 'P1', session_token: 'tok-1', role: 'RETAILER', is_host: false });
+  const back = (at: number) =>
+    dispatch('participant_reconnected', { seq: at, alias: 'P2', display_name: 'Ben', role: 'WHOLESALER' });
+  const lobby = (at: number, state: string) =>
+    dispatch('lobby_update', {
+      seq: at,
+      state,
+      host_display_name: 'Host',
+      participants: [],
+      role_to_alias: ALIASES,
+      role_assignment_mode: 'HOST_ASSIGNS',
+      can_start: false,
+      start_blocked_reason: null,
+    });
+  const started = (at: number) =>
+    dispatch('game_started', {
+      seq: at,
+      week: 6,
+      duration_weeks: 36,
+      role_to_alias: ALIASES,
+      bots: [],
+      config_public: gameConfig(),
+    });
+  const state = (at: number, over: Partial<PlayerView> = {}) =>
+    dispatch('your_state', { seq: at, ...viewFor('RETAILER', over) });
+  const persisted = (at: number) => dispatch('game_persisted', { seq: at, game_id: PUBLIC_ID });
+  /** The whole answer to a rejoin of a running game, with nothing in between. */
+  function answer(at: number): void {
+    lobby(at, 'RUNNING');
+    joined();
+    started(at + 1);
+    state(at + 2);
+  }
+
+  it('and its board opens', async () => {
+    openPage();
+    expect(joins()).toHaveLength(1);
+    lobby(30, 'RUNNING');
+    joined();
+    back(47);
+    started(31);
+    state(32);
+    expect(await screen.findByText(WAITING)).toBeInTheDocument();
+    expect(joins()).toHaveLength(2);
+    expect(joins()[1]).toEqual({ room_id: ROOM, session_token: 'tok-1', display_name: 'Ana' });
+
+    answer(48);
+    await waitFor(() => expect(orderInput()).not.toBeNull());
+    expect(joins()).toHaveLength(2);
+  });
+
+  it('also when only its state landed: it would stay in the lobby of a started game', async () => {
+    openPage();
+    back(31);
+    lobby(29, 'RUNNING');
+    joined();
+    started(30);
+    state(32);
+    expect(orderInput()).toBeNull();
+    expect(joins()).toHaveLength(2);
+
+    answer(33);
+    await waitFor(() => expect(orderInput()).not.toBeNull());
+    expect(joins()).toHaveLength(2);
+  });
+
+  it('also for the results link of a finished game', async () => {
+    openPage();
+    lobby(30, 'FINISHED');
+    joined();
+    state(31, { phase: 'FINISHED' });
+    back(47);
+    persisted(32);
+    expect(await screen.findByText(/saving the results/i)).toBeInTheDocument();
+    expect(joins()).toHaveLength(2);
+
+    lobby(48, 'FINISHED');
+    joined();
+    state(49, { phase: 'FINISHED' });
+    persisted(50);
+    expect(screen.getByRole('link', { name: 'See the results' })).toHaveAttribute('href', `/results/${PUBLIC_ID}`);
+    expect(joins()).toHaveLength(2);
+  });
+
+  it('gives up after a few answers that never land, and starts over once one does', async () => {
+    openPage();
+    lobby(30, 'RUNNING');
+    joined();
+    back(90);
+    for (let at = 31; at < 50; at += 1) state(at);
+    expect(joins()).toHaveLength(1 + 5);
+
+    answer(91);
+    await waitFor(() => expect(orderInput()).not.toBeNull());
+  });
+
+  it('but asks for nothing after a resync in order, the weeks after it and the end of the game', async () => {
+    openPage();
+    answer(30);
+    await waitFor(() => expect(orderInput()).not.toBeNull());
+    state(40);
+    dispatch('game_finished', { seq: 41, weeks_played: 6, stats: {}, demand_series: [], orders_by_role: {} });
+    persisted(42);
+    expect(joins()).toHaveLength(1);
+  });
+
+  it('but asks for nothing without a seat', () => {
+    clearSessionToken(ROOM);
+    openPage();
+    back(47);
+    state(32);
+    expect(joins()).toHaveLength(0);
   });
 });
