@@ -353,6 +353,32 @@ socket.on('host_claimed', (payload: HostClaimedPayload) => {
   store().setIsHost(true)
 })
 
+/**
+ * A host tab that missed its resync claims the room again: nothing the server
+ * sends later brings it once the game is over, and the console would wait on
+ * "Waiting for the room's state" (or "Saving the results…"). The server sends
+ * after releasing the room's lock, so when several pages load at once another
+ * page's room event, with a higher `seq`, can overtake this claim's events,
+ * and the seq gate drops them. A tab whose host role a second tab took in the
+ * lobby never got any. An answer can be overtaken too, so it may take a few;
+ * the limit is there so no answer can make it endless.
+ */
+function claimAgainIf(missing: boolean): void {
+  const { roomCode, isHost } = store()
+  if (!missing) {
+    claimsAgain = 0
+    return
+  }
+  if (!isHost || !roomCode || claimsAgain >= CLAIM_AGAIN_LIMIT) return
+  claimsAgain += 1
+  const hostSecret = getHostSecret(roomCode)
+  joinWaiting(hostSecret ? { room_id: roomCode, host_secret: hostSecret } : { room_id: roomCode })
+}
+
+const CLAIM_AGAIN_LIMIT = 5
+/** Claims sent in a row without the answer landing. */
+let claimsAgain = 0
+
 socket.on('join_error', (payload: JoinErrorPayload) => {
   // A `start_game` refusal names its room. For a room of the
   // multi-game dashboard's batch it goes on that game's card, not into a
@@ -425,6 +451,7 @@ socket.on('your_state', (payload: YourStatePayload) => {
 
 socket.on('host_state', (payload: HostStatePayload) => {
   store().applyHostState(payload)
+  claimAgainIf(store().hostState === null)
 })
 
 socket.on('order_submitted', (payload: OrderSubmittedPayload) => {
@@ -473,10 +500,12 @@ socket.on('seat_reclaimed', (payload: SeatReclaimedPayload) => {
 
 socket.on('game_finished', (payload: GameFinishedPayload) => {
   store().applyGameFinished(payload)
+  claimAgainIf(store().hostState === null)
 })
 
 socket.on('game_persisted', (payload: GamePersistedPayload) => {
   store().applyGamePersisted(payload)
+  claimAgainIf(store().gamePublicId === null)
 })
 
 /**
