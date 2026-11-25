@@ -145,6 +145,37 @@ a vulnerable Node; raise both after each Node security release.
 > 4. **A tappable Open button** on a coarse pointer wherever the desktop says "Press E", doing
 >    exactly what `E` does: proximity plus a keypress is not reachable without a keyboard. A
 >    fine pointer keeps the "Press E" prompt and gets no button.
+> 5. **A phone layout of its own**, on `(pointer: coarse) and (max-width: 47.99rem), (pointer:
+>    coarse) and (max-height: 30rem)`. A width breakpoint alone misses a phone on its side: at
+>    844 px wide it got the desktop's panel places on a 390 px tall screen **[HARD-WON]**.
+>    `pointer`, not `any-pointer`: no desktop window matches at any size, and a touch laptop
+>    keeps the desktop layout. The same in every game:
+>    - **HUD:** a status pill top-left; a round "?" top-right (and "2D" beside it where the
+>      player chooses the view); one dock of icon-only round buttons, the week's or day's
+>      decision first and filled, that opens every panel without walking: a row along the bottom
+>      upright, a column on the right on its side; a joystick bottom-left that presses the pad's
+>      own moves; a plain "Open" under the crosshair at a station. No words on the buttons, no
+>      "Press E" where touch is the main input, nothing else over the view.
+>    - **Help card** behind "?", open the first time and folded for the tab once tapped: the
+>      warning "3D mode may not be very well optimized for phones.", "Joystick: walk", "Drag:
+>      look around", "Icons: open everything", the player manual, and the 3D model credits,
+>      which a CC-BY licence needs reachable.
+>    - **Panels** open in the exact centre, capped in `dvh` and to the safe area, wider on its
+>      side, never over the dock, one at a time with a covered one kept mounted (a half-typed
+>      decision survives). Centre with `inset-0 m-auto h-fit`, never a translate: a `max-*:`
+>      override of a centred window's `left`/`top` left its translate in place and threw the
+>      charts off the corner **[HARD-WON]**. A saved drag position is ignored.
+>    - **Page:** `html:has([data-phone-scene])` is `100dvh`, `overflow: hidden` and
+>      `touch-action: manipulation`: a page that can scroll lets Safari's bars slide over the
+>      HUD. The lens is wider upright, and a finger turns the view further than a mouse.
+>    Tequila centres its windows on tablets too (`(pointer: coarse)`), because they drag with a
+>    mouse only.
+> 6. **No text field under 16px on a touch screen, on any page that leads to the view**
+>    **[HARD-WON]**. iOS Safari zooms the page in when a smaller field takes focus (by 16 / its
+>    size) and leaves it zoomed, and `touch-action: none` keeps the player from pinching back
+>    out. Beer's name form inherited 14px, so its 3D board opened at 1.14× with the HUD cut off
+>    on every iPhone. Chrome's device emulation does not zoom: check in Safari (the iOS
+>    Simulator does).
 >
 > An orbit-camera view (Lemony's street) needs none of this: drei's `OrbitControls` already
 > orbits with one finger and zooms with a pinch, so it only words its hint for touch.
@@ -1161,6 +1192,11 @@ Rules every game's core follows, each learned from a bug:
 - **A room broadcast skips the host's socket** when the host has a fuller version of the same
   payload (the config with its hidden keys), and the host gets its own copy.
 - **Each resync event has its own, higher `seq`**; the client drops `seq` it has already passed.
+- **A resync can be overtaken [HARD-WON].** Emitting after the lock means another handler's later
+  room event can reach a client between a resync's events, and the `seq` gate then drops the rest.
+  On a page that holds no state yet that is final in a finished game: the host waited on "Opening
+  the room" for good. A host tab that gets `host_state`/`game_finished` and still has no host view
+  claims again, a bounded number of times.
 - **"Play again" creates a new room** with the same settings, and results open from a "See the
   results" button, never an automatic redirect.
 

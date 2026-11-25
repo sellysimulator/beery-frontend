@@ -163,7 +163,8 @@ src/
 │   │       └── board3d/        the scene: buildSceneModel plus the three.js components
 │   │                           that render its output and nothing else; the walk
 │   │                           (keyboard + drag-look, and on touch screens the MovePad
-│   │                           and a tappable Open button, spec §9.7)
+│   │                           and a tappable Open button; a phone has PhoneHud, with
+│   │                           a joystick and a dock of icons, spec §9.7)
 │   ├── host/                   host console: chain diagram, controls, presentation mode
 │   ├── results/                charts, cost tables, debrief notes, CSV/JSON export (by
 │   │                           public_id, for every viewer)

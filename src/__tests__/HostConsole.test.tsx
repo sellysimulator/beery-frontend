@@ -21,7 +21,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { useGameStore } from '../store/gameStore';
@@ -39,6 +39,7 @@ import type {
 } from '../types/game';
 import { setHostSecret } from '../utils/storage';
 import * as HostConsoleModule from '../pages/HostConsole';
+import { HostRoom } from '../pages/HostRoom';
 import * as DemandCurveBuilder from '../components/host/demandCurveConfig';
 
 // ---------------------------------------------------------------------------
@@ -1332,6 +1333,130 @@ describe('an out-of-order host_state does not rewind the console', () => {
     const text = bodyText();
     expect(hasNumber(text, 800)).toBe(true);
     expect(hasNumber(text, 700)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A host page whose claim's host_state never landed
+// ---------------------------------------------------------------------------
+
+/**
+ * The server sends after releasing the room's lock, so the events of a claim
+ * and the broadcasts of other pages loading at the same moment interleave on
+ * the wire. The sequences and their `seq`s are as the backend sends them,
+ * recorded with several pages of one room loading together.
+ */
+describe('a host page that missed its resync claims the room again', () => {
+  const WAITING = "Waiting for the room's state";
+  const RESULTS = `/results/${'a'.repeat(32)}`;
+
+  function openHostPage(): void {
+    act(() => {
+      useGameStore.getState().reset();
+    });
+    render(
+      <MemoryRouter initialEntries={[`/host/${ROOM}`]}>
+        <Routes>
+          <Route path="/host/:roomCode" element={<HostRoom />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  const claims = () => rec.emits.filter((e) => e.event === 'join_waiting').length;
+  const claimed = () => dispatch('host_claimed', { room_id: ROOM, host_secret: SECRET });
+  const lobby = (at: number, state: RoomState) =>
+    dispatch('lobby_update', { seq: at, ...lobbyUpdate(state, participantsFor()) });
+  const config = (at: number) => dispatch('config_updated', { seq: at, config: null });
+  const back = (at: number) =>
+    dispatch('participant_reconnected', { seq: at, alias: 'P1', display_name: 'Ana', role: 'RETAILER' });
+  const hostState = (at: number, phase: HostView['phase']) => deliverHostState(hostView({ phase }), at);
+  const persisted = (at: number) => dispatch('game_persisted', { seq: at, game_id: 'a'.repeat(32) });
+  /** The whole answer to a claim of a finished, stored game, with nothing in between. */
+  function answer(at: number): void {
+    claimed();
+    lobby(at, 'FINISHED');
+    config(at + 1);
+    hostState(at + 2, 'FINISHED');
+    persisted(at + 3);
+  }
+
+  it('a finished room whose host_state other pages overtook', async () => {
+    openHostPage();
+    claimed();
+    lobby(30, 'FINISHED');
+    lobby(36, 'FINISHED');
+    config(31);
+    back(37);
+    hostState(32, 'FINISHED');
+    expect(await screen.findByText(WAITING)).toBeInTheDocument();
+    expect(claims()).toBe(2);
+
+    answer(47);
+    expect(screen.queryByText(WAITING)).toBeNull();
+    expect(screen.getByRole('link', { name: 'See the results' })).toHaveAttribute('href', RESULTS);
+    expect(claims()).toBe(2);
+  });
+
+  it('a finished room whose game_persisted alone was overtaken', async () => {
+    openHostPage();
+    claimed();
+    lobby(30, 'FINISHED');
+    config(31);
+    hostState(32, 'FINISHED');
+    back(37);
+    persisted(33);
+    expect(await screen.findByText('Saving the results…')).toBeInTheDocument();
+    expect(claims()).toBe(2);
+
+    answer(38);
+    expect(screen.getByRole('link', { name: 'See the results' })).toHaveAttribute('href', RESULTS);
+    expect(claims()).toBe(2);
+  });
+
+  it('a tab displaced in the lobby, once the game is over and not while it runs', async () => {
+    openHostPage();
+    claimed();
+    lobby(4, 'LOBBY');
+    config(5);
+    // Another tab of this host claims here: host_state goes to it alone.
+    dispatch('game_started', { seq: 14, week: 1, duration_weeks: DURATION, role_to_alias: ALIASES, bots: [], config_public: {} });
+    lobby(15, 'RUNNING');
+    expect(await screen.findByText(WAITING)).toBeInTheDocument();
+    expect(claims()).toBe(1);
+
+    dispatch('game_finished', { seq: 25, ...gameFinished() });
+    expect(claims()).toBe(2);
+    persisted(26);
+    answer(27);
+    expect(screen.queryByText(WAITING)).toBeNull();
+    expect(screen.getByRole('link', { name: 'See the results' })).toHaveAttribute('href', RESULTS);
+    expect(claims()).toBe(2);
+  });
+
+  it('gives up after a few answers that never land, and starts over once one does', async () => {
+    openHostPage();
+    claimed();
+    back(90);
+    for (let at = 20; at < 40; at += 1) hostState(at, 'FINISHED');
+    expect(claims()).toBe(1 + 5);
+
+    answer(91);
+    expect(await screen.findByRole('link', { name: 'See the results' })).toHaveAttribute('href', RESULTS);
+  });
+
+  it('a resync in order, and a game that ends on the open console, claim nothing again', async () => {
+    openHostPage();
+    claimed();
+    lobby(17, 'RUNNING');
+    config(18);
+    hostState(19, 'DECISION');
+    hostState(22, 'DECISION');
+    dispatch('game_finished', { seq: 23, ...gameFinished() });
+    persisted(24);
+    expect(await screen.findByRole('link', { name: 'See the results' })).toHaveAttribute('href', RESULTS);
+    answer(25);
+    expect(claims()).toBe(1);
   });
 });
 

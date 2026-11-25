@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import type { BoardViewChoice } from '../../../utils/storage'
 import useMediaQuery from '../../shared/useMediaQuery'
+import { PHONE_QUERY } from './board3d/phoneQuery'
 
 /**
  * The 2D/3D switch (spec §9.7).
@@ -51,6 +52,12 @@ export interface BoardViewToggleProps {
  * landscape notch the button is not under it; the 3D HUD stacks its own
  * bottom corners on the same baseline. `min-h-11`
  * keeps it a 44 px touch target.
+ *
+ * On the 3D board of a phone it is a round **2D** button in the top row
+ * instead, left of the "?" (`PhoneHud`): the full label filled the corner a
+ * thumb needs. Its name is still the whole sentence. On its side it steps
+ * aside while a panel fills the screen's height (`data-phone-panel`, set by
+ * `Board3DPanels`). CSS, so it stays a sibling that takes no prop.
  */
 export function BoardViewToggle({ choice, onChange }: BoardViewToggleProps): ReactElement {
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
@@ -59,6 +66,21 @@ export function BoardViewToggle({ choice, onChange }: BoardViewToggleProps): Rea
   // is the thing that warning is recommending.
   const warnReducedMotion = reducedMotion && choice === '2D'
   const next: BoardViewChoice = choice === '2D' ? '3D' : '2D'
+
+  const phone = useMediaQuery(PHONE_QUERY)
+  if (phone && choice === '3D') {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(next)}
+        aria-label={LABEL[choice]}
+        title={LABEL[choice]}
+        className="fixed right-[calc(max(0.75rem,env(safe-area-inset-right))_+_3.25rem)] top-[max(0.75rem,env(safe-area-inset-top))] z-50 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-raised/95 text-sm font-semibold text-ink shadow-md landscape:right-[calc(max(0.75rem,env(safe-area-inset-right))_+_6.5rem)] landscape:[body:has([data-phone-panel])_&]:hidden"
+      >
+        {next}
+      </button>
+    )
+  }
 
   return (
     <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-50 flex max-w-xs flex-col items-end gap-1 text-right">

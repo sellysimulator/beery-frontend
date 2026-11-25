@@ -303,3 +303,27 @@ export function claimPreloadReload(): boolean {
     return false
   }
 }
+
+/* ─── the phone's 3D help card — folded away for this tab ─── */
+//
+// Remembered so the card stays folded when the 3D board mounts again: a toggle
+// to 2D and back, or a reload. sessionStorage and no authority: losing it only
+// shows the card once more. The key is the same in every Novus game.
+
+const PHONE_HELP_HIDDEN_KEY = 'phone_3d_help_hidden'
+
+export function isPhoneHelpHidden(): boolean {
+  try {
+    return sessionStorage.getItem(PHONE_HELP_HIDDEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function setPhoneHelpHidden(hidden: boolean): void {
+  try {
+    sessionStorage.setItem(PHONE_HELP_HIDDEN_KEY, hidden ? '1' : '0')
+  } catch {
+    // Storage refused: the card opens again next time, nothing more.
+  }
+}

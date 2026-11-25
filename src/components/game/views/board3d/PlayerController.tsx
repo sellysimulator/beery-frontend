@@ -114,6 +114,8 @@ export interface PlayerControllerProps {
    * controller still stands on its own with only a keyboard.
    */
   readonly pad?: RefObject<Set<PadControl>>
+  /** Multiplies how far a drag turns the view; 1 everywhere but on a phone. */
+  readonly lookScale?: number
 }
 
 /** Read when no pad is wired, so the frame loop has one shape either way. */
@@ -126,6 +128,7 @@ export function PlayerController({
   gameOver,
   onInteract,
   pad,
+  lookScale = 1,
 }: PlayerControllerProps): ReactElement | null {
   const camera = useThree((state) => state.camera)
   const domElement = useThree((state) => state.gl.domElement)
@@ -223,8 +226,8 @@ export function PlayerController({
       lastPointer.current = { x: event.clientX, y: event.clientY }
       // Yaw is unclamped — a warehouse is a room you turn round in. Pitch is
       // not.
-      yaw.current -= dx * LOOK_SENSITIVITY
-      pitch.current = clampPitch(pitch.current - dy * LOOK_SENSITIVITY)
+      yaw.current -= dx * LOOK_SENSITIVITY * lookScale
+      pitch.current = clampPitch(pitch.current - dy * LOOK_SENSITIVITY * lookScale)
     }
 
     const onPointerUp = (event: PointerEvent): void => {
@@ -249,7 +252,7 @@ export function PlayerController({
       domElement.removeEventListener('pointercancel', onPointerUp)
       domElement.removeEventListener('lostpointercapture', onPointerUp)
     }
-  }, [domElement])
+  }, [domElement, lookScale])
 
   // The leading `state` parameter is unused and `noUnusedParameters` is on, so
   // it is `_`, the shape every other

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactElement, type RefObject } from 'react'
+import useMediaQuery from '../../../shared/useMediaQuery'
 import DecisionForm from '../../DecisionForm'
 import DecisionPanel from '../../DecisionPanel'
 import GameOverPanel from '../../GameOverPanel'
@@ -6,6 +7,7 @@ import OwnHistoryChart from '../../OwnHistoryChart'
 import SettlementRecap from '../../SettlementRecap'
 import WaitingForOthers from '../../WaitingForOthers'
 import type { BoardViewProps } from '../Board2D'
+import { PHONE_QUERY } from './phoneQuery'
 
 /** The three interact targets that open a DOM panel. */
 export type Board3DPanelId = 'order-desk' | 'ledger-wall' | 'team-board'
@@ -75,6 +77,21 @@ const TOP_PANEL_LAYER = 'z-[35]'
 const PANEL_LAYER = 'z-30'
 
 /**
+ * Where a panel sits on a phone (`PHONE_QUERY`), instead of its berth: the
+ * exact centre of the screen, never larger than the safe area, wider when the
+ * phone lies on its side. The berths leave a sideways phone 140–200 px of
+ * panel. Three panels in one place cannot share it, so only the most recently
+ * opened one is drawn; another open one waits as `sr-only`, still mounted, and
+ * comes back when the one in front closes.
+ *
+ * It leaves `PhoneHud`'s dock uncovered (2.75rem icons and a 0.5rem gap): the
+ * row below it upright, the column beside it on its side. The same is left
+ * free on the other side, which is what keeps it in the exact centre.
+ */
+const PHONE_PANEL =
+  'fixed inset-0 m-auto h-fit [&_section]:px-4 w-[min(32rem,calc(100vw_-_1.5rem))] max-h-[calc(100dvh_-_2*(max(0.75rem,env(safe-area-inset-top),env(safe-area-inset-bottom))_+_3.25rem))] overscroll-contain landscape:w-[min(40rem,calc(100vw_-_2*(max(0.75rem,env(safe-area-inset-left),env(safe-area-inset-right))_+_3.25rem)))] landscape:max-h-[calc(100dvh_-_2*max(0.75rem,env(safe-area-inset-top),env(safe-area-inset-bottom)))]'
+
+/**
  * What the panel's focus move counts as "the panel's first focusable element".
  * Deliberately literal: the first thing a `Tab` would reach inside the wrapper,
  * which is the panel's own Close button.
@@ -132,6 +149,8 @@ export function Board3DPanels({
   // takes focus when it opens.
   const topPanel = open.length === 0 ? null : (open[open.length - 1] ?? null)
 
+  const phone = useMediaQuery(PHONE_QUERY)
+
   useEffect(() => {
     if (topPanel === null) return
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -156,26 +175,49 @@ export function Board3DPanels({
     wrapper?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
   }, [topPanel, canvasRef])
 
-  const panelClass = (panel: Board3DPanelId): string =>
-    open.includes(panel)
-      ? `${PANEL_POSITION[panel]} ${panel === topPanel ? TOP_PANEL_LAYER : PANEL_LAYER} ${PANEL_CHROME}`
-      : 'sr-only'
+  /** On screen: every open panel, or on a phone only the one on top. */
+  const drawn = (panel: Board3DPanelId): boolean =>
+    phone ? panel === topPanel : open.includes(panel)
+
+  const panelClass = (panel: Board3DPanelId): string => {
+    if (!drawn(panel)) return 'sr-only'
+    const place = phone ? PHONE_PANEL : PANEL_POSITION[panel]
+    return `${place} ${panel === topPanel ? TOP_PANEL_LAYER : PANEL_LAYER} ${PANEL_CHROME}`
+  }
 
   /**
-   * The panel's chrome — heading and Close — renders only while it is open. A
-   * Close button for a panel that is not open is nonsense read aloud, and the
-   * `sr-only` presentation is the always-available 2D content, not a dialog.
+   * Marks the panel a phone is showing, which is what takes the 2D button
+   * (`z-50`) off it when the phone lies on its side and the panel fills its
+   * height. Not while paused: the button is the way out of a paused scene, and
+   * `PausedOverlay` covers the panel by then anyway.
+   */
+  const phonePanel = (panel: Board3DPanelId): true | undefined =>
+    phone && drawn(panel) && !paused ? true : undefined
+
+  /**
+   * The panel's chrome — heading and Close — renders only while it is drawn. A
+   * Close button for a panel that is not on screen is nonsense read aloud, and
+   * the `sr-only` presentation is the always-available 2D content, not a
+   * dialog. On a phone it stays put while the panel scrolls under it.
    */
   const chrome = (panel: Board3DPanelId): ReactElement | null =>
-    open.includes(panel) ? (
-      <div className="mb-3 flex items-center justify-between gap-3">
+    drawn(panel) ? (
+      <div
+        className={`mb-3 flex items-center justify-between gap-3 ${phone ? 'sticky -top-4 z-10 -mx-4 -mt-4 bg-surface-raised px-4 py-2' : ''}`}
+      >
         <h2 className="text-sm font-semibold text-ink-muted">{PANEL_TITLE[panel]}</h2>
         <button
           type="button"
-          className="rounded-md border border-border-strong px-2 py-1 text-sm hover:border-brand hover:text-brand any-pointer-coarse:min-h-11 any-pointer-coarse:px-4"
+          className={
+            phone
+              ? 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border-strong text-lg'
+              : 'rounded-md border border-border-strong px-2 py-1 text-sm hover:border-brand hover:text-brand any-pointer-coarse:min-h-11 any-pointer-coarse:px-4'
+          }
+          // On a phone a button carries no words; its name still says which panel it closes.
+          aria-label={phone ? `Close ${PANEL_TITLE[panel]}` : undefined}
           onClick={() => onClose(panel)}
         >
-          Close
+          {phone ? '×' : 'Close'}
         </button>
       </div>
     ) : null
@@ -187,6 +229,7 @@ export function Board3DPanels({
           wrappers.current.set('ledger-wall', node)
         }}
         data-panel="ledger-wall"
+        data-phone-panel={phonePanel('ledger-wall')}
         className={panelClass('ledger-wall')}
       >
         {chrome('ledger-wall')}
@@ -201,6 +244,7 @@ export function Board3DPanels({
           wrappers.current.set('order-desk', node)
         }}
         data-panel="order-desk"
+        data-phone-panel={phonePanel('order-desk')}
         className={panelClass('order-desk')}
       >
         {chrome('order-desk')}
@@ -235,6 +279,7 @@ export function Board3DPanels({
           wrappers.current.set('team-board', node)
         }}
         data-panel="team-board"
+        data-phone-panel={phonePanel('team-board')}
         className={panelClass('team-board')}
       >
         {chrome('team-board')}

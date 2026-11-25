@@ -206,7 +206,14 @@ const BODY: ManualPageSpec[] = [
             <strong>Open</strong>) to open it. Esc closes it.
           </li>
           <li>
-            <strong>On a phone or tablet:</strong> drag the scene with a finger to look around. The
+            <strong>On a phone:</strong> drag the scene with a finger to look around, and push the
+            joystick in the bottom-left corner to walk. The three icons open the order desk, the
+            ledger wall and the team board from anywhere, and so does <strong>Open</strong> when you
+            stand at one; <strong>×</strong> shuts it. <strong>2D</strong>, at the top, goes back
+            to the flat board, and <strong>?</strong> shows these controls.
+          </li>
+          <li>
+            <strong>On a tablet:</strong> drag the scene with a finger to look around. The
             arrow pad in the bottom-left corner walks you forward and back, steps you sideways, and
             the two curved arrows turn you. Walk up to the order desk, the ledger wall or the team
             board and tap <strong>Open</strong>; <strong>Close</strong> shuts it.

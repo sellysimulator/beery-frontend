@@ -111,6 +111,31 @@ export type PadControl =
   | 'backward'
   | 'strafe-right'
 
+/** How far from its centre the joystick must be pushed before it counts, as a
+ *  part of its radius. */
+export const STICK_DEAD_ZONE = 0.25
+
+/**
+ * The pad controls a thumb on the phone's joystick stands for, `dx` right and
+ * `dy` down from its centre: eight directions, and none inside the dead zone.
+ *
+ * It answers in pad controls rather than axes so the joystick is one more way
+ * to press the buttons that already exist: the same set, the same release on
+ * blur, a hidden tab and a panel opening, and `stepPlayer` still the one walk.
+ * It never turns — a finger on the scene does that.
+ */
+export function stickControls(dx: number, dy: number, radius: number): PadControl[] {
+  if (Math.hypot(dx, dy) < radius * STICK_DEAD_ZONE) return []
+  // 0 is straight up, positive clockwise, ±4 straight down.
+  const octant = Math.round(Math.atan2(dx, -dy) / (Math.PI / 4))
+  const controls: PadControl[] = []
+  if (Math.abs(octant) <= 1) controls.push('forward')
+  if (Math.abs(octant) >= 3) controls.push('backward')
+  if (octant >= 1 && octant <= 3) controls.push('strafe-right')
+  if (octant <= -1 && octant >= -3) controls.push('strafe-left')
+  return controls
+}
+
 /**
  * Which keyboard key each walking button stands for, so `stepPlayer` stays the
  * one walk authority. The pad does not get a second integration with

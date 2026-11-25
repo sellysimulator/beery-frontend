@@ -10,6 +10,8 @@ import { RECEIPT_LABEL } from '../../RoleBanner'
 import { PANEL_TITLE } from './Board3DPanels'
 import ModelAttribution from './ModelAttribution'
 import MovePad, { type MovePadProps } from './MovePad'
+import PhoneHud, { type PhoneDock } from './PhoneHud'
+import { PHONE_QUERY, TOUCH_MAIN_QUERY } from './phoneQuery'
 import { COARSE_POINTER_QUERY } from './playerMotion'
 import type { InteractTarget, InteractTargetId } from './sceneModel'
 
@@ -91,6 +93,11 @@ export interface Board3DHudProps {
   notice: string | null
   /** True for the 400 ms after a week turned over. */
   weekChanged: boolean
+  /**
+   * The phone's row of icons, which opens every panel without walking to it.
+   * Absent everywhere else: a desktop and a tablet walk.
+   */
+  dock?: PhoneDock
 }
 
 /**
@@ -118,6 +125,9 @@ export interface Board3DHudProps {
  * wraps pushes the pad up instead of under it. Bottom-right: the 2D/3D toggle
  * (`GameRoomPlaying`'s, `z-50`) with the credits stacked above it. The legend
  * is capped to the width the toggle leaves, so the two never meet at 375 px.
+ *
+ * A phone (`PHONE_QUERY`) has a HUD of its own, `PhoneHud`; what is below is
+ * the desktop's, and a tablet's and a narrow window's.
  */
 export function Board3DHud({
   view,
@@ -128,13 +138,18 @@ export function Board3DHud({
   notice,
   weekChanged,
   pad,
+  dock,
 }: Board3DHudProps): ReactElement {
   const settlement = view.settlement
   const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY)
-  const prompt = nearTarget?.prompt ?? null
+  const phone = useMediaQuery(PHONE_QUERY)
+  const touchMain = useMediaQuery(TOUCH_MAIN_QUERY)
   // Only an enabled target is offered: while paused the prompt still reads
   // and E is inert, and a button that does nothing is worse than none.
   const openable = nearTarget !== null && nearTarget.enabled ? nearTarget.id : null
+  // Where touch is the main input there is no E to press: the Open button is
+  // the whole prompt. A prompt with no button (paused) still reads.
+  const prompt = touchMain && openable !== null ? null : (nearTarget?.prompt ?? null)
   const legend = legendLines(coarsePointer ? TOUCH_PROMPT_COPY : PROMPT_COPY)
 
   // The week change's third signal. The other two are in the scene — the ledger frame and
@@ -148,6 +163,24 @@ export function Board3DHud({
     : settlement
       ? `Week ${week}. ${RECEIPT_LABEL[view.role]} ${settlement.arrived}.`
       : `Week ${week}.`
+
+  if (phone) {
+    return (
+      <PhoneHud
+        week={week}
+        durationWeeks={durationWeeks}
+        role={view.role}
+        notice={notice}
+        announcement={announcement}
+        prompt={prompt}
+        openable={openable}
+        openLabel={openable === null ? '' : interactLabel(openable)}
+        onInteract={onInteract}
+        pad={pad}
+        dock={dock}
+      />
+    )
+  }
 
   return (
     <div className="pointer-events-none fixed inset-0 z-20">
