@@ -1125,6 +1125,24 @@ itself deadlocks the room for the lock timeout. Read, mutate, save, build the pa
 it is released. Drive a cascade (an all-bot game closing round after round) with a loop of
 short acquisitions, never with recursion between two public methods. **[HARD-WON]**
 
+**A room's events leave in one order, the order it changed. [HARD-WON]** Emitting after the lock
+is not enough: when each handler sends its own events, two handlers' sends interleave, a later
+event overtakes an earlier one, and the page drops the earlier (`seq` gate) or ends on it (no
+`seq`). Four players' pages rejoining together lost their state 15 times in 20. So every handler
+takes the room through `services/room_turn.py`:
+
+- **`async with room_turn(code) as emits:`** holds the lock, queues the events in the room's FIFO
+  before releasing it, and sends them after. A block that raises sends nothing. No event of a
+  room is sent any other way; a refusal to one sid may be.
+- **A turn never waits for another's sends.** Whoever is already sending the room takes the new
+  events too, and the other returns. Socket.IO runs `disconnect` inside a send to a connection it
+  finds dead, so a flush that waits deadlocks the room, and so does a send under the lock.
+- **What must follow an event goes in the queue behind it**, not after the `async with`: the turn
+  may return before its events are out.
+- **The page enters or leaves the Socket.IO room inside the turn**, or an event between the two
+  never reaches it.
+- The queue is in process memory: more than one instance needs the order kept in Redis too.
+
 **Every `start_game` refusal carries `room_code`.** Reply `join_error {message, room_code}` on
 every refusal, including the rate-limit and server-error replies of the guard decorator, so a
 dashboard that runs several games can put each refusal on its own game's card. Listeners that
@@ -1192,11 +1210,13 @@ Rules every game's core follows, each learned from a bug:
 - **A room broadcast skips the host's socket** when the host has a fuller version of the same
   payload (the config with its hidden keys), and the host gets its own copy.
 - **Each resync event has its own, higher `seq`**; the client drops `seq` it has already passed.
-- **A resync can be overtaken [HARD-WON].** Emitting after the lock means another handler's later
-  room event can reach a client between a resync's events, and the `seq` gate then drops the rest.
-  On a page that holds no state yet that is final in a finished game: the host waited on "Opening
-  the room" for good. A host tab that gets `host_state`/`game_finished` and still has no host view
-  claims again, a bounded number of times.
+- **A page that missed its resync asks for it again [HARD-WON].** When a resync's event is dropped
+  by the `seq` gate on a page that holds no state yet, nothing may ever repair it: the host waited
+  on "Opening the room" and the player on "Joining the room" for good, and a host tab displaced in
+  the lobby gets no resync at all. A page that gets `host_state`/`your_state` or `game_finished`
+  and still cannot show its screen claims again (host) or rejoins (player), at most five times in
+  a row; only an answer that landed starts the count over. The ordered sends above are the fix;
+  this is the net under them.
 - **"Play again" creates a new room** with the same settings, and results open from a "See the
   results" button, never an automatic redirect.
 

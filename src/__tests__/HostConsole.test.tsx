@@ -1445,6 +1445,20 @@ describe('a host page that missed its resync claims the room again', () => {
     expect(await screen.findByRole('link', { name: 'See the results' })).toHaveAttribute('href', RESULTS);
   });
 
+  it('gives up too when the id lands and the state never does', async () => {
+    openHostPage();
+    claimed();
+    back(90);
+    for (let at = 20; at < 40; at += 1) {
+      hostState(at, 'FINISHED');
+      persisted(at + 100);
+    }
+    expect(claims()).toBe(1 + 5);
+
+    answer(201);
+    expect(await screen.findByRole('link', { name: 'See the results' })).toHaveAttribute('href', RESULTS);
+  });
+
   it('a resync in order, and a game that ends on the open console, claim nothing again', async () => {
     openHostPage();
     claimed();
