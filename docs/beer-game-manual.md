@@ -172,7 +172,8 @@ Then the next week begins.
 Your screen starts as a flat board. The button in the bottom-right corner, **Switch to the 3D warehouse**, turns it into a warehouse you walk around in: your stock is crates on the floor, your incoming shipments are lanes of crates on their way. The numbers are exactly the same. Switch back whenever you like; your week is not lost.
 
 - **On a laptop:** W A S D or the arrow keys to walk, drag with the mouse to look around. At the order desk, the ledger wall or the team board, press E (or click **Open**) to open it. Esc closes it.
-- **On a phone or tablet:** drag the scene with a finger to look around. The arrow pad in the bottom-left corner walks you forward and back, steps you sideways, and the two curved arrows turn you. Walk up to the order desk, the ledger wall or the team board and tap **Open**; **Close** shuts it.
+- **On a phone:** drag the scene with a finger to look around, and push the joystick in the bottom-left corner to walk. The three icons open the order desk, the ledger wall and the team board from anywhere, and so does **Open** when you stand at one; **×** shuts it. **2D**, at the top, goes back to the flat board, and **?** shows these controls.
+- **On a tablet:** drag the scene with a finger to look around. The arrow pad in the bottom-left corner walks you forward and back, steps you sideways, and the two curved arrows turn you. Walk up to the order desk, the ledger wall or the team board and tap **Open**; **Close** shuts it.
 
 You place your order at the order desk. If the 3D view makes you queasy or your device struggles with it, switch back to the flat board: nothing changes but the picture.
 
