@@ -104,6 +104,8 @@ import Board3DHud, {
 } from '../components/game/views/board3d/Board3DHud'
 import Board3DPanels, { PANEL_TITLE } from '../components/game/views/board3d/Board3DPanels'
 import { COARSE_POINTER_QUERY } from '../components/game/views/board3d/playerMotion'
+import PhoneHud, { PHONE_PROMPT_COPY, PHONE_WARNING } from '../components/game/views/board3d/PhoneHud'
+import { PHONE_QUERY, TOUCH_MAIN_QUERY } from '../components/game/views/board3d/phoneQuery'
 import type { InteractTarget } from '../components/game/views/board3d/sceneModel'
 import ModelAttribution from '../components/game/views/board3d/ModelAttribution'
 
@@ -1520,6 +1522,16 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
     expect(html).toMatch(/<meta\s+name="viewport"\s+content="[^"]*viewport-fit=cover[^"]*"/)
   })
 
+  it('no field is under 16px on a touch screen, or iOS zooms the page in and the board stays cut off', () => {
+    // Focusing a smaller field zooms the page by 16 / its size and leaves it
+    // there: the name form's inherited 14px put every player into the 3D board
+    // at 1.14×, which `touch-none` does not let them pinch back out of.
+    const css = readFileSync(join(projectRoot(), 'src', 'index.css'), 'utf8')
+    expect(css).toMatch(
+      /@media \(pointer: coarse\) \{\s*input,\s*select,\s*textarea \{\s*font-size: max\(1rem, 1em\);/,
+    )
+  })
+
   it('open panels size to the dynamic viewport, never to 100vh', () => {
     // On a phone `100vh` includes the space behind the browser's toolbar, and
     // a panel sized to it hides its last row — the Submit button — under it.
@@ -1530,6 +1542,94 @@ describe('Board3DPanels: one DOM copy, two presentations', () => {
       expect(className).toMatch(/max-h-\[calc\(100dvh/)
       expect(className).not.toContain('100vh')
     }
+  })
+
+  // The berths leave a phone held sideways 140–200 px of panel, off-centre.
+  describe('on a phone', () => {
+    beforeEach(() => matchOnly(COARSE_POINTER_QUERY, PHONE_QUERY))
+
+    const panel = (id: string) => document.querySelector(`[data-panel="${id}"]`)
+
+    it('the phone query asks for touch as the main pointer, so no desktop window matches it', () => {
+      const branches = PHONE_QUERY.split(',')
+      expect(branches).toHaveLength(2)
+      for (const branch of branches) expect(branch).toContain('(pointer: coarse)')
+    })
+
+    it('every panel opens in the centre of the screen, capped to it', () => {
+      for (const id of ['order-desk', 'ledger-wall', 'team-board'] as const) {
+        const { unmount } = renderPanels([id])
+        const className = panel(id)?.className ?? ''
+        expect(className).toMatch(/\bfixed inset-0\b/)
+        expect(className).toMatch(/\bm-auto\b/)
+        expect(className).not.toMatch(/translate/)
+        expect(className).toMatch(/max-h-\[calc\(100dvh/)
+        expect(className).not.toContain('100vh')
+        unmount()
+      }
+    })
+
+    it('only the panel opened last is drawn; the one behind stays mounted and reachable', () => {
+      renderPanels(['ledger-wall', 'order-desk'])
+      expect(panel('order-desk')?.className).toContain('z-[35]')
+      expect(panel('ledger-wall')?.className).toBe('sr-only')
+      // One Close, for the panel on screen, and still one copy of the content.
+      expect(screen.getAllByRole('button', { name: /close/i })).toHaveLength(1)
+      expect(screen.getAllByLabelText('What you have')).toHaveLength(1)
+    })
+
+    it('marks the panel that covers the screen, which is what hides the 2D/3D toggle, but not while paused', () => {
+      const { unmount } = renderPanels(['order-desk'])
+      expect(document.querySelectorAll('[data-phone-panel]')).toHaveLength(1)
+      expect(panel('order-desk')).toHaveAttribute('data-phone-panel')
+      unmount()
+      renderPanels(['order-desk'], { paused: true })
+      expect(document.querySelector('[data-phone-panel]')).toBeNull()
+    })
+
+    it('closes with a plain cross, named for its panel', () => {
+      renderPanels(['order-desk'])
+      const close = screen.getByRole('button', { name: `Close ${PANEL_TITLE['order-desk']}` })
+      expect(close.textContent).toBe('×')
+    })
+
+    it('leaves the dock uncovered, and the same room on the other side', () => {
+      renderPanels(['order-desk'])
+      const className = panel('order-desk')?.className ?? ''
+      expect(className).toContain('_+_3.25rem))]')
+      expect(className).toContain('landscape:w-[min(40rem,calc(100vw_-_2*(')
+    })
+  })
+
+  it('a touch screen that is no phone keeps the berths, and the toggle stays', () => {
+    matchOnly(COARSE_POINTER_QUERY)
+    renderPanels(['ledger-wall', 'order-desk'])
+    expect(document.querySelector('[data-panel="ledger-wall"]')?.className).toContain('max-h-[calc(100dvh-6rem)]')
+    expect(document.querySelector('[data-panel="order-desk"]')?.className).toContain('-translate-x-1/2')
+    expect(document.querySelector('[data-phone-panel]')).toBeNull()
+  })
+
+  describe('the 2D/3D toggle on a phone', () => {
+    it('is a round 2D button in 3D, still named in full, that steps aside for a panel on its side', async () => {
+      matchOnly(COARSE_POINTER_QUERY, PHONE_QUERY)
+      const onChange = vi.fn()
+      render(<BoardViewToggle choice="3D" onChange={onChange} />)
+      const button = screen.getByRole('button', { name: 'Switch to the 2D board' })
+      expect(button.textContent).toBe('2D')
+      expect(button.className).toContain('landscape:[body:has([data-phone-panel])_&]:hidden')
+      await userEvent.setup().click(button)
+      expect(onChange).toHaveBeenCalledWith('2D')
+    })
+
+    it('keeps its sentence on the 2D board, and everywhere that is no phone', () => {
+      matchOnly(COARSE_POINTER_QUERY, PHONE_QUERY)
+      const { unmount } = render(<BoardViewToggle choice="2D" onChange={() => {}} />)
+      expect(screen.getByText('Switch to the 3D warehouse')).toBeInTheDocument()
+      unmount()
+      matchOnly(COARSE_POINTER_QUERY, TOUCH_MAIN_QUERY)
+      render(<BoardViewToggle choice="3D" onChange={() => {}} />)
+      expect(screen.getByText('Switch to the 2D board')).toBeInTheDocument()
+    })
   })
 })
 
@@ -1741,6 +1841,39 @@ describe('Board3DHud: the legend and the pad follow the pointer', () => {
     expect(screen.queryByRole('group', { name: 'Movement controls' })).not.toBeInTheDocument()
   })
 
+  it('no other device is warned: not a desktop, not a touch laptop or a tablet', () => {
+    const { unmount } = renderHud()
+    expect(document.body.textContent).not.toContain(PHONE_WARNING)
+    unmount()
+    matchOnly(COARSE_POINTER_QUERY, TOUCH_MAIN_QUERY)
+    renderHud()
+    expect(document.body.textContent).not.toContain(PHONE_WARNING)
+    expect(screen.queryByRole('navigation', { name: 'Panels' })).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Movement controls' })).toBeInTheDocument()
+  })
+
+  it('where touch is the main input there is no key to press: the Open button is the prompt', () => {
+    const prompt = deskPrompt(propsFor('RETAILER'))
+    expect(prompt).toContain('Press E')
+
+    matchOnly(COARSE_POINTER_QUERY, TOUCH_MAIN_QUERY) // a tablet
+    const { unmount } = renderHud({ nearTarget: deskTarget() })
+    expect(document.body.textContent).not.toContain('Press E')
+    expect(screen.getByRole('button', { name: interactLabel('order-desk') })).toBeInTheDocument()
+    unmount()
+
+    matchOnly(COARSE_POINTER_QUERY) // a touch laptop: a keyboard, so the key stays
+    renderHud({ nearTarget: deskTarget() })
+    expect(document.body.textContent).toContain('Press E')
+  })
+
+  it('a prompt with no button to offer still reads on a tablet', () => {
+    matchOnly(COARSE_POINTER_QUERY, TOUCH_MAIN_QUERY)
+    const paused = 'Paused. The host has paused the game.'
+    renderHud({ nearTarget: deskTarget({ enabled: false, prompt: paused }) })
+    expect(document.body.textContent).toContain(paused)
+  })
+
   it('the pad reports presses to the callbacks it was handed', () => {
     matchOnly(COARSE_POINTER_QUERY)
     const onPress = vi.fn()
@@ -1752,6 +1885,137 @@ describe('Board3DHud: the legend and the pad follow the pointer', () => {
     fireEvent.pointerUp(forward)
     expect(onPress).toHaveBeenCalledWith('forward')
     expect(onRelease).toHaveBeenCalledWith('forward')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PhoneHud
+// ---------------------------------------------------------------------------
+
+describe('PhoneHud: the HUD on a phone', () => {
+  beforeEach(() => matchOnly(COARSE_POINTER_QUERY, TOUCH_MAIN_QUERY, PHONE_QUERY))
+
+  type Over = Partial<Parameters<typeof Board3DHud>[0]>
+  function renderHud(over: Over = {}) {
+    const onToggle = vi.fn()
+    const view = render(
+      <Board3DHud
+        view={viewFor('RETAILER')}
+        week={7}
+        durationWeeks={36}
+        nearTarget={null}
+        onInteract={() => {}}
+        notice={null}
+        weekChanged={false}
+        pad={{ onPress: () => {}, onRelease: () => {} }}
+        dock={{ top: null, enabled: true, onToggle }}
+        {...over}
+      />,
+    )
+    return { onToggle, ...view }
+  }
+  const dockButtons = () =>
+    Array.from(screen.getByRole('navigation', { name: 'Panels' }).querySelectorAll('button'))
+
+  it('opens every panel from a dock of icons with no words on them, the order desk first', async () => {
+    const user = userEvent.setup()
+    const { onToggle } = renderHud()
+    const buttons = dockButtons()
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+      PANEL_TITLE['order-desk'],
+      PANEL_TITLE['ledger-wall'],
+      PANEL_TITLE['team-board'],
+    ])
+    for (const button of buttons) {
+      expect(button.textContent).toBe('')
+      await user.click(button)
+    }
+    expect(onToggle.mock.calls.map(([id]) => id)).toEqual(['order-desk', 'ledger-wall', 'team-board'])
+  })
+
+  it('is inert while paused, like E', () => {
+    renderHud({ dock: { top: null, enabled: false, onToggle: () => {} } })
+    for (const button of dockButtons()) expect(button).toBeDisabled()
+  })
+
+  it('keeps the dock, marked, while a panel is shown and clears the rest away', () => {
+    renderHud({
+      dock: { top: 'ledger-wall', enabled: true, onToggle: () => {} },
+      nearTarget: deskTarget(),
+      pad: null,
+    })
+    expect(dockButtons().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false'])
+    expect(screen.queryByRole('button', { name: /3D controls/ })).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toContain(PHONE_WARNING)
+    expect(screen.queryByRole('button', { name: /^Open/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Movement joystick' })).not.toBeInTheDocument()
+  })
+
+  it('has a joystick and no six-button pad', () => {
+    renderHud()
+    expect(screen.getByRole('group', { name: 'Movement joystick' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Movement controls' })).not.toBeInTheDocument()
+  })
+
+  it('offers a plain Open button at a station, named for it, announced, and never a key', async () => {
+    const onInteract = vi.fn()
+    renderHud({ nearTarget: deskTarget(), onInteract })
+    const open = screen.getByRole('button', { name: interactLabel('order-desk') })
+    expect(open.textContent).toBe('Open')
+    expect(
+      screen.getAllByRole('status').some((node) => node.textContent?.includes(interactLabel('order-desk'))),
+    ).toBe(true)
+    expect(document.body.textContent).not.toContain('Press E')
+    await userEvent.setup().click(open)
+    expect(onInteract).toHaveBeenCalledWith('order-desk')
+  })
+
+  it('a refusal, a week change and a paused prompt all still read', () => {
+    renderHud({
+      notice: 'Refused.',
+      weekChanged: true,
+      nearTarget: deskTarget({ enabled: false, prompt: 'Paused. Back soon.' }),
+    })
+    const spoken = screen.getAllByRole('status').map((node) => node.textContent).join(' ')
+    expect(spoken).toContain('Refused.')
+    expect(spoken).toContain('Week 7.')
+    expect(spoken).toContain('Paused. Back soon.')
+  })
+
+  it('warns in a help card that a tap folds away for the tab, with the manual and the credits inside it', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderHud()
+    const card = screen.getByRole('button', { name: new RegExp(PHONE_WARNING) })
+    for (const line of Object.values(PHONE_PROMPT_COPY)) expect(card.textContent).toContain(line)
+    expect(screen.getByRole('link', { name: 'Player manual' })).toHaveAttribute('href', '/player-manual')
+    expect(screen.getByText('3D model credits')).toBeInTheDocument()
+
+    await user.click(card)
+    expect(document.body.textContent).not.toContain(PHONE_WARNING)
+    // The licence needs the credits reachable, not a button in the way of the view.
+    expect(screen.queryByText('3D model credits')).not.toBeInTheDocument()
+    unmount()
+
+    renderHud()
+    expect(document.body.textContent).not.toContain(PHONE_WARNING)
+    await user.click(screen.getByRole('button', { name: 'Show the 3D controls' }))
+    expect(document.body.textContent).toContain(PHONE_WARNING)
+  })
+
+  it('is a component of its own: the desktop HUD never renders it', () => {
+    expect(PhoneHud).toBeTypeOf('function')
+    window.matchMedia = REAL_MATCH_MEDIA
+    renderHud()
+    expect(screen.queryByRole('navigation', { name: 'Panels' })).not.toBeInTheDocument()
+  })
+
+  it('the page under it neither scrolls nor zooms', () => {
+    const css = readFileSync(join(projectRoot(), 'src', 'index.css'), 'utf8')
+    expect(css).toMatch(
+      /html:has\(\[data-phone-scene\]\) body \{[^}]*overflow: hidden;[^}]*touch-action: manipulation;/,
+    )
+    const board = readFileSync(join(projectRoot(), 'src', 'components', 'game', 'views', 'Board3D.tsx'), 'utf8')
+    expect(board).toMatch(/data-phone-scene=\{phone \|\| undefined\}/)
   })
 })
 

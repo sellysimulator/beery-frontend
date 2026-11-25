@@ -10,11 +10,14 @@ import {
 import { Canvas } from '@react-three/fiber'
 import { setBoardView } from '../../../utils/storage'
 import ErrorBoundary from '../../shared/ErrorBoundary'
+import useMediaQuery from '../../shared/useMediaQuery'
 import PausedOverlay from '../PausedOverlay'
 import Board2D, { type BoardViewProps } from './Board2D'
 import Board3DHud from './board3d/Board3DHud'
 import Board3DPanels, { type Board3DPanelId } from './board3d/Board3DPanels'
 import { observeContextLoss } from './board3d/contextLoss'
+import PhoneLens from './board3d/PhoneLens'
+import { PHONE_QUERY } from './board3d/phoneQuery'
 import PlayerController from './board3d/PlayerController'
 import { isTypingTarget, type PadControl } from './board3d/playerMotion'
 import WarehouseScene from './board3d/WarehouseScene'
@@ -82,6 +85,10 @@ function WebGLFallback(props: BoardViewProps): ReactElement {
   return <Board2D {...props} />
 }
 
+/** A finger's drag on a phone turns the view this much further than a mouse's:
+ *  a phone is a few hundred pixels wide and its joystick does not turn. */
+const PHONE_LOOK_SCALE = 1.8
+
 export function Board3D(props: BoardViewProps): ReactElement {
   const { view, week, durationWeeks, paused, pausedReason, gameOver, notice, weekChanged } =
     props
@@ -121,6 +128,7 @@ export function Board3D(props: BoardViewProps): ReactElement {
    */
   const [openPanels, setOpenPanels] = useState<readonly Board3DPanelId[]>([])
   const anyPanelOpen = openPanels.length > 0
+  const phone = useMediaQuery(PHONE_QUERY)
 
   const nearTarget: InteractTarget | null =
     model.interactTargets.find((target) => target.id === nearId) ?? null
@@ -216,6 +224,18 @@ export function Board3D(props: BoardViewProps): ReactElement {
     if (anyPanelOpen) padHeld.current.clear()
   }, [anyPanelOpen])
 
+  /**
+   * The phone's dock: opens a panel from anywhere in the hall, brings an open
+   * one that waits behind another to the front, or closes the one on screen.
+   * The standing check `openStation` makes is not its rule — that is the whole
+   * point of it — but the paused one is, and the HUD disables it then.
+   */
+  const toggleFromDock = useCallback((id: Board3DPanelId): void => {
+    setOpenPanels((current) =>
+      current.at(-1) === id ? current.slice(0, -1) : [...current.filter((open) => open !== id), id],
+    )
+  }, [])
+
   const closePanel = useCallback((panel: Board3DPanelId): void => {
     setOpenPanels((current) => current.filter((id) => id !== panel))
   }, [])
@@ -251,7 +271,11 @@ export function Board3D(props: BoardViewProps): ReactElement {
 
   return (
     <ErrorBoundary fallback={<WebGLFallback {...props} />}>
-      <div className="relative min-h-screen bg-surface">
+      <div
+        // Read by CSS on a phone (`index.css`): the page has nothing to scroll.
+        data-phone-scene={phone || undefined}
+        className={`relative bg-surface ${phone ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}
+      >
         {/*
           `role="img"` with `describeScene(model)` as the label, over a canvas
           that is `aria-hidden`. One sentence is all a screen reader gets
@@ -310,6 +334,7 @@ export function Board3D(props: BoardViewProps): ReactElement {
               `useGLTF.preload()` at module scope, so the fetches start with the
               chunk rather than with the first frame that needs a mesh.
             */}
+            {phone ? <PhoneLens /> : null}
             <Suspense fallback={null}>
               <WarehouseScene model={model}>
                 {/*
@@ -325,6 +350,7 @@ export function Board3D(props: BoardViewProps): ReactElement {
                   paused={paused}
                   gameOver={gameOver}
                   pad={padHeld}
+                  lookScale={phone ? PHONE_LOOK_SCALE : 1}
                 />
               </WarehouseScene>
             </Suspense>
@@ -346,6 +372,11 @@ export function Board3D(props: BoardViewProps): ReactElement {
           notice={notice}
           weekChanged={weekChanged}
           pad={anyPanelOpen ? null : pad}
+          dock={{
+            top: openPanels.at(-1) ?? null,
+            enabled: !paused,
+            onToggle: toggleFromDock,
+          }}
         />
 
         {/*

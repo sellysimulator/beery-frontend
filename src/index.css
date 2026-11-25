@@ -101,6 +101,31 @@
     outline: 2px solid var(--color-brand-strong);
     outline-offset: 2px;
   }
+
+  /* iOS Safari zooms the page in when a field under 16px takes focus and never
+     zooms it back out. The name form's field inherited 14px, so every player
+     reached the 3D board at 1.14×, its HUD cut off at the screen's edge, and
+     the board cannot be pinched back (it is touch-none). Nothing smaller than
+     16px on a touch screen, whatever the field inherits. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: max(1rem, 1em);
+    }
+  }
+
+  /* The 3D board on a phone: the page has nothing to scroll, so Safari's bars
+     never slide over the HUD (`body`'s 100vh above reaches under them), and a
+     double tap does not zoom. */
+  html:has([data-phone-scene]),
+  html:has([data-phone-scene]) body {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
 }
 
 @layer components {

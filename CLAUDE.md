@@ -87,7 +87,8 @@ src/
     game/views/board3d/  the 3D scene. sceneModel.ts is the pure heart (see §6.14);
                          everything else either renders its output or is frozen data
                          (sceneLayout.ts, scenePalette.ts, roleSets.ts). playerMotion.ts
-                         holds the controller's pure decisions, MovePad.tsx the touch pad
+                         holds the controller's pure decisions, MovePad.tsx the touch pad,
+                         PhoneHud.tsx + Joystick.tsx + PhoneLens.tsx the phone's own HUD
   __tests__/             all tests, flat, one file per feature + setup.ts
 ```
 
@@ -392,6 +393,25 @@ iframe and handler could break. `envSurface.test.ts` pins them. `main.tsx` reloa
     their own (`padHeld` in `Board3D`), merged with the keyboard's by `mergeHeldKeys` so
     `stepPlayer` stays the only walk; turning is `stepYaw` at 1.7 rad/s and counts as look
     (allowed while paused). Window blur, a hidden tab and a panel opening all release the pad.
+    **On a phone** (`PHONE_QUERY` in `phoneQuery.ts`: touch as the *main* pointer and a
+    phone-sized side, so no desktop window matches) `Board3DHud` renders `PhoneHud` instead:
+    week, "2D" (`BoardViewToggle`'s phone form), "?" and its help card (warning, controls,
+    manual, credits; folded state in `storage.ts` `isPhoneHelpHidden`), `Joystick` (it presses
+    the pad's own controls through `stickControls`, so `stepPlayer` is still the one walk) and a
+    dock of three icons. The dock calls `Board3D`'s `toggleFromDock`, which has no standing
+    check but is disabled while paused; `openStation` (E and Open) is unchanged.
+    `Board3DPanels` drops the berths for `PHONE_PANEL`, the exact centre, sized to leave the
+    dock uncovered, and draws only the top panel (a covered one is `sr-only`, still mounted).
+    `data-phone-panel` on it hides the 2D button by CSS `:has()` on a phone lying on its side,
+    except while paused; `data-phone-scene` on the board stops the page scrolling
+    (`index.css`). `PhoneLens` widens the lens upright and the drag turns 1.8× as far. The
+    desktop's and the tablet's HUD is untouched, but where touch is the main input
+    (`TOUCH_MAIN_QUERY`) no prompt says "Press E". `game_stack.md`, item 5 of the touch rule.
+    **No field under 16px on a touch screen** (`index.css`, `@media (pointer: coarse)`): iOS
+    zooms the page in on focus by 16 / the field's size and leaves it there, so the name form's
+    inherited 14px put players into the board at 1.14×, its HUD cut off, with `touch-none` in
+    the way of pinching out. Don't put `text-sm`/`text-xs` on an input itself: a utility beats
+    the base rule.
     **The seams.** `Board3D` is registered in `GameRoomPlaying`'s `BOARD_VIEWS` only via
     `lazy()` (a static import puts three.js in the entry chunk); `BoardViewToggle` is a sibling
     of `<Board>`, never a prop, and `BoardViewProps` does not grow for 3D. A new `PlayerView`
